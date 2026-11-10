@@ -42,8 +42,10 @@ Nothing in this file should be read as "every link was clicked".
    pasted into a browser). A serial, rate-respecting PubAPI fetch script is possible but is
    an **owner decision** because of §4(D).
 3. **Lichess opening explorer now needs an OAuth token** (anonymous requests return 401;
-   spec changed 2026-03-03). Move-frequency data for the repertoire trainer (M3) will be
-   computed offline on the Mac from the CC0 monthly game dumps instead.
+   spec changed 2026-03-03). Move-frequency data for the repertoire trainer is computed
+   offline on the Mac from the CC0 monthly game dumps instead: `public/packs/openings-lichess.json`
+   holds counts from 2,875,117 rated blitz/rapid/classical games (the first 1.5 GB of the
+   October 2026 file), 12,301 positions, by rating band of the player making the move.
 4. **Chessreps** has PGN / Lichess-study *import* but no export. The only compliant data
    flow is one-way into Chessreps. Repertoire lines inside this app must come from the
    owner's own PGN or rights-cleared sources, not from Chessreps courses.

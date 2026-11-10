@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportBackup, importBackup, serializeBackup } from './backup';
+import { makeEntry, START_FEN } from '../openings/repertoire';
 import { deleteDb, openDb, recordAttempt, saveJournalEntry, SCHEMA_VERSION } from './db';
 
 /** The schema exactly as shipped in version 1 (M1). Never edit: it stands in for an old install. */
@@ -25,7 +26,7 @@ const V1_SESSION = {
   blocks: [{ kind: 'review', budgetSec: 420, spentSec: 60, status: 'done', conceptId: null, reason: 'r', notice: null, attemptUuids: [] }],
 };
 /** A backup file written by version 1 (schemaVersion 1, three tables). */
-const V1_BACKUP_SHAPE = (hashes: Record<string, string>) => ({
+const V1_BACKUP_SHAPE = (hashes: Record<string, string | undefined>) => ({
   manifest: {
     format: 'chess-trainer-backup', schemaVersion: 1, exporterVersion: '0.1.0', exportTime: '2026-11-10T12:00:00.000Z', deviceId: 'dev-1',
     itemCounts: { attempts: 1, lessonEvents: 0, sessions: 1 }, contentHashes: hashes,
@@ -110,10 +111,99 @@ describe('upgrade from schema 1', () => {
     const backup = await exportBackup(src, 20);
     expect(backup.manifest.schemaVersion).toBe(SCHEMA_VERSION);
     expect(backup.manifest.itemCounts.gameJournal).toBe(1);
+    expect(backup.manifest.itemCounts.repertoire).toBe(0);
     const dst = openDb(name());
     const report = await importBackup(dst, serializeBackup(backup));
     expect(report.added.gameJournal).toBe(1);
     expect(await dst.gameJournal.get(e.id)).toEqual(e);
     expect((await importBackup(dst, serializeBackup(backup))).added.gameJournal).toBe(0);
+  });
+});
+
+/** The schema as shipped in version 2 (M2). Never edit. */
+const V2_STORES = { ...V1_STORES, gameJournal: 'id, ts' };
+const V2_JOURNAL = {
+  id: 'g-1', deviceId: 'dev-1', ts: 10, tzOffsetMin: -300, updatedAt: 11, sessionId: null, site: 'chess.com', timeClass: 'rapid',
+  timeControl: '10+5', color: 'black', result: 'loss', url: null, turningPoint: 'move 14', nextTime: 'slow down', ratingAfter: 449,
+};
+
+describe('upgrade from schema 2', () => {
+  it('keeps attempts and the game journal and adds the repertoire', async () => {
+    const n = name();
+    const old = new Dexie(n);
+    old.version(1).stores(V1_STORES);
+    old.version(2).stores({ gameJournal: V2_STORES.gameJournal });
+    await old.open();
+    await old.table('attempts').add(V1_ATTEMPT);
+    await old.table('gameJournal').add(V2_JOURNAL);
+    old.close();
+    const db = openDb(n);
+    await db.open();
+    expect(db.verno).toBe(SCHEMA_VERSION);
+    expect(await db.attempts.get(V1_ATTEMPT.uuid)).toEqual(V1_ATTEMPT);
+    expect(await db.gameJournal.get('g-1')).toEqual(V2_JOURNAL);
+    await db.repertoire.put(makeEntry('white', START_FEN, [], 'e2e4', 5));
+    expect(await db.repertoire.count()).toBe(1);
+  });
+
+  it('restores a schema-2 backup (no repertoire table) and round-trips the repertoire in current backups', async () => {
+    const src = openDb(name());
+    await src.gameJournal.add(V2_JOURNAL as never);
+    const current = await exportBackup(src, 1);
+    const { repertoire: _c, ...counts } = current.manifest.itemCounts;
+    const { repertoire: _h, ...hashes } = current.manifest.contentHashes;
+    const { repertoire: _d, ...data } = current.data;
+    const v2File = JSON.stringify({ manifest: { ...current.manifest, schemaVersion: 2, itemCounts: counts, contentHashes: hashes }, data });
+    const dst = openDb(name());
+    const report = await importBackup(dst, v2File);
+    expect(report.added.gameJournal).toBe(1);
+    expect(report.added.repertoire).toBe(0);
+
+    const e = makeEntry('white', START_FEN, [], 'e2e4', 5);
+    await src.repertoire.put(e);
+    const withRep = await importBackup(dst, serializeBackup(await exportBackup(src, 2)));
+    expect(withRep.added.repertoire).toBe(1);
+    expect(await dst.repertoire.get(e.id)).toEqual(e);
+    // An older copy of the same entry never overwrites a newer local choice.
+    await dst.repertoire.put({ ...e, uci: 'd2d4', san: 'd4', updatedAt: 99 });
+    await importBackup(dst, serializeBackup(await exportBackup(src, 3)));
+    expect((await dst.repertoire.get(e.id))!.uci).toBe('d2d4');
+  });
+
+  it('a current file that lacks a required table is rejected as damaged', async () => {
+    const src = openDb(name());
+    const b = await exportBackup(src, 1);
+    const { repertoire: _d, ...data } = b.data;
+    await expect(importBackup(openDb(name()), JSON.stringify({ manifest: b.manifest, data }))).rejects.toThrow(/missing the "repertoire" table/);
+  });
+});
+
+/** The schema as shipped in version 3 (M3). Never edit. */
+describe('upgrade from schema 3', () => {
+  it('keeps the repertoire and adds the games table; schema-3 backups still restore', async () => {
+    const n = name();
+    const old = new Dexie(n);
+    old.version(1).stores(V1_STORES);
+    old.version(2).stores({ gameJournal: 'id, ts' });
+    old.version(3).stores({ repertoire: 'id, side, positionKey' });
+    await old.open();
+    const e = makeEntry('white', START_FEN, [], 'e2e4', 5);
+    await old.table('repertoire').add(e);
+    await old.table('attempts').add(V1_ATTEMPT);
+    old.close();
+    const db = openDb(n);
+    await db.open();
+    expect(db.verno).toBe(SCHEMA_VERSION);
+    expect(await db.repertoire.get(e.id)).toEqual(e);
+    expect(await db.attempts.count()).toBe(1);
+    expect(await db.games.count()).toBe(0);
+
+    const current = await exportBackup(db, 1);
+    const { games: _c, ...counts } = current.manifest.itemCounts;
+    const { games: _h, ...hashes } = current.manifest.contentHashes;
+    const { games: _g, ...data } = current.data;
+    const v3File = JSON.stringify({ manifest: { ...current.manifest, schemaVersion: 3, itemCounts: counts, contentHashes: hashes }, data });
+    const report = await importBackup(openDb(name()), v3File);
+    expect(report.added).toMatchObject({ attempts: 1, repertoire: 1, games: 0 });
   });
 });

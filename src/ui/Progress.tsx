@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { href, type Route } from '../app/router';
 import { type Learner, useJournal, usePool } from '../app/store';
-import { STARTING_PROFILE } from '../app/profile';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, THEMES } from '../content';
 import type { Attempt } from '../db/types';
 import { formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy } from '../metrics/metrics';
 import { startRun } from '../puzzles/run';
 import { Board } from './Board';
+import { walkRepertoire } from '../openings/repertoire';
 import { DataPanel } from './Data';
+import { GameCards } from './Games';
+import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
 const DAY = 86_400_000;
@@ -19,6 +21,14 @@ const PERIODS = [
 ] as const;
 type PeriodKey = (typeof PERIODS)[number]['key'];
 const MIN_FOCUS_N = 8;
+
+/** Lower bound as a local date string for date-keyed game metrics. */
+export function sinceDateOf(period: string): string | undefined {
+  const p = PERIODS.find((x) => x.key === period);
+  if (!p || p.days === null) return undefined;
+  const d = new Date(Date.now() - p.days * DAY);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function since(period: PeriodKey): number | undefined {
   const p = PERIODS.find((x) => x.key === period)!;
@@ -65,6 +75,13 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const journal = useJournal().filter((j) => from === undefined || j.ts >= from);
   const tally = (r: 'win' | 'draw' | 'loss') => journal.filter((j) => j.result === r).length;
   const lastRated = journal.find((j) => j.ratingAfter !== null);
+  const book = useOpeningBook();
+  const repertoire = useRepertoire();
+  const prefs = useOpeningPrefs();
+  const walk = useMemo(() => (book ? walkRepertoire(book, repertoire, prefs.side, [prefs.band]) : null), [book, repertoire, prefs.side, prefs.band]);
+  const recalls = learner.attempts.filter((a) => a.exerciseKind === 'opening' && a.outcome !== 'skipped' && (from === undefined || a.ts >= from));
+  const recalled = recalls.filter((a) => a.outcome === 'success').length;
+  const alt = (v: 'sound' | 'weaker' | 'unknown') => recalls.filter((a) => a.altVerdict === v).length;
 
   return (
     <div className="page" data-testid="progress-home">
@@ -97,7 +114,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
         <RateLine m={overall} unit="unseen positions" />
         <IntervalBar m={overall} />
         <p className="definition-small">
-          Solved on the first-ever showing with no wrong move and no hint, out of all first-ever showings; {periodLabel}. Left out: {overall.excluded.repeats} repeats and reviews, {overall.excluded.skipped} skipped, {overall.excluded.guided} guided lesson examples.
+          Solved on the first-ever showing with no wrong move and no hint, out of all first-ever showings; {periodLabel}. Left out: {overall.excluded.repeats} repeats and reviews, {overall.excluded.skipped} skipped, {overall.excluded.guided} lesson examples and opening recalls.
         </p>
         {overall.n > 0 && <a href={href('progress/positions', { set: 'unseen', period })} data-testid="view-unseen">View the {overall.n} positions</a>}
       </section>
@@ -154,12 +171,32 @@ export function ProgressHome({ learner }: { learner: Learner }) {
         <a href={href('learn')}>Open the curriculum</a>
       </section>
 
-      <section className="card" data-testid="card-ratings">
-        <h2>Game ratings</h2>
-        <ul className="rating-list">
-          {STARTING_PROFILE.ratings.map((r) => (<li key={r.label}><span>{r.label}</span><strong>{r.value}</strong></li>))}
-        </ul>
-        <p className="definition-small">{STARTING_PROFILE.source}, {STARTING_PROFILE.enteredOn}. Each is a separate scale and they are not comparable. No games are imported yet, so there is no trend and no game-error analysis.</p>
+      <GameCards sinceDate={sinceDateOf(period)} periodLabel={periodLabel} period={period} />
+
+      <section className="card" data-testid="card-openings">
+        <h2>Opening preparedness</h2>
+        {!book || !walk ? (
+          <p className="metric-empty">Opening data is not on this device yet.</p>
+        ) : repertoire.filter((e) => e.side === prefs.side).length === 0 ? (
+          <p className="metric-empty">No repertoire moves recorded as {prefs.side === 'white' ? 'White' : 'Black'} yet.</p>
+        ) : (
+          <>
+            <p className="metric-line">
+              <span className="metric-value">{formatPct(walk.levels[2]?.answered ?? 0)}</span>
+              <span className="metric-range">of games have a recorded answer through your 3rd move; {formatPct(walk.levels[4]?.answered ?? 0)} through your 5th</span>
+            </p>
+            <p>
+              Recall: {recalls.length === 0 ? 'no recall attempts in this period' : `${recalled} of ${recalls.length} recalled`}
+              {recalls.length - recalled > 0 && ` (other moves played: ${alt('sound')} sound by engine evidence, ${alt('weaker')} weaker, ${recalls.length - recalled - alt('sound') - alt('weaker')} not evaluated or shown)`}.
+            </p>
+          </>
+        )}
+        {book && (
+          <p className="definition-small">
+            As {prefs.side === 'white' ? 'White' : 'Black'}, weighting opponents’ replies by how often players rated {bandLabel(book, prefs.band)} on Lichess play them ({book.manifest.games.used.toLocaleString()} games, {book.manifest.source.month}). Coverage counts recorded answers, all time; recall counts attempts to produce your own chosen move, {periodLabel}. A different sound move is reported separately, not as an error.
+          </p>
+        )}
+        <a href={href('practice/openings')}>Open the repertoire</a>
       </section>
 
       <section className="card" data-testid="card-journal">

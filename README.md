@@ -13,8 +13,8 @@ in `CLAUDE.md`, `AGENTS.md` and `docs/`.
 |---|---|
 | `src/` | React + TypeScript PWA (Vite). `chess/` rules wrapper, `puzzles/`, `schedule/`, `learn/`, `metrics/`, `db/` (IndexedDB, backup), `ui/` |
 | `content/` | Source registry, concept map, CC0 theme definitions, local lessons, engine evidence |
-| `public/packs/` | Built offline puzzle pack (CC0 Lichess data, engine-verified) |
-| `pipeline/` | Mac-side Python: pack builder, lesson validator, source fetcher |
+| `public/packs/` | Built offline packs: engine-verified puzzles and the opening frequency book (both from CC0 Lichess data) |
+| `pipeline/` | Mac-side Python: puzzle pack, lesson specs and validator, opening statistics and evidence, own-game analysis |
 | `e2e/` | Playwright tests against the production build |
 | `docs/` | Contract, decisions, content inventory, audits, state |
 | `data/` | Raw downloads and work files (git-ignored) |
@@ -37,8 +37,11 @@ uv sync
 uv run pytest                                        # puzzle semantics, lesson validation
 uv run python -m trainer_pipeline.fetch_sources      # download + checksum public-domain texts
 uv run python -m trainer_pipeline.lessons            # validate lessons, write engine evidence
-uv run python -m trainer_pipeline.build_puzzle_pack  # needs data/raw/lichess_db_puzzle.csv.zst (~25 min)
+uv run python -m trainer_pipeline.build_puzzle_pack  # needs data/raw/lichess_db_puzzle.csv.zst (~30 min)
+uv run python -m trainer_pipeline.games --player YOUR_USERNAME ../data/my-games/*.pgn   # analyse your own games
 ```
+
+The full command list, including the opening-book build, is in `docs/STATE.md`.
 
 ## Using it on an iPhone
 

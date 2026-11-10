@@ -10,11 +10,13 @@
  * migration test that opens a database created with the previous schema.
  */
 import Dexie, { type EntityTable, type Table } from 'dexie';
+import type { GameRecord } from '../games/types';
+import type { RepertoireEntry } from '../openings/repertoire';
 import { applyAttempt, rebuildReviewStates, SCHEDULER_VERSION } from '../schedule/review';
 import type { Attempt, AttemptDraft, GameJournalDraft, GameJournalEntry, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
 
 export const DB_NAME = 'chess-trainer';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export class TrainerDB extends Dexie {
   meta!: EntityTable<MetaRow, 'key'>;
@@ -25,6 +27,8 @@ export class TrainerDB extends Dexie {
   reviewStates!: EntityTable<ReviewState, 'itemId'>;
   sessions!: EntityTable<SessionRecord, 'id'>;
   gameJournal!: EntityTable<GameJournalEntry, 'id'>;
+  repertoire!: EntityTable<RepertoireEntry, 'id'>;
+  games!: EntityTable<GameRecord, 'id'>;
 
   constructor(name: string) {
     super(name);
@@ -39,6 +43,10 @@ export class TrainerDB extends Dexie {
     });
     // v2 (M2): hand-logged games for play days. Additive only; no existing row is touched.
     this.version(2).stores({ gameJournal: 'id, ts' });
+    // v3 (M3): the learner's own opening choices, one row per position. Additive only.
+    this.version(3).stores({ repertoire: 'id, side, positionKey' });
+    // v4 (M4): the learner's own games with engine analysis from the Mac pipeline. Additive only.
+    this.version(4).stores({ games: 'id, endDate, timeClass' });
   }
 }
 

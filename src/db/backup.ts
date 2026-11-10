@@ -5,11 +5,37 @@
  * table); `data` holds the rows. Restore is validate-everything-first, then one atomic
  * merge: rows are matched by id, existing rows are never deleted or overwritten by older
  * ones, and derived review state is rebuilt from the merged attempt log.
+ *
+ * A table introduced in schema N is required in files of schema >= N and simply absent in
+ * older files, so every earlier backup stays restorable.
  */
 import { getDeviceId, rebuildReviews, SCHEMA_VERSION, type TrainerDB } from './db';
 import type { Attempt, GameJournalEntry, LessonEvent, SessionRecord } from './types';
+import type { GameRecord } from '../games/types';
+import type { RepertoireEntry } from '../openings/repertoire';
 
 export const BACKUP_FORMAT = 'chess-trainer-backup';
+
+/** `append`: immutable rows, add if the id is new. `newer`: editable rows, the later `updatedAt` wins. */
+const TABLES = [
+  { name: 'attempts', key: 'uuid', since: 1, mode: 'append' },
+  { name: 'lessonEvents', key: 'uuid', since: 1, mode: 'append' },
+  { name: 'sessions', key: 'id', since: 1, mode: 'newer' },
+  { name: 'gameJournal', key: 'id', since: 2, mode: 'newer' },
+  { name: 'repertoire', key: 'id', since: 3, mode: 'newer' },
+  { name: 'games', key: 'id', since: 4, mode: 'newer' },
+] as const;
+export type BackupTable = (typeof TABLES)[number]['name'];
+type Row = Record<string, unknown>;
+
+export interface BackupData {
+  attempts: Attempt[];
+  lessonEvents: LessonEvent[];
+  sessions: SessionRecord[];
+  gameJournal?: GameJournalEntry[];
+  repertoire?: RepertoireEntry[];
+  games?: GameRecord[];
+}
 
 export interface BackupManifest {
   format: typeof BACKUP_FORMAT;
@@ -17,29 +43,26 @@ export interface BackupManifest {
   exporterVersion: string;
   exportTime: string; // ISO UTC
   deviceId: string;
-  /** `gameJournal` is absent in files written by schema 1. */
-  itemCounts: { attempts: number; lessonEvents: number; sessions: number; gameJournal?: number };
-  contentHashes: { attempts: string; lessonEvents: string; sessions: string; gameJournal?: string };
+  itemCounts: Partial<Record<BackupTable, number>>;
+  contentHashes: Partial<Record<BackupTable, string>>;
 }
 
 export interface BackupFile {
   manifest: BackupManifest;
-  data: { attempts: Attempt[]; lessonEvents: LessonEvent[]; sessions: SessionRecord[]; gameJournal?: GameJournalEntry[] };
+  data: BackupData;
 }
 
 export interface ImportReport {
   manifest: BackupManifest;
-  added: { attempts: number; lessonEvents: number; sessions: number; gameJournal: number };
+  added: Record<BackupTable, number>;
   reviewItems: number;
 }
-
-const TABLES = ['attempts', 'lessonEvents', 'sessions'] as const;
 
 /** JSON with object keys sorted, so the hash does not depend on property order. */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
+    const obj = value as Row;
     const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
   }
@@ -51,24 +74,22 @@ async function sha256(text: string): Promise<string> {
   return `sha256:${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
-const byKey = <T,>(rows: T[], key: (r: T) => string) => [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
-
-async function hashTables(data: BackupFile['data']): Promise<Required<BackupManifest['contentHashes']>> {
-  return {
-    attempts: await sha256(canonicalJson(byKey(data.attempts, (r) => r.uuid))),
-    lessonEvents: await sha256(canonicalJson(byKey(data.lessonEvents, (r) => r.uuid))),
-    sessions: await sha256(canonicalJson(byKey(data.sessions, (r) => r.id))),
-    gameJournal: await sha256(canonicalJson(byKey(data.gameJournal ?? [], (r) => r.id))),
-  };
+function sorted(rows: Row[], key: string): Row[] {
+  return [...rows].sort((a, b) => (String(a[key]) < String(b[key]) ? -1 : String(a[key]) > String(b[key]) ? 1 : 0));
 }
 
+const hashOf = (rows: Row[], key: string) => sha256(canonicalJson(sorted(rows, key)));
+
 export async function exportBackup(db: TrainerDB, now: number = Date.now()): Promise<BackupFile> {
-  const data = {
-    attempts: byKey(await db.attempts.toArray(), (r) => r.uuid),
-    lessonEvents: byKey(await db.lessonEvents.toArray(), (r) => r.uuid),
-    sessions: byKey(await db.sessions.toArray(), (r) => r.id),
-    gameJournal: byKey(await db.gameJournal.toArray(), (r) => r.id),
-  };
+  const data: Record<string, Row[]> = {};
+  const itemCounts: BackupManifest['itemCounts'] = {};
+  const contentHashes: BackupManifest['contentHashes'] = {};
+  for (const t of TABLES) {
+    const rows = sorted((await db.table(t.name).toArray()) as Row[], t.key);
+    data[t.name] = rows;
+    itemCounts[t.name] = rows.length;
+    contentHashes[t.name] = await hashOf(rows, t.key);
+  }
   return {
     manifest: {
       format: BACKUP_FORMAT,
@@ -76,10 +97,10 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
       exporterVersion: __APP_VERSION__,
       exportTime: new Date(now).toISOString(),
       deviceId: await getDeviceId(db),
-      itemCounts: { attempts: data.attempts.length, lessonEvents: data.lessonEvents.length, sessions: data.sessions.length, gameJournal: data.gameJournal.length },
-      contentHashes: await hashTables(data),
+      itemCounts,
+      contentHashes,
     },
-    data,
+    data: data as unknown as BackupData,
   };
 }
 
@@ -105,47 +126,39 @@ export async function parseBackup(text: string): Promise<BackupFile> {
   if (typeof m.schemaVersion !== 'number' || m.schemaVersion > SCHEMA_VERSION) {
     throw new Error(`This backup was made by a newer version of the app (schema ${m.schemaVersion}); update the app, then restore.`);
   }
+  const data = b.data as unknown as Record<string, Row[] | undefined>;
   for (const t of TABLES) {
-    if (!Array.isArray(b.data[t])) throw new Error(`Backup is missing the "${t}" table.`);
-    if (b.data[t].length !== m.itemCounts?.[t]) throw new Error(`Backup is damaged: "${t}" should have ${m.itemCounts?.[t]} rows but has ${b.data[t].length}.`);
+    const rows = data[t.name];
+    if (rows === undefined && m.schemaVersion < t.since) continue; // table did not exist yet
+    if (!Array.isArray(rows)) throw new Error(`Backup is missing the "${t.name}" table.`);
+    if (rows.length !== m.itemCounts?.[t.name]) throw new Error(`Backup is damaged: "${t.name}" should have ${m.itemCounts?.[t.name]} rows but has ${rows.length}.`);
+    if ((await hashOf(rows, t.key)) !== m.contentHashes?.[t.name]) throw new Error(`Backup is damaged: the "${t.name}" table does not match its checksum.`);
+    for (const r of rows) if (typeof r?.[t.key] !== 'string') throw new Error(`Backup contains a malformed row in "${t.name}".`);
   }
-  const hashes = await hashTables(b.data);
-  for (const t of TABLES) {
-    if (hashes[t] !== m.contentHashes?.[t]) throw new Error(`Backup is damaged: the "${t}" table does not match its checksum.`);
-  }
-  // The journal exists from schema 2 on; a schema-1 file simply has none.
-  if (m.schemaVersion >= 2 || b.data.gameJournal !== undefined) {
-    const journal = b.data.gameJournal;
-    if (!Array.isArray(journal) || journal.length !== m.itemCounts.gameJournal) throw new Error('Backup is damaged: the "gameJournal" table is missing or incomplete.');
-    if (hashes.gameJournal !== m.contentHashes.gameJournal) throw new Error('Backup is damaged: the "gameJournal" table does not match its checksum.');
-  }
-  for (const a of b.data.attempts) if (typeof a.uuid !== 'string' || typeof a.exerciseId !== 'string' || typeof a.ts !== 'number') throw new Error('Backup contains a malformed attempt.');
+  for (const a of b.data.attempts) if (typeof a.exerciseId !== 'string' || typeof a.ts !== 'number') throw new Error('Backup contains a malformed attempt.');
   return b as BackupFile;
 }
 
 export async function importBackup(db: TrainerDB, text: string): Promise<ImportReport> {
   const backup = await parseBackup(text); // all validation happens before any write
-  const added = { attempts: 0, lessonEvents: 0, sessions: 0, gameJournal: 0 };
-  await db.transaction('rw', [db.attempts, db.lessonEvents, db.sessions, db.reviewStates, db.gameJournal], async () => {
-    const haveA = new Set(await db.attempts.toCollection().primaryKeys());
-    const newA = backup.data.attempts.filter((a) => !haveA.has(a.uuid));
-    await db.attempts.bulkAdd(newA);
-    added.attempts = newA.length;
-
-    const haveE = new Set(await db.lessonEvents.toCollection().primaryKeys());
-    const newE = backup.data.lessonEvents.filter((e) => !haveE.has(e.uuid));
-    await db.lessonEvents.bulkAdd(newE);
-    added.lessonEvents = newE.length;
-
-    for (const s of backup.data.sessions) {
-      const mine = await db.sessions.get(s.id);
-      if (!mine) added.sessions++;
-      if (!mine || s.updatedAt > mine.updatedAt) await db.sessions.put(s);
-    }
-    for (const g of backup.data.gameJournal ?? []) {
-      const mine = await db.gameJournal.get(g.id);
-      if (!mine) added.gameJournal++;
-      if (!mine || g.updatedAt > mine.updatedAt) await db.gameJournal.put(g);
+  const data = backup.data as unknown as Record<string, Row[] | undefined>;
+  const added = Object.fromEntries(TABLES.map((t) => [t.name, 0])) as Record<BackupTable, number>;
+  await db.transaction('rw', [...TABLES.map((t) => db.table(t.name)), db.reviewStates], async () => {
+    for (const t of TABLES) {
+      const rows = data[t.name] ?? [];
+      const table = db.table(t.name);
+      if (t.mode === 'append') {
+        const have = new Set((await table.toCollection().primaryKeys()) as string[]);
+        const fresh = rows.filter((r) => !have.has(r[t.key] as string));
+        await table.bulkAdd(fresh);
+        added[t.name] = fresh.length;
+      } else {
+        for (const r of rows) {
+          const mine = (await table.get(r[t.key] as string)) as Row | undefined;
+          if (!mine) added[t.name]++;
+          if (!mine || Number(r.updatedAt) > Number(mine.updatedAt)) await table.put(r);
+        }
+      }
     }
     await rebuildReviews(db);
   });

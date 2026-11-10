@@ -65,7 +65,7 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   let text = '';
   for await (const chunk of stream) text += chunk;
   const backup = JSON.parse(text);
-  expect(backup.manifest.schemaVersion).toBe(2);
+  expect(backup.manifest.schemaVersion).toBeGreaterThanOrEqual(2);
   expect(backup.data.gameJournal).toHaveLength(1);
   expect(backup.data.gameJournal[0].turningPoint).toContain('knight on f6');
 });

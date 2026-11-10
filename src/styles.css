@@ -215,6 +215,8 @@ progress::-moz-progress-bar { background: var(--felt); }
 .outcome-mark.is-assisted { background: var(--pencil); border-color: var(--pencil); }
 
 /* Forms */
+.spark { width: 100%; height: 1.75rem; color: var(--board-dark); display: block; }
+code { font-size: 0.85em; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05rem 0.3rem; word-break: break-word; }
 .journal-row { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.65rem 0.75rem; }
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.95rem; }
 .field span, .choice legend { color: var(--muted); padding: 0; }

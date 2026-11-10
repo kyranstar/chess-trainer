@@ -3,7 +3,7 @@ import type { PackManifest, Puzzle } from '../puzzles/types';
 /** Where in the product an attempt happened. */
 export type AttemptContext = 'review' | 'apply' | 'test' | 'practice' | 'check' | 'lesson' | 'diagnostic';
 export type Outcome = 'success' | 'fail' | 'assisted' | 'skipped';
-export type ExerciseKind = 'puzzle' | 'lesson-try';
+export type ExerciseKind = 'puzzle' | 'lesson-try' | 'opening' | 'own-game';
 
 /**
  * Immutable record of one presentation of one exercise. Never updated or deleted.
@@ -32,6 +32,11 @@ export interface Attempt {
   hints: number;
   outcome: Outcome;
   acceptedAlternative: boolean;
+  /**
+   * Opening recall only: when the move played was not the repertoire move, what the engine
+   * evidence says about it. A sound alternative is recorded as such, not as a blunder.
+   */
+  altVerdict?: 'sound' | 'weaker' | 'unknown';
   /** No earlier attempt at this exercise existed on this device. */
   fresh: boolean;
   /** The exercise was in the spaced-review queue and due when shown. */

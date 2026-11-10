@@ -4,6 +4,9 @@ import { type Learner, useDueReviews, useNow, usePack, usePool } from '../app/st
 import { CONCEPT_BY_ID, conceptOpenings, conceptThemes, THEMES } from '../content';
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
+import { OwnGameRun, useGames } from './Games';
+import { OpeningRecallRun } from './Openings';
+import { drillPositions } from '../games/metrics';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
@@ -13,6 +16,8 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   const pack = usePack();
   const now = useNow();
   const due = useDueReviews(learner.reviews, now);
+  const games = useGames();
+  const ownDrills = useMemo(() => (games ? drillPositions(games).length : 0), [games]);
   const remaining = useMemo(() => {
     const out = new Map<string, number>();
     if (!pool) return out;
@@ -53,7 +58,9 @@ export function PracticeHome({ learner }: { learner: Learner }) {
         <ul className="concept-list">
           {row('review', 'Review what is due', `${due.length} due now, ${learner.reviews.length} in the queue`, { mode: 'review' })}
         </ul>
-        <p className="muted small">Mistakes from your own games will appear here once game import exists. No games are imported yet.</p>
+        <ul className="concept-list">
+          {row('own', 'Positions from your own games', games && games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where you missed a move the engine found clearly best` : 'Appears after analysed games are imported under Progress, Your data', { mode: 'own' })}
+        </ul>
       </section>
 
       <section className="concept-group">
@@ -68,7 +75,15 @@ export function PracticeHome({ learner }: { learner: Learner }) {
         <ul className="concept-list">
           {openings.map((s) => row(s.concept.id, `Tactics from the ${OPENING_NAMES[conceptOpenings(s.concept)[0]!] ?? s.concept.title}`, metaFor(s.concept.id, s.evidence.n, s.evidence.successes), { concept: s.concept.id }))}
         </ul>
-        <p className="muted small">These are positions from real games that began with your openings. Move-by-move repertoire training is not built yet.</p>
+        <ul className="concept-list">
+          <li>
+            <a href={href('practice/openings')} data-testid="practice-openings">
+              <span className="concept-name">Opening repertoire</span>
+              <span className="concept-meta">Record the moves you play, most common positions first, and recall them on a schedule</span>
+            </a>
+          </li>
+        </ul>
+        <p className="muted small">The tactics above are positions from real games that began with your openings.</p>
       </section>
 
       <section className="concept-group">
@@ -106,9 +121,11 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
     <div className="page run" data-testid="practice-run">
       <header className="run-bar">
         <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
+        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
         <span />
       </header>
+      {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}
+      {mode === 'openings' && <OpeningRecallRun learner={learner} side={route.query.get('side') === 'black' ? 'black' : 'white'} onFinished={() => go('practice/openings')} />}
       {mode === 'review' && dueAtStart.current && <ReviewRunner due={dueAtStart.current} sessionId={null} onFinished={() => go('practice')} />}
       {concept && (
         <PuzzleStream key={concept.id} pick={conceptPicker(pool.puzzles, concept, learner.level.level - 100, seed)} context="practice" conceptId={concept.id}

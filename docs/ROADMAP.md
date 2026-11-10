@@ -21,11 +21,15 @@ Done: baseline diagnostic with untested/provisional states; concept taxonomy and
 - Diagnostic, concept taxonomy/prereqs, vetted source catalog, lesson sequencing, local/linked course state, novel transfer tests, first 30 days of credible course plan.
 - New-learning time protected, skip-tested prereqs, no false course completion.
 
-## M3 — Opening repertoire
+## M3 — Opening repertoire — BUILT 2026-11-10 (data deep only under 1.e4 e5 and 1.e4 c6)
+Done: position-keyed repertoire of the owner's own moves (transpositions merged), real move frequencies by rating band from the CC0 Lichess dump, engine evidence per move with sound / weaker / unknown, FSRS recall in a disclosed recall mode, sound alternatives reported separately, own-PGN import and export with round-trip test, encounter-weighted preparedness metric, offline. Not done: Lichess-study import; contextual explanations (no rights-cleared text mapped to positions yet); deep data for other first moves (extend `ROOTS` and rerun the pipeline).
+
 - Import permitted PGNs/Lichess studies; Italian/anti–Caro-Kann learning by position graph, transpositions, contextual explanations, sound alternatives vs bad moves, spaced decision drills.
 - Engine checked test lines and import round trips; complete repertoire session offline.
 
-## M4 — Local game analysis + real performance dashboard
+## M4 — Local game analysis + real performance dashboard — BUILT ON FIXTURES 2026-11-10; not yet run on the owner's games
+Done: manual-PGN import with idempotent identity, native Stockfish analysis with versioned settings and conservative labels, file import into the app, rating per time control, major errors per 100 decisions with coverage, missed tactical chances, clock-pressure comparison with a sample-size gate, drill-down to positions, drills from own missed moves. Not done: the owner's real games (username and PGN files needed), training-to-game transfer metric, PubAPI fetch (owner decision).
+
 - Chess.com game records from supported own-game import or compliant official access; native Mac Stockfish analysis, versioned results, conservative error labels and drill creation.
 - Dashboard: rating per time control, game errors and exposure, unseen puzzle performance, curriculum/retention, drill-to-game recurrence; all with denominators/provenance.
 

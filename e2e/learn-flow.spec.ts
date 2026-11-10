@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { failPuzzle, openApp, playMove, solvePuzzle } from './helpers';
+import { failPuzzle, openApp, playUntilAccepted, solvePuzzle } from './helpers';
 
 test('daily session: linked lesson -> apply -> check -> mixed test -> summary -> progress, surviving a restart', async ({ page, context }) => {
   await openApp(page);
@@ -83,15 +83,11 @@ test('local lesson: read the public-domain text, play its moves, and it is recor
     await expect(lesson).toHaveAttribute('data-step', String(s));
     const tryBox = page.getByTestId('lesson-try');
     if (await tryBox.count()) {
-      for (let i = 0; i < 4; i++) {
-        if ((await tryBox.getAttribute('data-finished')) === 'true') break;
+      const finished = async () => (await tryBox.getAttribute('data-finished')) === 'true';
+      for (let i = 0; i < 6; i++) {
+        if (await finished()) break;
         const expected = (await tryBox.getAttribute('data-expected'))!;
-        await playMove(page, expected);
-        await expect(async () => {
-          const fin = await tryBox.getAttribute('data-finished');
-          const exp = await tryBox.getAttribute('data-expected');
-          expect(fin === 'true' || exp !== expected).toBeTruthy();
-        }).toPass();
+        await playUntilAccepted(page, tryBox, expected, finished);
       }
       await expect(tryBox).toHaveAttribute('data-finished', 'true');
     }

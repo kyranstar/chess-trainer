@@ -4,6 +4,7 @@ import { SOURCES } from '../content';
 import { backupFileName, exportBackup, importBackup, serializeBackup } from '../db/backup';
 import { getMeta, setMeta } from '../db/db';
 import { installPack } from '../db/pack';
+import { GamesImport } from './Games';
 
 /** Backup, restore, storage durability, installed content and licences. */
 export function DataPanel({ learner }: { learner: Learner }) {
@@ -112,6 +113,8 @@ export function DataPanel({ learner }: { learner: Learner }) {
         </p>
         {persisted === false && <div className="actions"><button onClick={() => void persist()}>Ask the browser to protect storage</button></div>}
       </section>
+
+      <GamesImport />
 
       <section className="card" data-testid="card-content">
         <h2>Installed content</h2>

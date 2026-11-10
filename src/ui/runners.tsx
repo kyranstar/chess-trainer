@@ -7,7 +7,10 @@ import { CHECK, gradeCheck } from '../learn/curriculum';
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
+import { drillPositions } from '../games/metrics';
+import { OwnGameDrill, useGames } from './Games';
 import { LessonTry } from './LessonPlayer';
+import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
 export type Picker = (exclude: Set<string>, index: number) => Puzzle | null;
@@ -159,6 +162,10 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
   due: ReviewState[]; sessionId: string | null; stop?: boolean; onAttempt?: (a: Attempt) => void; onFinished: (reason: 'done' | 'stopped') => void;
 }) {
   const pool = usePool();
+  const book = useOpeningBook();
+  const repertoire = useRepertoire();
+  const prefs = useOpeningPrefs();
+  const games = useGames();
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
   const queue = useRef(due.map((d) => d.itemId));
   const [i, setI] = useState(0);
@@ -185,6 +192,16 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
       <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
         allowHints={false} heading={`Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
     );
+  }
+  if (itemId.startsWith('game:')) {
+    const drill = games ? drillPositions(games).find((d) => d.id === itemId) : undefined;
+    if (!drill) return <RetiredItem onNext={advance} />;
+    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
+  }
+  if (itemId.startsWith('opening:')) {
+    const entry = repertoire.find((e) => `opening:${e.id}` === itemId);
+    if (!entry) return <RetiredItem onNext={advance} />;
+    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }
   const [, lessonId, stepNo] = itemId.split(':');
   const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
