@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hintSquare, startRun, submitMove } from './run';
+import { hintSquare, startRun, submitMove, wrongMoveFor } from './run';
 import type { Puzzle } from './types';
 
 // Verbatim rows from the Lichess puzzle database (CC0).
@@ -90,5 +90,12 @@ describe('puzzle run', () => {
     const h = hintSquare(run);
     expect(h.square).toBe('e6');
     expect(h.run.hints).toBe(1);
+  });
+
+  it('wrongMoveFor returns a legal move that is scored wrong', () => {
+    const run = startRun(HANGING);
+    expect(submitMove(run, wrongMoveFor(run)).verdict).toBe('wrong');
+    const mate = startRun(MATE1);
+    expect(submitMove(mate, wrongMoveFor(mate)).verdict).toBe('wrong');
   });
 });

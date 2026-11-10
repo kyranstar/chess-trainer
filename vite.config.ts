@@ -6,6 +6,8 @@ import pkg from './package.json' with { type: 'json' };
 export default defineConfig({
   base: './',
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // One eagerly loaded bundle is deliberate: the whole app must be precached for offline use.
+  build: { chunkSizeWarningLimit: 800 },
   plugins: [
     react(),
     VitePWA({

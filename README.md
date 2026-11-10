@@ -1,10 +1,55 @@
-# Personalized Chess Trainer — implementation starter kit
+# Chess Trainer
 
-This archive is a source-controlled **design and implementation contract**, not a working app. It includes the Claude kickoff prompt and persistent engineering/product/course/metrics documents.
+A personal, offline-first chess coach for one learner (iPhone + Mac). It teaches concepts
+from human-written sources, practises them on unseen positions, schedules review, and
+reports only what the recorded attempts support.
 
-1. Unzip into a new git repository.
-2. In Claude Code, start with `KICKOFF_PROMPT.md` (paste or reference its content), and ensure Claude reads `CLAUDE.md` and `AGENTS.md`.
-3. Claude must begin with **M0 content feasibility**, then implement usable vertical slices.
-4. Keep `docs/STATE.md` current for resumability after compaction.
+Start with `docs/STATE.md` for what works today and what does not. The product contract is
+in `CLAUDE.md`, `AGENTS.md` and `docs/`.
 
-The user ratings, teaching choices, rights constraints, offline/mobile promises and quality gates are specified in `docs/`. No product or integration is yet implemented.
+## Layout
+
+| Path | What |
+|---|---|
+| `src/` | React + TypeScript PWA (Vite). `chess/` rules wrapper, `puzzles/`, `schedule/`, `learn/`, `metrics/`, `db/` (IndexedDB, backup), `ui/` |
+| `content/` | Source registry, concept map, CC0 theme definitions, local lessons, engine evidence |
+| `public/packs/` | Built offline puzzle pack (CC0 Lichess data, engine-verified) |
+| `pipeline/` | Mac-side Python: pack builder, lesson validator, source fetcher |
+| `e2e/` | Playwright tests against the production build |
+| `docs/` | Contract, decisions, content inventory, audits, state |
+| `data/` | Raw downloads and work files (git-ignored) |
+
+## Commands
+
+Node 22.23.1 (`nvm use`), Python via `uv`, native Stockfish on PATH for the pipeline.
+
+```sh
+npm install
+npm run dev          # http://localhost:5173
+npm run typecheck
+npm test             # unit tests (Vitest)
+npm run build        # typecheck + production build with service worker
+npm run e2e          # Playwright: iPhone-size WebKit + desktop Chromium, incl. offline
+npm run check        # all of the above
+
+cd pipeline
+uv sync
+uv run pytest                                        # puzzle semantics, lesson validation
+uv run python -m trainer_pipeline.fetch_sources      # download + checksum public-domain texts
+uv run python -m trainer_pipeline.lessons            # validate lessons, write engine evidence
+uv run python -m trainer_pipeline.build_puzzle_pack  # needs data/raw/lichess_db_puzzle.csv.zst (~25 min)
+```
+
+## Using it on an iPhone
+
+Serve `dist/` over HTTPS (any static host), open it in Safari, Share → Add to Home Screen,
+and open it once while online so the practice pack installs. After that it runs with no
+network. Progress lives only in that Home Screen app's storage: use Progress → Download
+backup to keep a copy and to move history between devices.
+
+## Licence
+
+GPL-3.0-or-later (the board and rules libraries are GPL). Bundled content: Lichess puzzle
+data and theme definitions (CC0); excerpts from Edward Lasker, *Chess and Checkers* (1918,
+public domain in the United States). Lessons on Chess.com, Chessreps and Lichess are linked,
+never copied. See `docs/CONTENT_INVENTORY.md`.

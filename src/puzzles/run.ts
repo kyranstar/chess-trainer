@@ -7,7 +7,7 @@
  *  - anything else is wrong. Packs only contain puzzles where the engine found the source
  *    move to be the only good move by a wide margin, so a sound alternative is not mis-scored.
  */
-import { applyUci, canonicalUci, type Color, fenOf, isCheckmate, positionFromFen, sameMove, type Uci } from '../chess/rules';
+import { applyUci, canonicalUci, type Color, fenOf, isCheckmate, legalDests, positionFromFen, sameMove, type Uci } from '../chess/rules';
 import type { Puzzle } from './types';
 
 export interface PuzzleRun {
@@ -102,4 +102,23 @@ export function hintSquare(run: PuzzleRun): { square: string; run: PuzzleRun } {
 /** Remaining solution from the current position (solver move, reply, ...). */
 export function remainingLine(run: PuzzleRun): Uci[] {
   return run.line.slice(run.ply);
+}
+
+/** A legal move that the answer policy scores as wrong (used by tests to exercise the miss path). */
+export function wrongMoveFor(run: PuzzleRun): Uci {
+  const pos = positionFromFen(run.fen);
+  const expected = expectedMove(run);
+  for (const [from, tos] of legalDests(pos)) {
+    for (const to of tos) {
+      for (const promo of ['', 'q']) {
+        const uci = `${from}${to}${promo}`;
+        try {
+          if (!sameMove(pos, uci, expected) && !isCheckmate(applyUci(pos, uci))) return uci;
+        } catch {
+          // not legal in this spelling (e.g. promotion needed); try the next
+        }
+      }
+    }
+  }
+  throw new Error('No wrong move exists in this position');
 }

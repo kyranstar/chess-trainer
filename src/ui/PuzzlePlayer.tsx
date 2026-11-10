@@ -1,0 +1,210 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
+import { THEMES } from '../content';
+import { recordAttempt } from '../db/db';
+import type { Attempt, AttemptContext, Outcome } from '../db/types';
+import { expectedMove, hintSquare, type PuzzleRun, remainingLine, startRun, submitMove, wrongMoveFor } from '../puzzles/run';
+import type { Puzzle } from '../puzzles/types';
+import { useDb, useFocusMode } from '../app/store';
+import { Board } from './Board';
+
+export interface PuzzlePlayerProps {
+  puzzle: Puzzle;
+  context: AttemptContext;
+  conceptId: string | null;
+  sessionId: string | null;
+  packVersion: string;
+  allowHints: boolean;
+  /** Heading shown above the board, e.g. "Review" or the concept title. */
+  heading?: string;
+  onRecorded?: (a: Attempt) => void;
+  onNext: () => void;
+  nextLabel?: string;
+}
+
+type Phase = 'setup' | 'solving' | 'solved' | 'revealed';
+
+export function PuzzlePlayer(props: PuzzlePlayerProps) {
+  const { puzzle, allowHints } = props;
+  const db = useDb();
+  useFocusMode();
+  const initial = useMemo(() => startRun(puzzle), [puzzle]);
+  const [run, setRun] = useState<PuzzleRun>(initial);
+  const [phase, setPhase] = useState<Phase>('setup');
+  const [lastMove, setLastMove] = useState<string | null>(null);
+  const [marks, setMarks] = useState<string[]>([]);
+  const [resetKey, setResetKey] = useState(0);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [wrongSan, setWrongSan] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const startedAt = useRef(0);
+  const decided = useRef(false);
+
+  // Show the position before the opponent's move briefly, then play the setup move.
+  useEffect(() => {
+    setRun(initial);
+    setPhase('setup');
+    setLastMove(null);
+    setMarks([]);
+    setOutcome(null);
+    setWrongSan(null);
+    decided.current = false;
+    const t = setTimeout(() => {
+      setLastMove(initial.setupMove);
+      setPhase('solving');
+      startedAt.current = Date.now();
+    }, 450);
+    return () => clearTimeout(t);
+  }, [initial]);
+
+  async function decide(o: Outcome, r: PuzzleRun) {
+    if (decided.current) return;
+    decided.current = true;
+    setOutcome(o);
+    const now = Date.now();
+    const a = await recordAttempt(db, {
+      sessionId: props.sessionId,
+      context: props.context,
+      exerciseId: `lichess:${puzzle.id}`,
+      exerciseKind: 'puzzle',
+      contentVersion: props.packVersion,
+      conceptId: props.conceptId,
+      themes: puzzle.themes,
+      rating: puzzle.rating,
+      ts: now,
+      elapsedMs: startedAt.current ? now - startedAt.current : 0,
+      firstMove: r.firstMove,
+      played: r.played,
+      mistakes: r.mistakes,
+      hints: r.hints,
+      outcome: o,
+      acceptedAlternative: r.acceptedAlternative,
+    });
+    props.onRecorded?.(a);
+  }
+
+  function onMove(uci: string) {
+    if (phase !== 'solving' || busy) return;
+    const before = positionFromFen(run.fen);
+    const res = submitMove(run, uci);
+    setMarks([]);
+    if (res.verdict === 'wrong') {
+      setWrongSan(sanOf(before, uci));
+      setRun(res.run);
+      setResetKey((k) => k + 1);
+      void decide(res.run.hints > 0 ? 'assisted' : 'fail', res.run);
+      return;
+    }
+    setWrongSan(null);
+    if (res.verdict === 'solved') {
+      setRun(res.run);
+      setLastMove(uci);
+      setPhase('solved');
+      void decide(res.run.hints > 0 ? 'assisted' : res.run.mistakes > 0 ? 'fail' : 'success', res.run);
+      return;
+    }
+    // Correct, with a forced reply: show the learner's move, then the reply.
+    setBusy(true);
+    const mid = { ...run, fen: positionAfter(run.fen, uci) };
+    setRun(mid);
+    setLastMove(uci);
+    setTimeout(() => {
+      setRun(res.run);
+      setLastMove(res.reply ?? null);
+      setBusy(false);
+    }, 380);
+  }
+
+  function hint() {
+    const h = hintSquare(run);
+    setRun(h.run);
+    setMarks([h.square]);
+    void decide('assisted', h.run);
+  }
+
+  function reveal() {
+    void decide(run.hints > 0 ? 'assisted' : 'fail', run);
+    setPhase('revealed');
+    setMarks([expectedMove(run).slice(0, 2), expectedMove(run).slice(2, 4)]);
+  }
+
+  async function skip() {
+    await decide('skipped', run);
+    props.onNext();
+  }
+
+  useEffect(() => {
+    (window as unknown as { __wrongMove?: () => string }).__wrongMove = () => wrongMoveFor(run);
+  }, [run]);
+
+  const solver = initial.solver;
+  const solutionSan = useMemo(() => {
+    if (phase !== 'revealed') return '';
+    let pos = positionFromFen(run.fen);
+    const out: string[] = [];
+    for (const u of remainingLine(run)) {
+      out.push(sanOf(pos, u));
+      pos = applyUci(pos, u);
+    }
+    return out.join(' ');
+  }, [phase, run]);
+
+  const done = phase === 'solved' || phase === 'revealed';
+  return (
+    <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' ? expectedMove(run) : ''}>
+      <header className="puzzle-head">
+        {props.heading && <p className="kicker">{props.heading}</p>}
+        <h2>{phase === 'setup' ? 'Opponent is moving' : `${solver === 'white' ? 'White' : 'Black'} to move`}</h2>
+      </header>
+      <Board fen={phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy ? solver : null} lastMove={lastMove} marks={marks} onMove={onMove} resetKey={resetKey} />
+
+      <div className="feedback" aria-live="polite">
+        {phase === 'solving' && !wrongSan && !outcome && <p className="muted">Find the best move. Any checkmate also counts.</p>}
+        {phase === 'solving' && outcome === 'assisted' && !wrongSan && <p className="muted">Hint shown: this attempt is recorded as assisted, not as a first-try solve.</p>}
+        {phase === 'solving' && wrongSan && (
+          <div className="verdict wrong" data-testid="verdict-wrong">
+            <strong>{wrongSan} is not the move.</strong>
+            <p>An engine check found one move here clearly better than every other. Recorded as missed; this position returns in your review queue.</p>
+          </div>
+        )}
+        {phase === 'solved' && (
+          <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
+            <strong>{outcome === 'success' ? 'Solved first try.' : 'Solved.'}</strong>
+            {run.acceptedAlternative && <p>Your checkmate differs from the source game’s move and is equally correct.</p>}
+            {outcome === 'fail' && <p>Recorded as missed because the first move was wrong. It returns in your review queue.</p>}
+            {outcome === 'assisted' && <p>Recorded as assisted because a hint was used. It returns in your review queue.</p>}
+          </div>
+        )}
+        {phase === 'revealed' && (
+          <div className="verdict neutral" data-testid="verdict-revealed">
+            <strong>Solution: {solutionSan}</strong>
+            <p>Recorded as missed. It returns in your review queue.</p>
+          </div>
+        )}
+      </div>
+
+      {done && (
+        <p className="provenance">
+          {puzzle.themes.filter((t) => THEMES[t]).map((t) => THEMES[t]!.name).join(', ') || 'Puzzle'}; Lichess puzzle rating {puzzle.rating}.{' '}
+          <a href={`https://lichess.org/training/${puzzle.id}`} target="_blank" rel="noreferrer">Puzzle {puzzle.id} on Lichess</a>
+        </p>
+      )}
+
+      <div className="actions">
+        {phase === 'solving' && (
+          <>
+            {wrongSan && <button className="primary" onClick={() => setWrongSan(null)}>Try again</button>}
+            {allowHints && !wrongSan && <button onClick={hint} disabled={marks.length > 0}>Show which piece</button>}
+            {(wrongSan || outcome) && <button onClick={reveal}>Show solution</button>}
+            {!outcome && <button className="quiet" onClick={() => void skip()}>Skip</button>}
+          </>
+        )}
+        {done && <button className="primary" data-testid="next" onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}
+      </div>
+    </section>
+  );
+}
+
+function positionAfter(fen: string, uci: string): string {
+  return fenOf(applyUci(positionFromFen(fen), uci));
+}

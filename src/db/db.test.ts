@@ -142,3 +142,21 @@ describe('backup and restore', () => {
     await expect(parseBackup('{}')).rejects.toThrow(/not a Chess Trainer backup/i);
   });
 });
+
+describe('schema', () => {
+  it('v1 table and index definitions are frozen (change = new version + migration test)', async () => {
+    const db = fresh();
+    await db.open();
+    expect(db.verno).toBe(1);
+    const shape = Object.fromEntries(db.tables.map((t) => [t.name, [t.schema.primKey.src, ...t.schema.indexes.map((i) => i.src)].join(', ')]));
+    expect(shape).toEqual({
+      meta: 'key',
+      packs: 'id',
+      puzzles: 'id, packId, rating, *themes',
+      attempts: 'uuid, exerciseId, ts, conceptId, sessionId',
+      lessonEvents: 'uuid, conceptId, ts',
+      reviewStates: 'itemId, due',
+      sessions: 'id, date',
+    });
+  });
+});
