@@ -146,3 +146,23 @@ export function estimateLevel(attempts: Attempt[]): { level: number; n: number }
 export function formatPct(x: number | null): string {
   return x === null ? '—' : `${Math.round(x * 100)}%`;
 }
+
+export interface EndgameAccuracy extends RateMetric {
+  win: { n: number; successes: number };
+  hold: { n: number; successes: number };
+}
+
+/**
+ * Theoretical endgame accuracy (king and pawn against king).
+ *   numerator   = starts played out with the win or draw kept on every move, first time seen, no help
+ *   denominator = first-time play-outs with a decided outcome
+ * Every move is judged by the exact table of the ending, so there is no engine judgement in it.
+ */
+export function endgameAccuracy(attempts: Attempt[], since?: number): EndgameAccuracy {
+  const rows = attempts.filter((a) => a.exerciseKind === 'endgame' && a.fresh && a.outcome !== 'skipped' && (since === undefined || a.ts >= since));
+  const part = (goal: string) => {
+    const r = rows.filter((a) => a.themes.includes(goal));
+    return { n: r.length, successes: r.filter((a) => a.outcome === 'success').length };
+  };
+  return { ...rateOf(rows), win: part('win'), hold: part('hold') };
+}

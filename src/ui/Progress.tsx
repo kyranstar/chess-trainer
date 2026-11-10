@@ -4,7 +4,7 @@ import { type Learner, useJournal, usePool } from '../app/store';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, THEMES } from '../content';
 import type { Attempt } from '../db/types';
-import { formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy } from '../metrics/metrics';
+import { endgameAccuracy, formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy } from '../metrics/metrics';
 import { startRun } from '../puzzles/run';
 import { Board } from './Board';
 import { walkRepertoire } from '../openings/repertoire';
@@ -63,6 +63,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const from = since(period);
   const overall = useMemo(() => unseenAccuracy(learner.attempts, { since: from }), [learner.attempts, from]);
   const ret = useMemo(() => retention(learner.attempts, from), [learner.attempts, from]);
+  const endgame = useMemo(() => endgameAccuracy(learner.attempts, from), [learner.attempts, from]);
   const perConcept = useMemo(
     () => learner.statuses.filter((s) => s.concept.themes.length > 0 && s.assessable).map((s) => ({ s, m: unseenAccuracy(learner.attempts, { themes: s.concept.themes, since: from }) })),
     [learner.attempts, learner.statuses, from],
@@ -157,6 +158,14 @@ export function ProgressHome({ learner }: { learner: Learner }) {
           </table>
         )}
         {ret.n > 0 && <a href={href('progress/positions', { set: 'retention', period })}>View the {ret.n} reviews</a>}
+      </section>
+
+      <section className="card" data-testid="card-endgame">
+        <h2>Endgame technique, exact</h2>
+        <RateLine m={endgame} unit="king-and-pawn play-outs" />
+        {endgame.n > 0 && <p>Winning: {endgame.win.successes} of {endgame.win.n}. Holding the draw: {endgame.hold.successes} of {endgame.hold.n}.</p>}
+        <p className="definition-small">King and pawn against king, first time each start is seen: the win or draw kept on every move against perfect play, with no help; {periodLabel}. Moves are judged by the complete table of this ending, so a failure is a move that changed the theoretical result, not an engine preference.</p>
+        <a href={href('practice/run', { mode: 'kpk' })}>Practise this ending</a>
       </section>
 
       <section className="card" data-testid="card-coverage">

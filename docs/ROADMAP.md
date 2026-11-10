@@ -33,7 +33,9 @@ Done: manual-PGN import with idempotent identity, native Stockfish analysis with
 - Chess.com game records from supported own-game import or compliant official access; native Mac Stockfish analysis, versioned results, conservative error labels and drill creation.
 - Dashboard: rating per time control, game errors and exposure, unseen puzzle performance, curriculum/retention, drill-to-game recurrence; all with denominators/provenance.
 
-## M5 — Advanced endgames, calculation and adaptive optimization
+## M5 — Advanced endgames, calculation and adaptive optimization — STARTED 2026-11-10
+Done: exact king-and-pawn-versus-king table computed and validated here; win/hold play-outs against perfect play; exact endgame metric. Not done: other theoretical endings, multi-ply calculation training beyond three-move puzzles, active defence and strategic ideas, baselines and controlled evaluation of scheduler changes.
+
 - Verified tablebase/theoretical endgame lessons; multi-ply calculation, active defense, strategic ideas; curriculum refinements grounded in assessment data.
 - Reproducible baselines, controlled evaluation of scheduler changes, comprehensive regression fixtures.
 

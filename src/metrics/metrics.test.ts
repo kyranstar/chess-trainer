@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Attempt } from '../db/types';
-import { bandOf, estimateLevel, PROVISIONAL_N, retention, unseenAccuracy, wilson } from './metrics';
+import { bandOf, endgameAccuracy, estimateLevel, PROVISIONAL_N, retention, unseenAccuracy, wilson } from './metrics';
 
 const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 10, 10, 12);
@@ -106,5 +106,23 @@ describe('practice level estimate', () => {
     const log = [att({ rating: 1500, ts: T0 }), att({ rating: 1500, ts: T0 + 1, outcome: 'fail' })];
     const noise = [att({ fresh: false, rating: 2500 }), att({ outcome: 'skipped', rating: 2500 }), att({ rating: null })];
     expect(estimateLevel([...noise, ...log.slice().reverse()])).toEqual(estimateLevel(log));
+  });
+});
+
+describe('theoretical endgame accuracy', () => {
+  it('counts first-time play-outs only, split by task, and stays out of the puzzle metric', () => {
+    const log = [
+      att({ exerciseKind: 'endgame', themes: ['kpk', 'win'], rating: null, outcome: 'success' }),
+      att({ exerciseKind: 'endgame', themes: ['kpk', 'win'], rating: null, outcome: 'fail' }),
+      att({ exerciseKind: 'endgame', themes: ['kpk', 'hold'], rating: null, outcome: 'assisted', hints: 1 }),
+      att({ exerciseKind: 'endgame', themes: ['kpk', 'hold'], rating: null, outcome: 'success', fresh: false }),
+    ];
+    const m = endgameAccuracy(log);
+    expect(m.n).toBe(3);
+    expect(m.successes).toBe(1);
+    expect(m.win).toEqual({ n: 2, successes: 1 });
+    expect(m.hold).toEqual({ n: 1, successes: 0 });
+    expect(unseenAccuracy(log).n).toBe(0);
+    expect(endgameAccuracy([]).confidence).toBe('none');
   });
 });

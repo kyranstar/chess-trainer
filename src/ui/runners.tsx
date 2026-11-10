@@ -9,6 +9,7 @@ import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
 import { drillPositions } from '../games/metrics';
 import { OwnGameDrill, useGames } from './Games';
+import { KpkDrill, type KpkGoal } from './Kpk';
 import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
@@ -192,6 +193,10 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
       <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
         allowHints={false} heading={`Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
     );
+  }
+  if (itemId.startsWith('kpk:')) {
+    const [, goal, ...rest] = itemId.split(':');
+    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('game:')) {
     const drill = games ? drillPositions(games).find((d) => d.id === itemId) : undefined;

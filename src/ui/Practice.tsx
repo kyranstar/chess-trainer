@@ -5,7 +5,9 @@ import { CONCEPT_BY_ID, conceptOpenings, conceptThemes, THEMES } from '../conten
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { OwnGameRun, useGames } from './Games';
+import { KpkRun } from './Kpk';
 import { OpeningRecallRun } from './Openings';
+import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
@@ -18,6 +20,7 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   const due = useDueReviews(learner.reviews, now);
   const games = useGames();
   const ownDrills = useMemo(() => (games ? drillPositions(games).length : 0), [games]);
+  const kpkSeen = useMemo(() => new Set(learner.attempts.filter((a) => a.exerciseKind === 'endgame').map((a) => a.exerciseId)).size, [learner.attempts]);
   const remaining = useMemo(() => {
     const out = new Map<string, number>();
     if (!pool) return out;
@@ -91,7 +94,10 @@ export function PracticeHome({ learner }: { learner: Learner }) {
         <ul className="concept-list">
           {endgames.map((s) => row(s.concept.id, s.concept.title, metaFor(s.concept.id, s.evidence.n, s.evidence.successes), { concept: s.concept.id }))}
         </ul>
-        <p className="muted small">Endgame positions from games. Theoretical endings checked against tablebases are not built yet.</p>
+        <ul className="concept-list">
+          {row('kpk', 'King and pawn against king, exact', `${KPK_DRILLS.win.length + KPK_DRILLS.hold.length - kpkSeen} unseen starts; win it or hold it against perfect play, every move checked against the full table of the ending`, { mode: 'kpk' })}
+        </ul>
+        <p className="muted small">The first group is endgame positions from real games. Other theoretical endings (rook endings, basic mates) are not built yet.</p>
       </section>
 
       <section className="concept-group">
@@ -121,9 +127,10 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
     <div className="page run" data-testid="practice-run">
       <header className="run-bar">
         <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
+        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
         <span />
       </header>
+      {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'openings' && <OpeningRecallRun learner={learner} side={route.query.get('side') === 'black' ? 'black' : 'white'} onFinished={() => go('practice/openings')} />}
       {mode === 'review' && dueAtStart.current && <ReviewRunner due={dueAtStart.current} sessionId={null} onFinished={() => go('practice')} />}
