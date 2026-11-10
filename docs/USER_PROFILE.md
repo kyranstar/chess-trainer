@@ -1,0 +1,14 @@
+# Initial learner configuration (supplied directly)
+- Chess.com Daily: 772.
+- Chess.com Rapid: 457.
+- Chess.com Blitz: 423.
+- Chess.com Puzzles: 1617.
+- Ratings are separate instruments; do not combine or compare numerically as equivalent.
+- Repertoire familiarity: Italian Game as White, learning anti–Caro-Kann continuations. Black repertoire not chosen; infer candidates from games and ask only when necessary.
+- Daily training budget: 30 minutes; allow 10/20/45/60-minute sessions, but keep 30 as default.
+- Teaching style: balanced—short verified explanation then guided example, independent practice, feedback and delayed review.
+- Existing subscriptions: Chessreps and Chess.com (plan tiers and particular courses not specified).
+- Target devices: iPhone and Mac.
+- Privacy: local-only by default; no cloud LLM; no paid required AI.
+- Cross-device sync: defer initially. Static hosting for the PWA and optional content downloads is compatible with local-only *user data*.
+- Goal: learn new chess principles and raise real-game rating efficiently; use human-written courses and performance metrics.
