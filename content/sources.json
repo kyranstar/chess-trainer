@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "reviewedAt": "2026-11-10",
+  "sources": [
+    {
+      "id": "lasker-chess-and-checkers-1918",
+      "title": "Chess and Checkers: The Way to Mastership",
+      "author": "Edward Lasker",
+      "provider": "Project Gutenberg",
+      "url": "https://www.gutenberg.org/ebooks/4913",
+      "sourceType": "book",
+      "permission": "public-domain-reviewed",
+      "licenseUrl": "https://www.gutenberg.org/policy/permission.html",
+      "licenseNotes": "Published New York, 1918: public domain in the United States (published before 1931). Edward Lasker died in 1981, so the text is NOT yet public domain in life+70 jurisdictions. Excerpts are stored without Project Gutenberg branding.",
+      "jurisdiction": "US",
+      "contentVersion": "Project Gutenberg eBook #4913, text file sha256 fc8d530a0aa820dcd82d58f7de5669c489331ce481afad88f7ddabcbd97520f0",
+      "localFile": "pg4913.txt",
+      "fetchUrl": "https://www.gutenberg.org/cache/epub/4913/pg4913.txt",
+      "sha256": "fc8d530a0aa820dcd82d58f7de5669c489331ce481afad88f7ddabcbd97520f0",
+      "teachingLevel": "beginner to improving beginner",
+      "accessRequirement": "none",
+      "onlineRequired": false,
+      "lastReviewedAt": "2026-11-10"
+    },
+    {
+      "id": "capablanca-chess-fundamentals-1921",
+      "title": "Chess Fundamentals",
+      "author": "José Raúl Capablanca",
+      "provider": "Project Gutenberg",
+      "url": "https://www.gutenberg.org/ebooks/33870",
+      "sourceType": "book",
+      "permission": "public-domain-reviewed",
+      "licenseUrl": "https://www.gutenberg.org/policy/permission.html",
+      "licenseNotes": "Published 1921: public domain in the United States. Capablanca died in 1942, so also public domain in life+70 jurisdictions. The plain-text edition omits the diagrams; positions must be re-derived and proven against the text's own move sequences before use.",
+      "jurisdiction": "US and life+70 countries",
+      "contentVersion": "Project Gutenberg eBook #33870, text file sha256 86f8bbe769853ddac506c65f6b4fb2e78cb5f00761e6bee06c4d7a415b042639",
+      "localFile": "pg33870.txt",
+      "fetchUrl": "https://www.gutenberg.org/cache/epub/33870/pg33870.txt",
+      "sha256": "86f8bbe769853ddac506c65f6b4fb2e78cb5f00761e6bee06c4d7a415b042639",
+      "teachingLevel": "improving beginner to intermediate",
+      "accessRequirement": "none",
+      "onlineRequired": false,
+      "lastReviewedAt": "2026-11-10"
+    }
+  ]
+}

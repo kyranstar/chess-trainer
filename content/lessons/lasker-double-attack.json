@@ -1,0 +1,130 @@
+{
+  "id": "lasker-double-attack",
+  "conceptId": "tactics.double-attack",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "How the different men cooperate: the double attack",
+  "locator": "Part II, section “How the Different Men Cooperate”, Diagrams 20–23",
+  "revision": 1,
+  "estMinutes": 8,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  },
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "There are two kinds of elementary attack. One when a single man attacks two or more hostile men at the same time; the other when more men are brought up to attack an opposing man than can be mustered for defense. The beginner, as a rule, makes attacks with the sole aim of driving away a hostile piece; it is clear that these attempts will in most cases be futile as they generally allow the attacked piece to move to another square just as or perhaps more favorable. The advantage of attacking two men at once is evident in that probably only one of them can be saved. The advantage of bringing up more men for attack than can be gathered for defense is not less obvious, but will be found more difficult to carry out. Using both methods of attack in conjunction is the secret of the successful cooperation of the men.",
+        "In the following diagrams simple illustrations are shown of elementary cases of such attacks. These positions often occur in games of beginners on account of their placing the men on unfavorable squares. In studying them the eye of the beginner will become accustomed to dangerous formations of the pieces and he will be able to foresee similar threats in his games."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r3k1nr/pbp1bppp/1pnp1q2/4p3/2B1P3/2NPBN2/PPP2PPP/R2Q1RK1 w kq - 0 1",
+      "diagram": 20,
+      "orientation": "white",
+      "moves": [
+        "c3d5"
+      ],
+      "after": [
+        "In the position of Diagram 20 White on the move wins the exchange and thereby practically the game by playing (1) Kt-d5. With this move he attacks the Queen and at the same time the Pawn c7. Black, in order not to lose the Queen, must move her, but he cannot move her so that she will protect the Pawn c7.",
+        "On the next move White will, therefore, take the Pawn calling Check and at the same time attacking the Rook a8. The King must move and the Knight takes the Rook."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnb1kb1r/ppp2ppp/2q5/3Np3/4P3/8/PPP2PPP/R2QKBNR w KQkq - 2 2",
+      "diagram": 21,
+      "diagramFen": "rnb1kb1r/ppp2ppp/5q2/4p3/4P3/2N5/PPP2PPP/R2QKBNR w KQkq - 0 1",
+      "afterDiagramMoves": [
+        "Nd5",
+        "Qc6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "f1b5",
+        "c6b5",
+        "d5c7"
+      ],
+      "before": [],
+      "after": [
+        "Quite frequently a similar attack with the Knight is likely to win the Queen if the opponent is not familiar with situations of that kind. If in the position of Diagram 21 White plays (1) Kt-d5, Black must protect the Pawn c7 by Q-d8 or Q-d6, but not by Q-c6; for in the latter case White would continue with (2) B-b5, Qxb5; (3) Ktxc7+ and (4) Ktxb5."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "rnb1kb1r/ppp2ppp/4pn2/q7/2BP4/2N5/PPPB1PPP/R2QK1NR b KQkq - 0 1",
+      "diagram": 22,
+      "fromMoves": [
+        "e4",
+        "d5",
+        "exd5",
+        "Qxd5",
+        "Nc3",
+        "Qa5",
+        "d4",
+        "Nf6",
+        "Bc4",
+        "e6",
+        "Bd2"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Sometimes two pieces are involved in the double attack, the line of one of the pieces being discovered by the other. Thus, in the position of Diagram 22, which could be brought about by the moves (1) P-e4, P-d5; (2) Pxd5, Qxd5; (3) Kt-c3, Q-a5; (4) P-d4, Kt-f6; (5) B-c4, P-e6; (6) B-d2, white threatens to play (7) Kt-d5, uncovering the Bishop d2 on Black's Queen and at the same time attacking the Pawn c7, which Black cannot keep protected."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nf6",
+        "Nxe5",
+        "Nxe4",
+        "Qe2",
+        "Nf6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "e5c6"
+      ],
+      "after": [
+        "Threats of this kind more frequently occur in connection with a discovered Check. As an example the following opening will serve: (1) P-e4, P-e5; (2) Kt-f3, Kt-f6; (3) Ktxe5, Ktxe4; (4) Q-e2, Kt-f6. Black's last move exposes his King to a discovered Check, and White wins the Queen by playing (5) Kt-c6+."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Next to the Knight the Queen is most frequently in a position to carry out a double attack. Two typical examples are shown in the following diagrams."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbqk1nr/pppp1ppp/8/2b1P3/4P3/8/PPPP2PP/RNBQKBNR b KQkq - 0 1",
+      "diagram": 23,
+      "fromMoves": [
+        "e4",
+        "e5",
+        "f4",
+        "Bc5",
+        "fxe5"
+      ],
+      "orientation": "black",
+      "moves": [
+        "d8h4",
+        "g2g3",
+        "h4e4"
+      ],
+      "after": [
+        "After the opening moves (1) P-e4, P-e5; (2) P-f4, B-C5; (3) Pxe5?? the position of Diagram 23 is reached, in which Black wins a Rook by Q-h4+. White cannot reply (4) K-e2 on account of Qxe4 mate. His only move is (4) P-g3 and then follows Qxe4 attacking King and Rook simultaneously."
+      ]
+    }
+  ]
+}

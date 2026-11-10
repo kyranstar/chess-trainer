@@ -1,0 +1,97 @@
+{
+ "source": {
+  "id": "lichess-puzzle-themes",
+  "license": "CC0-1.0",
+  "sha256": "6e34a3b0c5954cfe5966e926a30786db06b673408f70c3037f8f6edb21da258b"
+ },
+ "themes": {
+  "advancedPawn": {
+   "name": "Advanced pawn",
+   "description": "One of your pawns is deep into the opponent position, maybe threatening to promote."
+  },
+  "attraction": {
+   "name": "Attraction",
+   "description": "An exchange or sacrifice encouraging or forcing an opponent piece to a square that allows a follow-up tactic."
+  },
+  "backRankMate": {
+   "name": "Back rank mate",
+   "description": "Checkmate the king on the home rank, when it is trapped there by its own pieces."
+  },
+  "capturingDefender": {
+   "name": "Capture the defender",
+   "description": "Removing a piece that is critical to defence of another piece, allowing the now undefended piece to be captured on a following move."
+  },
+  "defensiveMove": {
+   "name": "Defensive move",
+   "description": "A precise move or sequence of moves that is needed to avoid losing material or another advantage."
+  },
+  "deflection": {
+   "name": "Deflection",
+   "description": "A move that distracts an opposing piece from another duty that it performs, such as guarding a key square. Sometimes also called \"overloading\"."
+  },
+  "discoveredAttack": {
+   "name": "Discovered attack",
+   "description": "Moving a piece (such as a knight), that previously blocked an attack by a long range piece (such as a rook), out of the way of that piece."
+  },
+  "doubleCheck": {
+   "name": "Double check",
+   "description": "Checking with two pieces at once, as a result of a discovered attack where both the moving piece and the unveiled piece attack the opponent's king."
+  },
+  "fork": {
+   "name": "Fork",
+   "description": "A move where a piece attacks two or more opposing pieces simultaneously."
+  },
+  "hangingPiece": {
+   "name": "Hanging piece",
+   "description": "A tactic involving an opponent piece being undefended or insufficiently defended and free to capture."
+  },
+  "intermezzo": {
+   "name": "Intermezzo",
+   "description": "Instead of playing the expected move, first interpose another move posing an immediate threat that the opponent must answer. Also known as \"Zwischenzug\" or \"In between\"."
+  },
+  "long": {
+   "name": "Long puzzle",
+   "description": "Three moves to win."
+  },
+  "mateIn1": {
+   "name": "Mate in 1",
+   "description": "Deliver checkmate in one move."
+  },
+  "mateIn2": {
+   "name": "Mate in 2",
+   "description": "Deliver checkmate in two moves."
+  },
+  "pawnEndgame": {
+   "name": "Pawn endgame",
+   "description": "An endgame with only pawns."
+  },
+  "pin": {
+   "name": "Pin",
+   "description": "A tactic involving pins, where a piece is unable to move without revealing an attack on a higher value piece."
+  },
+  "quietMove": {
+   "name": "Quiet move",
+   "description": "A move that does not check, capture, or create an immediate threat to capture. Instead, it prepares a hidden and unavoidable threat for a later move."
+  },
+  "rookEndgame": {
+   "name": "Rook endgame",
+   "description": "An endgame with only rooks and pawns."
+  },
+  "short": {
+   "name": "Short puzzle",
+   "description": "Two moves to win."
+  },
+  "skewer": {
+   "name": "Skewer",
+   "description": "A motif involving a high value piece being attacked, moving out the way, and allowing a lower value piece behind it to be captured or attacked, the inverse of a pin."
+  },
+  "smotheredMate": {
+   "name": "Smothered mate",
+   "description": "A checkmate delivered by a knight in which the mated king is unable to move because it is surrounded (or smothered) by its own pieces."
+  },
+  "trappedPiece": {
+   "name": "Trapped piece",
+   "description": "A piece is unable to escape capture as it has limited moves."
+  }
+ }
+}

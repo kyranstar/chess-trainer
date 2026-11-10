@@ -1,0 +1,124 @@
+/**
+ * Local-only storage (IndexedDB via Dexie).
+ *
+ * Two kinds of table:
+ *  - user history (attempts, lessonEvents, sessions, meta): irreplaceable, append-only where
+ *    noted, included in backups, never deleted by content or app updates;
+ *  - replaceable content/derived data (packs, puzzles, reviewStates): can be rebuilt.
+ *
+ * Schema changes: add a new `this.version(n)` block below, never edit an old one, and add a
+ * migration test that opens a database created with the previous schema.
+ */
+import Dexie, { type EntityTable, type Table } from 'dexie';
+import { applyAttempt, rebuildReviewStates, SCHEDULER_VERSION } from '../schedule/review';
+import type { Attempt, AttemptDraft, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
+
+export const DB_NAME = 'chess-trainer';
+export const SCHEMA_VERSION = 1;
+
+export class TrainerDB extends Dexie {
+  meta!: EntityTable<MetaRow, 'key'>;
+  packs!: EntityTable<PackRow, 'id'>;
+  puzzles!: EntityTable<PuzzleRow, 'id'>;
+  attempts!: EntityTable<Attempt, 'uuid'>;
+  lessonEvents!: EntityTable<LessonEvent, 'uuid'>;
+  reviewStates!: EntityTable<ReviewState, 'itemId'>;
+  sessions!: EntityTable<SessionRecord, 'id'>;
+
+  constructor(name: string) {
+    super(name);
+    this.version(1).stores({
+      meta: 'key',
+      packs: 'id',
+      puzzles: 'id, packId, rating, *themes',
+      attempts: 'uuid, exerciseId, ts, conceptId, sessionId',
+      lessonEvents: 'uuid, conceptId, ts',
+      reviewStates: 'itemId, due',
+      sessions: 'id, date',
+    });
+  }
+}
+
+export function openDb(name: string = DB_NAME): TrainerDB {
+  return new TrainerDB(name);
+}
+
+export async function deleteDb(name: string): Promise<void> {
+  await Dexie.delete(name);
+}
+
+export function newUuid(): string {
+  return crypto.randomUUID();
+}
+
+export function tzOffsetMin(ts: number): number {
+  return -new Date(ts).getTimezoneOffset();
+}
+
+export async function getMeta<T>(db: TrainerDB, key: string): Promise<T | undefined> {
+  return (await db.meta.get(key))?.value as T | undefined;
+}
+
+export async function setMeta(db: TrainerDB, key: string, value: unknown): Promise<void> {
+  await db.meta.put({ key, value });
+}
+
+/** Stable random id for this browser profile; created on first use. */
+export async function getDeviceId(db: TrainerDB): Promise<string> {
+  return db.transaction('rw', db.meta, async () => {
+    const existing = await getMeta<string>(db, 'deviceId');
+    if (existing) return existing;
+    const id = newUuid();
+    await setMeta(db, 'deviceId', id);
+    return id;
+  });
+}
+
+/** Appends one immutable attempt and updates the derived review state atomically. */
+export async function recordAttempt(db: TrainerDB, draft: AttemptDraft): Promise<Attempt> {
+  const deviceId = await getDeviceId(db);
+  return db.transaction('rw', db.attempts, db.reviewStates, async () => {
+    const earlier = await db.attempts.where('exerciseId').equals(draft.exerciseId).toArray();
+    const last = earlier.reduce<Attempt | undefined>((m, a) => (!m || a.ts > m.ts ? a : m), undefined);
+    const state = await db.reviewStates.get(draft.exerciseId);
+    const attempt: Attempt = {
+      ...draft,
+      uuid: newUuid(),
+      deviceId,
+      tzOffsetMin: tzOffsetMin(draft.ts),
+      fresh: earlier.length === 0,
+      scheduledReview: !!state && state.due <= draft.ts,
+      daysSinceLast: last ? Math.floor((draft.ts - last.ts) / 86_400_000) : null,
+      schedulerVersion: SCHEDULER_VERSION,
+    };
+    await db.attempts.add(attempt);
+    const next = applyAttempt(state, attempt);
+    if (next) await db.reviewStates.put(next);
+    return attempt;
+  });
+}
+
+export async function recordLessonEvent(
+  db: TrainerDB,
+  e: Omit<LessonEvent, 'uuid' | 'deviceId' | 'tzOffsetMin'>,
+): Promise<LessonEvent> {
+  const event: LessonEvent = { ...e, uuid: newUuid(), deviceId: await getDeviceId(db), tzOffsetMin: tzOffsetMin(e.ts) };
+  await db.lessonEvents.add(event);
+  return event;
+}
+
+export async function saveSession(db: TrainerDB, s: SessionRecord): Promise<void> {
+  await db.sessions.put(s);
+}
+
+/** Recomputes every review state from the attempt log (after restore or a scheduler change). */
+export async function rebuildReviews(db: TrainerDB): Promise<number> {
+  return db.transaction('rw', db.attempts, db.reviewStates, async () => {
+    const states = rebuildReviewStates(await db.attempts.toArray());
+    await db.reviewStates.clear();
+    await db.reviewStates.bulkPut([...states.values()]);
+    return states.size;
+  });
+}
+
+export type { Table };

@@ -1,0 +1,69 @@
+{
+  "engine": "Stockfish 19",
+  "limit": {
+    "nodes": 400000
+  },
+  "maxLossWinPct": 5.0,
+  "lessons": [
+    {
+      "lesson": "lasker-double-attack",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 2,
+          "fen": "r3k1nr/pbp1bppp/1pnp1q2/4p3/2B1P3/2NPBN2/PPP2PPP/R2Q1RK1 w kq - 0 1",
+          "move": "c3d5",
+          "san": "Nd5",
+          "engineBest": "c3d5",
+          "bestWinPct": 93.7,
+          "moveWinPct": 93.7
+        },
+        {
+          "step": 3,
+          "fen": "rnb1kb1r/ppp2ppp/2q5/3Np3/4P3/8/PPP2PPP/R2QKBNR w KQkq - 2 2",
+          "move": "f1b5",
+          "san": "Bb5",
+          "engineBest": "f1b5",
+          "bestWinPct": 95.0,
+          "moveWinPct": 94.9
+        },
+        {
+          "step": 3,
+          "fen": "rnb1kb1r/ppp2ppp/8/1q1Np3/4P3/8/PPP2PPP/R2QK1NR w KQkq - 0 3",
+          "move": "d5c7",
+          "san": "Nxc7+",
+          "engineBest": "d5c7",
+          "bestWinPct": 97.1,
+          "moveWinPct": 97.2
+        },
+        {
+          "step": 6,
+          "fen": "rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5",
+          "move": "e5c6",
+          "san": "Nc6+",
+          "engineBest": "e5c6",
+          "bestWinPct": 95.4,
+          "moveWinPct": 95.5
+        },
+        {
+          "step": 8,
+          "fen": "rnbqk1nr/pppp1ppp/8/2b1P3/4P3/8/PPPP2PP/RNBQKBNR b KQkq - 0 1",
+          "move": "d8h4",
+          "san": "Qh4+",
+          "engineBest": "d8h4",
+          "bestWinPct": 85.4,
+          "moveWinPct": 85.4
+        },
+        {
+          "step": 8,
+          "fen": "rnb1k1nr/pppp1ppp/8/2b1P3/4P2q/6P1/PPPP3P/RNBQKBNR b KQkq - 0 2",
+          "move": "h4e4",
+          "san": "Qxe4+",
+          "engineBest": "h4e4",
+          "bestWinPct": 87.8,
+          "moveWinPct": 86.6
+        }
+      ]
+    }
+  ]
+}
