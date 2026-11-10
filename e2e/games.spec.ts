@@ -79,3 +79,51 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.');
   await expect(errors).toContainText('3 in 27 decisions');
 });
+
+test('a question from your own games stays put while new games arrive and are analysed in the background', async ({ page }) => {
+  // What the phone does all the time: a game is fetched and analysed while a question is on screen.
+  let extraGame = false;
+  const later = { ...archive.games[1], url: 'https://www.chess.com/game/live/900000099', end_time: archive.games[1].end_time + 3600 };
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: extraGame ? { games: [...archive.games, later] } : archive });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  const start = new Date(2026, 10, 10, 9, 0, 0);
+  await page.clock.install({ time: start });
+  await openApp(page, '#/progress');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
+
+  await page.goto('./#/practice/run?mode=sense');
+  const drill = page.getByTestId('sense-drill');
+  await expect(drill).toHaveAttribute('data-phase', 'ask');
+  const question = await drill.locator('h2').textContent();
+  const fen = await drill.locator('.board').getAttribute('data-fen');
+
+  // Hours later the app comes back online: it fetches by itself, finds a new game and analyses it.
+  extraGame = true;
+  await page.clock.setSystemTime(new Date(start.getTime() + 4 * 3_600_000));
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  const measured = () => page.evaluate(() => new Promise<number>((resolve, reject) => {
+    const open = indexedDB.open('chess-trainer');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const all = open.result.transaction('games').objectStore('games').getAll();
+      all.onsuccess = () => { open.result.close(); resolve((all.result as { measure?: unknown }[]).filter((g) => g.measure).length); };
+    };
+  }));
+  await expect.poll(measured, { timeout: 90_000 }).toBe(7);
+
+  // The same question is still on screen, still waiting for an answer.
+  await expect(drill).toHaveAttribute('data-phase', 'ask');
+  expect(await drill.locator('h2').textContent()).toBe(question);
+  expect(await drill.locator('.board').getAttribute('data-fen')).toBe(fen);
+  await page.getByTestId('sense-no').click();
+  await expect(page.getByTestId('sense-verdict')).toBeVisible();
+});
+

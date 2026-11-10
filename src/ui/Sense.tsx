@@ -144,18 +144,29 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
   const items = useMemo(() => (games ? senseItemsFrom(games) : null), [games]);
   const seenAtStart = useRef<Set<string> | null>(null);
   if (seenAtStart.current === null && learner.ready) seenAtStart.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId));
-  const current = useMemo(() => {
-    if (!items || !seenAtStart.current) return undefined;
+  // The question for turn `n` is chosen once and kept. The games list changes underneath all
+  // the time (a game is fetched or its analysis finishes every few seconds while the app is
+  // open); choosing again on every change swapped the position out from under the learner
+  // before they could answer.
+  const latch = useRef<{ n: number; item: SenseItem } | null>(null);
+  let current: SenseItem | null | undefined;
+  if (!items || !seenAtStart.current) current = undefined;
+  else if (latch.current?.n === n) current = latch.current.item;
+  else {
     const seen = new Set([...seenAtStart.current, ...shown.current]);
     const kinds: SenseKind[] = n % 2 === 0 ? ['safe-or-not', 'chance-or-not'] : ['chance-or-not', 'safe-or-not'];
+    current = null;
     for (const kind of kinds) {
       // Ask for a pair so truth alternates over time; take the first.
       const pick = pickSense(items, kind, seen, 2, `sense|${n}`)[0];
-      if (pick) return pick;
+      if (pick) {
+        current = pick;
+        break;
+      }
     }
-    return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, n, learner.ready]);
+    // Only a real question is kept: while there is none yet, newly analysed games may supply one.
+    if (current) latch.current = { n, item: current };
+  }
   if (current === undefined) return <p className="muted">Loading your games</p>;
   if (current === null) {
     return (
