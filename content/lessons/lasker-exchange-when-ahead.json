@@ -1,0 +1,35 @@
+{
+  "id": "lasker-exchange-when-ahead",
+  "conceptId": "conversion.trade-when-ahead",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "A pawn ahead: forcing the exchange of pieces",
+  "locator": "Part II, section “Relative Value of the Men”, Diagram 17",
+  "revision": 1,
+  "estMinutes": 4,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "From the foregoing it will be clear to the beginner that if a player succeeds in winning a Pawn he can win the game if he is able to exchange all pieces so that only the Pawns are left. However, he will not yet see the way in which this exchange of pieces can be forced. It is evident that the player who has lost the Pawn will try to avoid the exchange, hoping that he may be able to regain the Pawn with his pieces. Therefore, he will permit his opponent an exchange only if, in avoiding it, he would sustain an additional loss. The position of Diagram 17 offers a simple example."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
+      "diagram": 17,
+      "orientation": "white",
+      "moves": [
+        "e2e5"
+      ],
+      "after": [
+        "White on the move will play R-e5, offering the exchange of Rooks. If Black tried to avoid the exchange by playing R-b6, White would capture the Pawn f5 with the Rook and after Black's King moves out of check he would take the Pawn g4 too. Therefore Black has to make the offered exchange of Rooks, and White then wins by advancing the c-Pawn which forces Black's King over to the Queen's wing and leaves the Pawns of the King's wing unprotected."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

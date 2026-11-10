@@ -1,7 +1,7 @@
 import type { PackManifest, Puzzle } from '../puzzles/types';
 
 /** Where in the product an attempt happened. */
-export type AttemptContext = 'review' | 'apply' | 'test' | 'practice' | 'check' | 'lesson';
+export type AttemptContext = 'review' | 'apply' | 'test' | 'practice' | 'check' | 'lesson' | 'diagnostic';
 export type Outcome = 'success' | 'fail' | 'assisted' | 'skipped';
 export type ExerciseKind = 'puzzle' | 'lesson-try';
 
@@ -85,7 +85,9 @@ export interface SerializedCard {
   last_review: number | null;
 }
 
-export type BlockKind = 'review' | 'learn' | 'apply' | 'test';
+export type StudyBlockKind = 'review' | 'learn' | 'apply' | 'test';
+/** 'play' and 'reflect' belong to play-day sessions. */
+export type BlockKind = StudyBlockKind | 'play' | 'reflect';
 export type BlockStatus = 'pending' | 'active' | 'done' | 'skipped';
 
 export interface SessionBlock {
@@ -103,6 +105,8 @@ export interface SessionBlock {
 
 export interface SessionRecord {
   id: string;
+  /** Absent on sessions written before play days existed; treat as 'study'. */
+  kind?: 'study' | 'play';
   date: string; // local YYYY-MM-DD
   createdAt: number;
   updatedAt: number;
@@ -124,3 +128,26 @@ export interface PackRow {
 }
 
 export type PuzzleRow = Puzzle & { packId: string };
+
+/** A game the learner played and logged by hand. Self-reported; nothing here is engine analysis. */
+export interface GameJournalEntry {
+  id: string;
+  deviceId: string;
+  ts: number;
+  tzOffsetMin: number;
+  updatedAt: number;
+  sessionId: string | null;
+  site: 'chess.com' | 'lichess' | 'over-the-board' | 'other';
+  timeClass: 'rapid' | 'blitz' | 'daily' | 'other';
+  timeControl: string;
+  color: 'white' | 'black' | null;
+  result: 'win' | 'draw' | 'loss' | null;
+  /** Link to the game, pasted by the learner. Never fetched by the app. */
+  url: string | null;
+  /** The learner's own words. */
+  turningPoint: string;
+  nextTime: string;
+  /** Rating shown by the site after the game, typed in by the learner. */
+  ratingAfter: number | null;
+}
+export type GameJournalDraft = Omit<GameJournalEntry, 'id' | 'deviceId' | 'tzOffsetMin' | 'updatedAt'>;

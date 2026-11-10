@@ -41,3 +41,12 @@ FSRS via ts-fsrs with fuzz off, short-term steps off, retention target 0.9 and a
 
 ## ADR-014 Chess.com access posture — accepted 2026-11-10, two items awaiting the owner
 The app never requests `www.chess.com`. Linked lessons are stored as title, author, level and URL only. Own-game import (M4) defaults to manually downloaded PGN. Open for the owner: (a) whether to keep the lesson links first collected by the automated audit or re-collect them by hand, given User Agreement §4(D); (b) whether to add a serial PubAPI fetch script for own games.
+
+## ADR-015 Baseline is a sampler, not a score — accepted 2026-11-10
+The first-run diagnostic shows two unseen positions for each of the 15 early concepts that can be assessed with positions (prerequisites ignored), choosing the least-sampled concept next. Its progress is derived from the attempt log (any unseen attempt counts), so it has no state of its own and resumes anywhere. It can only produce "untested", "provisional" or "pre-test to skip"; the 5-position check decides demonstration. A position counts for every concept whose theme tag it carries.
+
+## ADR-016 Play days and the game journal (schema 2) — accepted 2026-11-10
+A play day replaces the four study blocks with warm-up review, one 10+5 game on the learner's own site, and a written reflection. Suggestion rule v1: play after two study sessions since the last play day, never more than two play days in seven; always overridable. The game is logged by hand in `gameJournal` (schema 2: result, colour, own-words notes, optional rating and link; the link is stored and never fetched). Backups are schema 2 and still restore schema-1 files. The app writes no chess advice on the play screen. The projection in Learn assumes Wednesdays and Saturdays; real suggestions follow the rule above.
+
+## ADR-017 An engine disagreement demotes a lesson example from "asked" to "shown" — accepted 2026-11-10
+When the validator finds the author's move more than 5 expected-score points below the engine's first choice, the learner is not asked to find it; the position and the author's explanation are still shown verbatim. The text is never edited to agree with the engine, and the engine's preference is not presented as instruction.

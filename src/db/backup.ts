@@ -7,7 +7,7 @@
  * ones, and derived review state is rebuilt from the merged attempt log.
  */
 import { getDeviceId, rebuildReviews, SCHEMA_VERSION, type TrainerDB } from './db';
-import type { Attempt, LessonEvent, SessionRecord } from './types';
+import type { Attempt, GameJournalEntry, LessonEvent, SessionRecord } from './types';
 
 export const BACKUP_FORMAT = 'chess-trainer-backup';
 
@@ -17,18 +17,19 @@ export interface BackupManifest {
   exporterVersion: string;
   exportTime: string; // ISO UTC
   deviceId: string;
-  itemCounts: { attempts: number; lessonEvents: number; sessions: number };
-  contentHashes: { attempts: string; lessonEvents: string; sessions: string };
+  /** `gameJournal` is absent in files written by schema 1. */
+  itemCounts: { attempts: number; lessonEvents: number; sessions: number; gameJournal?: number };
+  contentHashes: { attempts: string; lessonEvents: string; sessions: string; gameJournal?: string };
 }
 
 export interface BackupFile {
   manifest: BackupManifest;
-  data: { attempts: Attempt[]; lessonEvents: LessonEvent[]; sessions: SessionRecord[] };
+  data: { attempts: Attempt[]; lessonEvents: LessonEvent[]; sessions: SessionRecord[]; gameJournal?: GameJournalEntry[] };
 }
 
 export interface ImportReport {
   manifest: BackupManifest;
-  added: { attempts: number; lessonEvents: number; sessions: number };
+  added: { attempts: number; lessonEvents: number; sessions: number; gameJournal: number };
   reviewItems: number;
 }
 
@@ -52,11 +53,12 @@ async function sha256(text: string): Promise<string> {
 
 const byKey = <T,>(rows: T[], key: (r: T) => string) => [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 
-async function hashTables(data: BackupFile['data']): Promise<BackupManifest['contentHashes']> {
+async function hashTables(data: BackupFile['data']): Promise<Required<BackupManifest['contentHashes']>> {
   return {
     attempts: await sha256(canonicalJson(byKey(data.attempts, (r) => r.uuid))),
     lessonEvents: await sha256(canonicalJson(byKey(data.lessonEvents, (r) => r.uuid))),
     sessions: await sha256(canonicalJson(byKey(data.sessions, (r) => r.id))),
+    gameJournal: await sha256(canonicalJson(byKey(data.gameJournal ?? [], (r) => r.id))),
   };
 }
 
@@ -65,6 +67,7 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
     attempts: byKey(await db.attempts.toArray(), (r) => r.uuid),
     lessonEvents: byKey(await db.lessonEvents.toArray(), (r) => r.uuid),
     sessions: byKey(await db.sessions.toArray(), (r) => r.id),
+    gameJournal: byKey(await db.gameJournal.toArray(), (r) => r.id),
   };
   return {
     manifest: {
@@ -73,7 +76,7 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
       exporterVersion: __APP_VERSION__,
       exportTime: new Date(now).toISOString(),
       deviceId: await getDeviceId(db),
-      itemCounts: { attempts: data.attempts.length, lessonEvents: data.lessonEvents.length, sessions: data.sessions.length },
+      itemCounts: { attempts: data.attempts.length, lessonEvents: data.lessonEvents.length, sessions: data.sessions.length, gameJournal: data.gameJournal.length },
       contentHashes: await hashTables(data),
     },
     data,
@@ -110,14 +113,20 @@ export async function parseBackup(text: string): Promise<BackupFile> {
   for (const t of TABLES) {
     if (hashes[t] !== m.contentHashes?.[t]) throw new Error(`Backup is damaged: the "${t}" table does not match its checksum.`);
   }
+  // The journal exists from schema 2 on; a schema-1 file simply has none.
+  if (m.schemaVersion >= 2 || b.data.gameJournal !== undefined) {
+    const journal = b.data.gameJournal;
+    if (!Array.isArray(journal) || journal.length !== m.itemCounts.gameJournal) throw new Error('Backup is damaged: the "gameJournal" table is missing or incomplete.');
+    if (hashes.gameJournal !== m.contentHashes.gameJournal) throw new Error('Backup is damaged: the "gameJournal" table does not match its checksum.');
+  }
   for (const a of b.data.attempts) if (typeof a.uuid !== 'string' || typeof a.exerciseId !== 'string' || typeof a.ts !== 'number') throw new Error('Backup contains a malformed attempt.');
   return b as BackupFile;
 }
 
 export async function importBackup(db: TrainerDB, text: string): Promise<ImportReport> {
   const backup = await parseBackup(text); // all validation happens before any write
-  const added = { attempts: 0, lessonEvents: 0, sessions: 0 };
-  await db.transaction('rw', db.attempts, db.lessonEvents, db.sessions, db.reviewStates, async () => {
+  const added = { attempts: 0, lessonEvents: 0, sessions: 0, gameJournal: 0 };
+  await db.transaction('rw', [db.attempts, db.lessonEvents, db.sessions, db.reviewStates, db.gameJournal], async () => {
     const haveA = new Set(await db.attempts.toCollection().primaryKeys());
     const newA = backup.data.attempts.filter((a) => !haveA.has(a.uuid));
     await db.attempts.bulkAdd(newA);
@@ -132,6 +141,11 @@ export async function importBackup(db: TrainerDB, text: string): Promise<ImportR
       const mine = await db.sessions.get(s.id);
       if (!mine) added.sessions++;
       if (!mine || s.updatedAt > mine.updatedAt) await db.sessions.put(s);
+    }
+    for (const g of backup.data.gameJournal ?? []) {
+      const mine = await db.gameJournal.get(g.id);
+      if (!mine) added.gameJournal++;
+      if (!mine || g.updatedAt > mine.updatedAt) await db.gameJournal.put(g);
     }
     await rebuildReviews(db);
   });

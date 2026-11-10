@@ -1,0 +1,110 @@
+{
+  "id": "lasker-opposition",
+  "conceptId": "endgame.opposition",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "King and pawn against king: the opposition",
+  "locator": "Part II, section “Relative Value of the Men”, Diagrams 14–15",
+  "revision": 1,
+  "estMinutes": 9,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "The value of a Pawn is the hardest thing to grasp for the beginner. A Pawn appears to be of so little use on account of his limited mobility, that it seems hardly worth while to waste time on saving a Pawn that is attacked, as so much greater things are apparently at issue. What he overlooks is the latent value of the Pawn which lies in the possibility of queening him later in the game.",
+        "To realize the importance of the Pawn it is necessary to know exactly under what conditions he CAN be queened. This knowledge is all the more indispensable to the Chess player as the vast majority of all games finally resolve themselves into Pawn endings in which the advantage of one or more Pawns decides the issue.",
+        "In most of these cases some pieces are on the board in addition to the Pawns and sometimes it is only by their exchange that the game can be won. The most elementary example is that shown in the following Diagram."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/8/8/8/q3P3/1k6/8/2Q3K1 w - - 0 1",
+      "diagram": 14,
+      "orientation": "white",
+      "moves": [
+        "c1d1",
+        "b3a3",
+        "d1a4"
+      ],
+      "after": [
+        "White is a Pawn ahead and it will be his object to Queen it. The beginner, in his haste to advance the Pawn, will probably play P-e5 at once and lose the Pawn, as Black can answer Q-d4 check with simultaneous attack on the Pawn. The correct way to play for White is (1) Q-d1+, K-a3 or b4; (2) Qxa4, Kxa4. Now that the Queens are exchanged White need not any longer worry about any interference with his plans to queen the Pawn except maneuvers of the black King, which might still lead to the capture or the blockade of the Pawn."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "A rash advance of the Pawn would again be the wrong thing. The right way of playing is indicated by a simple calculation. The Pawn needs four moves to reach the queening square. But the black King arrives there in the same number of moves, so that he can capture the Pawn the moment he queens. Consequently White will only be able to enforce the safe queening of his Pawn if he can gain control of the queening square with his own King, thus protecting the Pawn at the time of queening.",
+        "Now, White needs three moves to bring his King up to his Pawn on f4. In the meantime Black will have reached the square d6 and after White's (4) K-f5 Black will block the further advance of White's King by K-e7. However, White can force Black to give the way free. The maneuver by which he does this is one which occurs in a similar form in nearly all Pawn endings and its thorough grasp is therefore essential. Diagram 15 shows the critical position."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/4k3/8/5K2/4P3/8/8/8 w - - 0 1",
+      "diagram": 15,
+      "orientation": "white",
+      "moves": [
+        "f5e5"
+      ],
+      "after": [
+        "White can win the game only by playing (5) K-e5. The technical term for this move is \"going into OPPOSITION.\" The Kings oppose each other in one line on squares of the same color and the one who has to move out of opposition--in this case Black's King--is compelled to allow the advance of the opposing King to the next line."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/3k4/8/4K3/4P3/8/8/8 w - - 2 2",
+      "diagram": 15,
+      "diagramFen": "8/4k3/8/5K2/4P3/8/8/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Ke5",
+        "Kd7"
+      ],
+      "orientation": "white",
+      "moves": [
+        "e5f6"
+      ],
+      "after": [
+        "If Black plays K-d7, White answers (6) K-f6, and if Black plays K-f7, (6) K-d6 would follow. Then, after Black's K-e8, White repeats the maneuver by taking the opposition with (7) K-e6, and again Black must back out with either K-d8 or K-f8, so that White can advance to either f7 or d7. This clears the way for the Pawn who now advances unimpeded to the queening square."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/4k3/4P3/4K3/8/8/8/8 b - - 2 3",
+      "diagram": 15,
+      "diagramFen": "8/4k3/8/5K2/4P3/8/8/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "e5",
+        "Kf7",
+        "e6+",
+        "Ke7",
+        "Ke5"
+      ],
+      "orientation": "black",
+      "moves": [
+        "e7e8",
+        "e5f6",
+        "e8f8",
+        "e6e7",
+        "f8e8"
+      ],
+      "before": [
+        "The important role which the opposition of the Kings play in Pawn endings is still more strikingly illustrated by the situations which would result if in the position of Diagram 15 White played (5) P-e5 instead of K-e5. Black would then draw the game by maintaining the opposition himself. He would play K-f7 and although after (6) P-e6, K-e7; (7) K-e5 White has regained the opposition he cannot keep it if Black continues correctly."
+      ],
+      "after": [
+        "The move which saves the game for Black is K-e8. K-d8 or K-f8 lose, as then White could go into opposition by K-d6 or K-f6. The play in these three cases would be this: A: (7) ..., K-e8, (8) K-f6, K-f8; (9) P-e7+, K-e8; (10) K-e6 and Black is stalemate, the game is drawn. B: (7) ..., K-d8; (8) K-d6, K-e8; (9) P-e7 and Black must move K-f7 enabling White to obtain control of the queening square by (10) K-d7. C: (7) ..., K-f8, (8) K-f6, K-e8, etc., similar to the play in B."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "To sum up the investigation of this Pawn ending: The deciding factor is the opposition of the Kings on the 6th and 8th ranks. If the weaker party succeeds in obtaining that opposition with the Pawn on the 6th rank he draws the game.",
+        "If the Pawn is not yet advanced to the 6th rank the opposition of the Kings is of no avail to the weaker party as the Pawn advancing would force the opposing King out of opposition again. Suppose, for instance, White has the King on e6 and the Pawn on e5 while Black's King stands on e8 with White on the move. White must get out of opposition by playing K-f6 or K-d6 and Black keeps the opposition by K-f8 or K-d8. But then White has a move to spare which forces Black out of opposition and thereby wins the game. He plays P-e6 and the game ends in the way discussed above.",
+        "The ending King and Pawn against King is one of the most important for every Chess player to know, not only because a great number of positions can be reduced to this ending by the exchange of all the other men left on the board, but also because it gives the first insight into the peculiar maneuvers of the King which have to be carried out in connection with gaining or giving up the opposition, and which, as will be seen later on, constitute the essence of the most frequent pawn endings."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

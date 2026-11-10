@@ -56,8 +56,9 @@ Nothing in this file should be read as "every link was clicked".
 
 ## 2. The offline human-written lesson gap (honest status)
 
-- **1 of 29** concepts has a local, offline, human-written lesson today
-  (`tactics.double-attack`, Lasker). 26 have only online links; 2 have no lesson found.
+- **5 of 29** concepts have a local, offline, human-written lesson today, all from Lasker
+  (`tactics.double-attack`, `tactics.pin`, `endgame.opposition`, `endgame.passed-pawn`,
+  `conversion.trade-when-ahead`). 22 have only online links; 2 have no lesson found.
 - The two public-domain books can plausibly supply local lessons for: pins, discovered
   check, the opposition and pawn promotion, basic mates (K+R, K+Q), relative value of the
   pieces, opening development and the centre, and the Giuoco Piano. They do **not** cover:

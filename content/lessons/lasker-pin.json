@@ -1,0 +1,132 @@
+{
+  "id": "lasker-pin",
+  "conceptId": "tactics.pin",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "How the different men cooperate: the pin",
+  "locator": "Part II, section “How the Different Men Cooperate”, Diagrams 31–32",
+  "revision": 1,
+  "estMinutes": 9,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "board",
+      "fen": "r1bqk2r/pppp1ppp/2n2n2/2b1P3/2Bp4/5N2/PPP2PPP/RNBQ1RK1 b kq - 0 1",
+      "diagram": 31,
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "r1bqk2r/pppp1ppp/2n5/2b1n3/2Bp4/5N1P/PPP2PP1/RNBQ1RK1 w kq - 0 3",
+      "diagram": 31,
+      "diagramFen": "r1bqk2r/pppp1ppp/2n2n2/2b1P3/2Bp4/5N2/PPP2PPP/RNBQ1RK1 b kq - 0 1",
+      "afterDiagramMoves": [
+        "Ng4",
+        "h3",
+        "Ngxe5"
+      ],
+      "orientation": "white",
+      "moves": [
+        "f3e5",
+        "c6e5",
+        "f1e1"
+      ],
+      "before": [
+        "In the opening and in the middle game the main threat of a Rook is the \"pinning\" of a hostile piece. What is meant by this is illustrated in Diagram 31. Supposing Black, to save his Knight f6 which White has just attacked by P-e5, plays Kt-g4 and after (2) P-h3 takes the Pawn e5 with the Knight g4,"
+      ],
+      "after": [
+        "then White wins a piece by (3) Ktxe5, Ktxe5; (4) R-e1. This move \"pins\" Black's Knight to his place as the King would be exposed to White's Rook if the Knight moved. (4) ..., P-d6 or Q-e7 is not a sufficient defense, for White continues with (5) P-f4."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Pieces that can be used for pinning a hostile man are, apart from the Rooks, the Queen and the Bishops; in fact pinning is the main activity of a Bishop throughout the game. Right after the first few moves one of the Bishops, as a rule, finds an opportunity to pin a hostile Knight. For instance: (1) P-e4, P-e5; (2) Kt-f3, Kt-c6; (3) B-b5 and as soon as the Pawn d7 moves in order to give an outlet to the Bishop c8, the Knight c6 is pinned. Or: (1) P-d4, P-d5; (2) Kt-f3, Kt-f6; (3) P-c4, P-e6; (4) B-g5 and the Knight f6 is pinned, as the Queen would be lost if the Knight moved."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "Bb5"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "board",
+      "fen": "rnbqkb1r/ppp2ppp/4pn2/3p2B1/2PP4/5N2/PP2PPPP/RN1QKB1R b KQkq - 1 4",
+      "fromMoves": [
+        "d4",
+        "d5",
+        "Nf3",
+        "Nf6",
+        "c4",
+        "e6",
+        "Bg5"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "The disadvantage arising from having a piece pinned is often that the opponent might be able to concentrate more men to attack the piece which is pinned than can be gathered for defense. The position of Diagram 32 will serve as an illustration.",
+        "Two of Black's men are pinned, namely, the Knight f6 and the Pawn e5, and of both pins White can take advantage."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r4rk1/pppbqppp/1bn2n2/4p1B1/8/1BNP1N1P/PPPQ1PP1/R3R1K1 w - - 0 1",
+      "diagram": 32,
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "The Pawn e5 is attacked twice and defended twice. White cannot take Pawn, as he would lose Knight and Rook but would get for it only Knight and Pawn. However, he can win the Pawn by playing (1) P-d4. This attacks the Pawn for the third time and although Black can defend him for the third time with R-e8, the defense is not serviceable as Black would lose Pawn, Knight and Queen for Pawn, Knight and Rook.",
+        "P-e4 in answer to P-d4 would not help either; for on e4 the Pawn is twice attacked and only once protected as the Knight f6 cannot be counted as protection on account of his being pinned by the Bishop g5. All White needs to do is to take the Knight f6 first and then to capture the Pawn e4."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r4rk1/pppbqppp/2n2n2/4p1B1/3b4/1BN2N1P/PPPQ1PP1/R3R1K1 w - - 0 2",
+      "diagram": 32,
+      "diagramFen": "r4rk1/pppbqppp/1bn2n2/4p1B1/8/1BNP1N1P/PPPQ1PP1/R3R1K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "d4",
+        "Bxd4"
+      ],
+      "orientation": "white",
+      "moves": [
+        "f3d4",
+        "c6d4",
+        "d2d4",
+        "e5d4",
+        "e1e7",
+        "d4c3",
+        "g5f6",
+        "g7f6",
+        "e7d7"
+      ],
+      "before": [
+        "It remains to examine whether in answer to (1) P-d4 Black can take the Pawn with either Bishop or Knight. Apparently this is possible as the Pawn d4 is protected only by the Knight f3 and the Queen. Indeed, the combination would be correct if the Bishop d7 were sufficiently protected. As it is White wins a piece in the following way:"
+      ],
+      "after": [
+        "Up to this move an even exchange of pieces has taken place, but now Black loses the Bishop which is attacked by White's Rook, because White can remove the Knight which protects the Bishop."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Instead of playing (1) P-d4 and taking advantage of the fact that the Pawn e5 is pinned, White can direct his attack against the other Black man which is pinned, namely the Knight f6. He can play (1) Kt-d5 and thereby attack the Queen and at the same time the Knight f6 for the second time. It will not be evident to the beginner that White can derive any advantage from this double attack, as Black can answer either Q-d6 or Q-d8 keeping his Knight twice protected. Indeed, White does not gain anything on f6, the square itself upon which the pin is effected, but he uses the pin to force an opening into the chain of Pawns which protects Black's King by exchanging on f6, compelling Black to retake with the Pawn g7. The advantage resulting from this break in Black's Pawn position will be explained later on when discussing the strategy of the middle-game."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

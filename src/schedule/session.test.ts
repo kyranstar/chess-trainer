@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CONCEPTS } from '../content';
 import type { LessonEvent } from '../db/types';
 import { conceptStatuses } from '../learn/curriculum';
-import { activeBlock, BLOCK_MINUTES, completeBlock, localDate, planSession, PLANNER_VERSION, pickTestConcept, spend } from './session';
+import type { SessionRecord } from '../db/types';
+import { activeBlock, BLOCK_MINUTES, completeBlock, localDate, planPlaySession, planSession, PLANNER_VERSION, pickTestConcept, spend, suggestSessionKind } from './session';
 
 const T0 = new Date(2026, 10, 10, 9, 0, 0).getTime();
 let k = 0;
@@ -65,14 +66,16 @@ describe('session plan', () => {
   });
 
   it('offline with no local lesson available: no fake lesson, the time goes to practice', () => {
-    const events = [ev('safety.hanging-pieces', 'check-passed'), ev('tactics.double-attack', 'local-completed')];
+    const events = [ev('safety.hanging-pieces', 'check-passed'), ...CONCEPTS.filter((c) => c.localLessons.length).map((c) => ev(c.id, 'local-completed'))];
     const s = plan(events, { online: false });
     const learn = s.blocks[1]!;
     expect(learn.status).toBe('skipped');
     expect(learn.conceptId).toBeNull();
     expect(learn.notice).toMatch(/connection/);
     expect(s.blocks[2]!.budgetSec).toBe((8 + 9) * 60);
-    expect(s.blocks[2]!.conceptId).toBe('tactics.double-attack'); // taught, awaiting its check
+    // apply goes to a concept that was studied and still awaits its check
+    const taught = CONCEPTS.filter((c) => c.localLessons.length && c.assessment.kind !== 'none-yet').map((c) => c.id);
+    expect(taught).toContain(s.blocks[2]!.conceptId);
   });
 });
 
@@ -100,5 +103,41 @@ describe('mixed test selection', () => {
     const second = pickTestConcept(statuses, first!.concept.id);
     expect(second?.concept.id).not.toBe(first!.concept.id);
     expect(second?.assessable).toBe(true);
+  });
+});
+
+describe('play days', () => {
+  const DAY = 86_400_000;
+  const past = (daysAgo: number, kind: 'study' | 'play'): SessionRecord => ({
+    id: `p${daysAgo}`, kind, date: localDate(T0 - daysAgo * DAY), createdAt: T0 - daysAgo * DAY, updatedAt: T0 - daysAgo * DAY,
+    budgetMin: 30, plannerVersion: PLANNER_VERSION, status: 'done', blocks: [],
+  });
+
+  it('a play day is warm-up review, one rapid game, then reflection', () => {
+    const s = planPlaySession({ id: 'p', now: T0, dueCount: 4 });
+    expect(s.kind).toBe('play');
+    expect(s.blocks.map((b) => b.kind)).toEqual(['review', 'play', 'reflect']);
+    expect(s.blocks[0]!.budgetSec).toBe(5 * 60);
+    expect(planPlaySession({ id: 'p', now: T0, dueCount: 0 }).blocks[0]!.status).toBe('skipped');
+  });
+
+  it('suggests study until two study sessions have been done since the last play day', () => {
+    expect(suggestSessionKind([], T0).kind).toBe('study');
+    expect(suggestSessionKind([past(1, 'study')], T0).kind).toBe('study');
+    expect(suggestSessionKind([past(2, 'study'), past(1, 'study')], T0).kind).toBe('play');
+    expect(suggestSessionKind([past(3, 'study'), past(2, 'play'), past(1, 'study')], T0).kind).toBe('study');
+  });
+
+  it('suggests at most two play days in any seven days, and always explains why', () => {
+    const week = [past(6, 'play'), past(5, 'study'), past(4, 'study'), past(3, 'play'), past(2, 'study'), past(1, 'study')];
+    const s = suggestSessionKind(week, T0);
+    expect(s.kind).toBe('study');
+    expect(s.reason).toMatch(/two play days/i);
+    expect(suggestSessionKind([past(2, 'study'), past(1, 'study')], T0).reason.length).toBeGreaterThan(10);
+  });
+
+  it('sessions written before play days existed count as study sessions', () => {
+    const legacy = [past(2, 'study'), past(1, 'study')].map(({ kind: _k, ...rest }) => rest as SessionRecord);
+    expect(suggestSessionKind(legacy, T0).kind).toBe('play');
   });
 });

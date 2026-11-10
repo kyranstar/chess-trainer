@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { CONCEPTS } from '../content';
 import type { TrainerDB } from '../db/db';
 import { packStatus, type PackStatus } from '../db/pack';
-import type { Attempt, LessonEvent, ReviewState, SessionRecord } from '../db/types';
+import type { Attempt, GameJournalEntry, LessonEvent, ReviewState, SessionRecord } from '../db/types';
 import { conceptStatuses, type ConceptStatus } from '../learn/curriculum';
 import { estimateLevel } from '../metrics/metrics';
 import type { Puzzle } from '../puzzles/types';
@@ -125,4 +125,16 @@ export function useFocusMode(): void {
       if (focusCount === 0) document.documentElement.classList.remove('focus-mode');
     };
   }, []);
+}
+
+/** Sessions from the last two weeks, oldest first (for the study/play suggestion). */
+export function useRecentSessions(): SessionRecord[] {
+  const db = useDb();
+  const from = localDate(Date.now() - 14 * 86_400_000);
+  return useLiveQuery(() => db.sessions.where('date').aboveOrEqual(from).sortBy('createdAt'), [db, from]) ?? [];
+}
+
+export function useJournal(): GameJournalEntry[] {
+  const db = useDb();
+  return useLiveQuery(() => db.gameJournal.orderBy('ts').reverse().toArray(), [db]) ?? [];
 }

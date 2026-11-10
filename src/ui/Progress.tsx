@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { href, type Route } from '../app/router';
-import { type Learner, usePool } from '../app/store';
+import { type Learner, useJournal, usePool } from '../app/store';
 import { STARTING_PROFILE } from '../app/profile';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, THEMES } from '../content';
@@ -62,6 +62,9 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const untested = perConcept.filter((x) => x.m.n === 0).length;
   const focus = perConcept.filter((x) => x.m.n >= MIN_FOCUS_N).sort((a, b) => a.m.interval!.hi - b.m.interval!.hi)[0];
   const periodLabel = PERIODS.find((p) => p.key === period)!.label.toLowerCase();
+  const journal = useJournal().filter((j) => from === undefined || j.ts >= from);
+  const tally = (r: 'win' | 'draw' | 'loss') => journal.filter((j) => j.result === r).length;
+  const lastRated = journal.find((j) => j.ratingAfter !== null);
 
   return (
     <div className="page" data-testid="progress-home">
@@ -157,6 +160,34 @@ export function ProgressHome({ learner }: { learner: Learner }) {
           {STARTING_PROFILE.ratings.map((r) => (<li key={r.label}><span>{r.label}</span><strong>{r.value}</strong></li>))}
         </ul>
         <p className="definition-small">{STARTING_PROFILE.source}, {STARTING_PROFILE.enteredOn}. Each is a separate scale and they are not comparable. No games are imported yet, so there is no trend and no game-error analysis.</p>
+      </section>
+
+      <section className="card" data-testid="card-journal">
+        <h2>Games you logged</h2>
+        {journal.length === 0 ? (
+          <p className="metric-empty">No games logged in this period. Play days add them.</p>
+        ) : (
+          <>
+            <p className="metric-line">
+              <span className="metric-value">{journal.length}</span>
+              <span className="metric-range">rapid game{journal.length === 1 ? '' : 's'}: {tally('win')} won, {tally('draw')} drawn, {tally('loss')} lost</span>
+            </p>
+            {lastRated && <p>Latest rapid rating you entered: <strong>{lastRated.ratingAfter}</strong> on {new Date(lastRated.ts).toLocaleDateString()}.</p>}
+            <ul className="attempt-list">
+              {journal.slice(0, 10).map((j) => (
+                <li key={j.id}>
+                  <span className="journal-row" data-testid="journal-row">
+                    <span className="concept-name">{new Date(j.ts).toLocaleDateString()}: {j.result ?? 'no result'}{j.color ? ` as ${j.color}` : ''}{j.ratingAfter ? `, rating ${j.ratingAfter}` : ''}</span>
+                    {j.turningPoint && <span className="concept-meta">Turning point: {j.turningPoint}</span>}
+                    {j.nextTime && <span className="concept-meta">Next time: {j.nextTime}</span>}
+                    {j.url && <a className="concept-meta" href={j.url} target="_blank" rel="noreferrer">Open the game</a>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <p className="definition-small">Entered by you on play days; {periodLabel}. A handful of results says little about strength, and none of this is engine analysis.</p>
       </section>
 
       <section className="card" data-testid="card-level">

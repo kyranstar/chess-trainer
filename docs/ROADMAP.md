@@ -15,7 +15,9 @@ Acceptance status: PWA build + service worker ✔ (automated); mobile board, rul
 - Offline Lichess practice pack, puzzle correctness, attempts persist, dashboard derives real metrics from attempts, explicit export/import.
 - Airplane-mode restart on iPhone; typecheck, tests, build and smoke test pass.
 
-## M2 — Principled curriculum
+## M2 — Principled curriculum — MOSTLY BUILT 2026-11-10
+Done: baseline diagnostic with untested/provisional states; concept taxonomy and prerequisites; source catalogue; lesson sequencing; local/linked lesson state with no false completion; unseen transfer check and pre-test skip; 30-day projection; play days; protected new-learning time (tested against a 500-item backlog). Open: owner review of lessons, more offline lessons, real-device run.
+
 - Diagnostic, concept taxonomy/prereqs, vetted source catalog, lesson sequencing, local/linked course state, novel transfer tests, first 30 days of credible course plan.
 - New-learning time protected, skip-tested prereqs, no false course completion.
 

@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "revision": 1,
+ "revision": 2,
  "concepts": [
   {
    "id": "safety.hanging-pieces",
@@ -230,7 +230,9 @@
    "themes": [
     "pin"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-pin"
+   ],
    "links": [
     {
      "sourceId": "lichess-practice",
@@ -269,7 +271,7 @@
     ]
    },
    "stepsMethod": "Step 2",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "tactics.skewer",
@@ -539,7 +541,9 @@
    "themes": [
     "pawnEndgame"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-opposition"
+   ],
    "links": [
     {
      "sourceId": "lichess-practice",
@@ -577,7 +581,7 @@
     ]
    },
    "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "endgame.passed-pawn",
@@ -591,7 +595,9 @@
     "pawnEndgame",
     "advancedPawn"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-passed-pawn"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -622,7 +628,7 @@
     ]
    },
    "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "tactics.discovered-attack",
@@ -732,7 +738,9 @@
    "prereqs": [],
    "descriptionTheme": null,
    "themes": [],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-exchange-when-ahead"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -760,7 +768,7 @@
     "reason": "Needs conversion play-outs against engine defence (M5)."
    },
    "stepsMethod": "Step 3-4",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "opening.italian",

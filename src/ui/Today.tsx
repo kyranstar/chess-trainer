@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { go, href } from '../app/router';
-import { type Learner, useDb, useDueReviews, useNow, useOnline, usePack, usePool, useTodaySession } from '../app/store';
+import { type Learner, useDb, useDueReviews, useJournal, useNow, useOnline, usePack, usePool, useRecentSessions, useTodaySession } from '../app/store';
 import { CONCEPT_BY_ID } from '../content';
 import type { Concept } from '../content/types';
 import { newUuid, saveSession } from '../db/db';
-import type { Attempt, BlockKind, SessionBlock, SessionRecord } from '../db/types';
+import type { Attempt, BlockKind, GameJournalEntry, SessionBlock, SessionRecord } from '../db/types';
 import { awaitingCheck } from '../learn/curriculum';
-import { activeBlockIndex, addAttempt, completeBlock, pickTestConcept, planSession, SESSION_LENGTHS, spend } from '../schedule/session';
+import { baselineProgress, DIAGNOSTIC, nextBaselineConcept } from '../learn/diagnostic';
+import { activeBlockIndex, addAttempt, completeBlock, pickTestConcept, planPlaySession, planSession, SESSION_LENGTHS, spend, suggestSessionKind } from '../schedule/session';
 import { ConceptStudy } from './Learn';
+import { PlayBlock, ReflectBlock } from './PlayDay';
 import { CheckRunner, conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
-const BLOCK_NAME: Record<BlockKind, string> = { review: 'Review', learn: 'Learn', apply: 'Apply', test: 'Test' };
+const BLOCK_NAME: Record<BlockKind, string> = { review: 'Review', learn: 'Learn', apply: 'Apply', test: 'Test', play: 'Play', reflect: 'Reflect' };
 const mins = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 function blockSubject(b: SessionBlock): string {
@@ -18,6 +20,8 @@ function blockSubject(b: SessionBlock): string {
   if (b.kind === 'review') return 'Positions you missed before';
   if (b.kind === 'learn') return c ? c.title : 'No new concept today';
   if (b.kind === 'apply') return c ? `New positions: ${c.title}` : 'Practice';
+  if (b.kind === 'play') return 'One rapid game, 10+5';
+  if (b.kind === 'reflect') return 'Result and turning point';
   return 'Mixed unseen positions';
 }
 
@@ -40,6 +44,27 @@ function Scoresheet({ session, activeIndex }: { session: SessionRecord; activeIn
         </li>
       ))}
     </ol>
+  );
+}
+
+const RESULT_TEXT = { win: 'won', draw: 'drew', loss: 'lost' } as const;
+
+function PlaySummary({ session, entry }: { session: SessionRecord; entry: GameJournalEntry | undefined }) {
+  const total = session.blocks.reduce((t, b) => t + b.spentSec, 0);
+  return (
+    <section className="summary" data-testid="summary">
+      <h2>Play day finished</h2>
+      <dl className="facts">
+        <dt>Time</dt>
+        <dd>{Math.round(total / 60)} minutes</dd>
+        <dt>Game</dt>
+        <dd data-testid="summary-game">{entry ? `${entry.timeControl} ${entry.timeClass}${entry.result ? `, ${RESULT_TEXT[entry.result]}` : ''}${entry.color ? ` as ${entry.color}` : ''}` : 'Not logged'}</dd>
+        {entry?.turningPoint && (<><dt>Turning point</dt><dd>{entry.turningPoint}</dd></>)}
+        {entry?.nextTime && (<><dt>Next time</dt><dd>{entry.nextTime}</dd></>)}
+      </dl>
+      <p className="muted">These are your own notes. The app has not analysed this game; engine analysis of imported games is not built yet.</p>
+      <div className="actions"><a className="button primary" href={href('progress')}>See progress</a></div>
+    </section>
   );
 }
 
@@ -91,6 +116,10 @@ export function Today({ learner }: { learner: Learner }) {
   const session = useTodaySession();
   const due = useDueReviews(learner.reviews, now);
   const [length, setLength] = useState<number>(30);
+  const history = useRecentSessions();
+  const journal = useJournal();
+  const suggestion = useMemo(() => suggestSessionKind(history, now), [history, now]);
+  const baseline = useMemo(() => baselineProgress(learner.statuses), [learner.statuses]);
 
   const preview = useMemo(
     () => planSession({ id: 'preview', now, budgetMin: length, statuses: learner.statuses, dueCount: due.length, online }),
@@ -99,8 +128,10 @@ export function Today({ learner }: { learner: Learner }) {
 
   if (session === undefined || !learner.ready) return <div className="page"><p className="muted">Loading</p></div>;
 
-  async function start() {
-    const s = planSession({ id: newUuid(), now: Date.now(), budgetMin: length, statuses: learner.statuses, dueCount: due.length, online });
+  async function start(kind: 'study' | 'play') {
+    const s = kind === 'play'
+      ? planPlaySession({ id: newUuid(), now: Date.now(), dueCount: due.length })
+      : planSession({ id: newUuid(), now: Date.now(), budgetMin: length, statuses: learner.statuses, dueCount: due.length, online });
     await saveSession(db, s);
     go('today/run');
   }
@@ -113,14 +144,31 @@ export function Today({ learner }: { learner: Learner }) {
       <div className="page" data-testid="today" data-state="unplanned">
         <p className="kicker">{dateLabel}</p>
         <h1>Today</h1>
+        <p className="lede" data-testid="suggestion" data-kind={suggestion.kind}>{suggestion.reason}</p>
         <div className="actions">
-          <button className="primary big" data-testid="start-session" disabled={!packReady} onClick={() => void start()}>Start {length}-minute session</button>
+          {suggestion.kind === 'study' ? (
+            <>
+              <button className="primary big" data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start {length}-minute session</button>
+              <button data-testid="start-play" onClick={() => void start('play')}>Make today a play day instead</button>
+            </>
+          ) : (
+            <>
+              <button className="primary big" data-testid="start-play" onClick={() => void start('play')}>Start play day: one rapid game</button>
+              <button data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Study for {length} minutes instead</button>
+            </>
+          )}
         </div>
         <div className="length-picker" role="group" aria-label="Session length">
           {SESSION_LENGTHS.map((m) => (
             <button key={m} className={m === length ? 'chip is-on' : 'chip'} aria-pressed={m === length} onClick={() => setLength(m)}>{m} min</button>
           ))}
         </div>
+        {!baseline.complete && packReady && (
+          <div className="return-card" data-testid="baseline-card">
+            <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> About {baseline.positionsLeft} unseen positions, no hints, at your own pace. It only replaces “untested” with a first, provisional reading.</p>
+            <div className="actions"><a className="button" data-testid="start-baseline" href={href('today/baseline')}>{baseline.sampled === 0 && learner.attempts.length === 0 ? 'Take the baseline first' : 'Continue the baseline'}</a></div>
+          </div>
+        )}
         {!packReady && <p className="note" data-testid="pack-missing">The practice positions are not installed on this device yet. Connect once to download them.</p>}
         <Scoresheet session={preview} activeIndex={-1} />
       </div>
@@ -133,7 +181,7 @@ export function Today({ learner }: { learner: Learner }) {
       <p className="kicker">{dateLabel}</p>
       <h1>Today</h1>
       {session.status === 'done' ? (
-        <Summary session={session} learner={learner} />
+        session.kind === 'play' ? <PlaySummary session={session} entry={journal.find((j) => j.sessionId === session.id)} /> : <Summary session={session} learner={learner} />
       ) : (
         <div className="actions">
           <a className="button primary big" data-testid="resume-session" href={href('today/run')}>
@@ -206,8 +254,9 @@ export function SessionRun({ learner }: { learner: Learner }) {
   if (session === undefined || !learner.ready) return <div className="page"><p className="muted">Loading</p></div>;
   if (!session || !block) return <div className="page"><p>No session is running. <a href={href('today')}>Go to Today</a></p></div>;
 
+  const untimed = block.kind === 'play' || block.kind === 'reflect';
   const left = Math.max(0, block.budgetSec - spent);
-  const timeUp = left === 0;
+  const timeUp = !untimed && left === 0;
   const finish = (how: 'done' | 'skipped' = 'done') => saveSession(db, completeBlock(latest.current!, idx, Date.now(), how));
   const onAttempt = (a: Attempt) => void saveSession(db, addAttempt(latest.current!, idx, a.uuid, Date.now()));
   const concept = block.conceptId ? CONCEPT_BY_ID.get(block.conceptId) ?? null : null;
@@ -228,7 +277,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       <header className="run-bar">
         <a className="back" href={href('today')}>Today</a>
         <p className="run-title">{idx + 1}. {BLOCK_NAME[block.kind]}</p>
-        <p className={`run-clock${timeUp ? ' is-up' : ''}`} data-testid="block-clock" aria-label="Time left in this block">{timeUp ? 'time is up' : mins(left)}</p>
+        <p className={`run-clock${timeUp ? ' is-up' : ''}`} data-testid="block-clock" aria-label="Time left in this block">{untimed ? mins(spent) : timeUp ? 'time is up' : mins(left)}</p>
       </header>
       {timeUp && <p className="note" data-testid="time-up">This block’s minutes are used. Finish what is on screen, then move on.</p>}
 
@@ -277,11 +326,70 @@ export function SessionRun({ learner }: { learner: Learner }) {
         />
       )}
 
+      {block.kind === 'play' && <PlayBlock onFinished={() => void finish()} />}
+      {block.kind === 'reflect' && <ReflectBlock sessionId={session.id} onSaved={() => void finish()} />}
+
       <footer className="run-foot">
         <button className="quiet" data-testid="end-block" onClick={() => void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped')}>
           {idx === session.blocks.length - 1 ? 'End session' : `End ${BLOCK_NAME[block.kind].toLowerCase()} and move on`}
         </button>
       </footer>
+    </div>
+  );
+}
+
+/** Self-paced baseline sampler: unseen positions for each early concept until every one has two. */
+export function BaselineRun({ learner }: { learner: Learner }) {
+  const pool = usePool();
+  const last = useRef<string | null>(null);
+  const [stopped, setStopped] = useState(false);
+  const progress = baselineProgress(learner.statuses);
+  if (!pool || !learner.ready) return <div className="page"><p className="muted">Loading positions</p></div>;
+
+  if (progress.complete || stopped) {
+    return (
+      <div className="page" data-testid="baseline-result" data-complete={progress.complete}>
+        <a className="back" href={href('today')}>Today</a>
+        <h1>{progress.complete ? 'Baseline sampled' : 'Baseline paused'}</h1>
+        <p className="lede">{progress.sampled} of {progress.total} early concepts have at least {DIAGNOSTIC.perConcept} unseen positions. Two positions cannot show strength or weakness; they only tell the app where to look next.</p>
+        <table className="concept-table">
+          <thead><tr><th scope="col">Concept</th><th scope="col">First try</th><th scope="col">Reading</th></tr></thead>
+          <tbody>
+            {progress.rows.map((r) => (
+              <tr key={r.concept.id} data-testid={`baseline-${r.concept.id}`}>
+                <th scope="row"><a href={href(`learn/${r.concept.id}`)}>{r.concept.title}</a></th>
+                <td>{r.n === 0 ? <span className="muted">untested</span> : `${r.successes}/${r.n}`}</td>
+                <td>{r.n === 0 ? '' : r.n >= DIAGNOSTIC.perConcept && r.successes === r.n ? <a href={href(`learn/${r.concept.id}`)}>pre-test to skip</a> : 'provisional'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="definition-small">“Pre-test to skip” appears when every sampled position was solved first try: the 5-position check on the concept page decides, not this sampler.</p>
+        <div className="actions">
+          <a className="button primary" href={href('today')}>Back to Today</a>
+          {!progress.complete && <button onClick={() => setStopped(false)}>Continue the baseline</button>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="page run" data-testid="baseline-run">
+      <header className="run-bar">
+        <a className="back" href={href('today')}>Today</a>
+        <p className="run-title">Baseline</p>
+        <p className="run-clock" data-testid="baseline-left">{progress.positionsLeft} left</p>
+      </header>
+      <PuzzleStream
+        pick={(exclude, i) => {
+          const c = nextBaselineConcept(learner.statuses, last.current);
+          if (!c) return null;
+          last.current = c.id;
+          return conceptPicker(pool.puzzles, c, learner.level.level, `baseline|${DIAGNOSTIC.version}`)(exclude, i);
+        }}
+        context="diagnostic" conceptId={() => last.current} sessionId={null} allowHints={false} seen={learner.seen}
+        heading="Baseline, no hints" onFinished={() => setStopped(true)}
+      />
+      <footer className="run-foot"><button className="quiet" data-testid="baseline-stop" onClick={() => setStopped(true)}>Stop for now</button></footer>
     </div>
   );
 }

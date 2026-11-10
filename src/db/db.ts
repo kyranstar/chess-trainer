@@ -11,10 +11,10 @@
  */
 import Dexie, { type EntityTable, type Table } from 'dexie';
 import { applyAttempt, rebuildReviewStates, SCHEDULER_VERSION } from '../schedule/review';
-import type { Attempt, AttemptDraft, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
+import type { Attempt, AttemptDraft, GameJournalDraft, GameJournalEntry, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
 
 export const DB_NAME = 'chess-trainer';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export class TrainerDB extends Dexie {
   meta!: EntityTable<MetaRow, 'key'>;
@@ -24,6 +24,7 @@ export class TrainerDB extends Dexie {
   lessonEvents!: EntityTable<LessonEvent, 'uuid'>;
   reviewStates!: EntityTable<ReviewState, 'itemId'>;
   sessions!: EntityTable<SessionRecord, 'id'>;
+  gameJournal!: EntityTable<GameJournalEntry, 'id'>;
 
   constructor(name: string) {
     super(name);
@@ -36,6 +37,8 @@ export class TrainerDB extends Dexie {
       reviewStates: 'itemId, due',
       sessions: 'id, date',
     });
+    // v2 (M2): hand-logged games for play days. Additive only; no existing row is touched.
+    this.version(2).stores({ gameJournal: 'id, ts' });
   }
 }
 
@@ -109,6 +112,12 @@ export async function recordLessonEvent(
 
 export async function saveSession(db: TrainerDB, s: SessionRecord): Promise<void> {
   await db.sessions.put(s);
+}
+
+export async function saveJournalEntry(db: TrainerDB, draft: GameJournalDraft, id: string = newUuid()): Promise<GameJournalEntry> {
+  const entry: GameJournalEntry = { ...draft, id, deviceId: await getDeviceId(db), tzOffsetMin: tzOffsetMin(draft.ts), updatedAt: Date.now() };
+  await db.gameJournal.put(entry);
+  return entry;
 }
 
 /** Recomputes every review state from the attempt log (after restore or a scheduler change). */

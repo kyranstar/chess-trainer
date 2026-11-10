@@ -11,13 +11,14 @@
  *    to practice (never to substitute text);
  *  - unused minutes flow forward (review -> test, learn -> apply).
  */
-import type { BlockKind, SessionBlock, SessionRecord } from '../db/types';
+import type { BlockKind, SessionBlock, SessionRecord, StudyBlockKind } from '../db/types';
 import { awaitingCheck, type ConceptStatus, nextToLearn } from '../learn/curriculum';
 
 export const PLANNER_VERSION = 'planner-v1';
-export const BLOCK_MINUTES: Record<BlockKind, number> = { review: 7, learn: 9, apply: 8, test: 6 };
+export const BLOCK_MINUTES: Record<StudyBlockKind, number> = { review: 7, learn: 9, apply: 8, test: 6 };
+export const PLAY_MINUTES = { review: 5, play: 25, reflect: 5 };
 export const SESSION_LENGTHS = [10, 20, 30, 45, 60] as const;
-const ORDER: BlockKind[] = ['review', 'learn', 'apply', 'test'];
+const ORDER: StudyBlockKind[] = ['review', 'learn', 'apply', 'test'];
 
 export function localDate(ts: number): string {
   const d = new Date(ts);
@@ -33,7 +34,7 @@ export interface PlanInput {
   online: boolean;
 }
 
-function budgets(totalMin: number): Record<BlockKind, number> {
+function budgets(totalMin: number): Record<StudyBlockKind, number> {
   const total = totalMin * 60;
   const out = { review: 0, learn: 0, apply: 0, test: 0 };
   let used = 0;
@@ -54,7 +55,7 @@ function practiceFallback(statuses: ConceptStatus[]): ConceptStatus | null {
 export function planSession(input: PlanInput): SessionRecord {
   const { statuses, dueCount, online, now } = input;
   const b = budgets(input.budgetMin);
-  const block = (kind: BlockKind, over: Partial<SessionBlock>): SessionBlock => ({
+  const block = (kind: StudyBlockKind, over: Partial<SessionBlock>): SessionBlock => ({
     kind, budgetSec: b[kind], spentSec: 0, status: 'pending', conceptId: null, reason: '', notice: null, attemptUuids: [], ...over,
   });
 
@@ -110,6 +111,7 @@ export function planSession(input: PlanInput): SessionRecord {
 
   return {
     id: input.id,
+    kind: 'study',
     date: localDate(now),
     createdAt: now,
     updatedAt: now,
@@ -161,4 +163,59 @@ export function pickTestConcept(statuses: ConceptStatus[], previousConceptId: st
   const pool = statuses.filter((s) => s.assessable && s.concept.themes.length > 0 && (s.prereqsMet || s.stage !== 'new'));
   const ranked = pool.slice().sort((a, b) => a.evidence.n - b.evidence.n || a.concept.order - b.concept.order);
   return ranked.find((s) => s.concept.id !== previousConceptId) ?? ranked[0] ?? null;
+}
+
+/**
+ * A play day: a short warm-up, one deliberate rapid game on the learner's own site, then a
+ * written reflection. It replaces the four study blocks for that day; the next new concept
+ * simply stays first in line for the next study day. The game block is not cut off by a clock.
+ */
+export function planPlaySession(input: { id: string; now: number; dueCount: number }): SessionRecord {
+  const { now, dueCount } = input;
+  const block = (kind: BlockKind, budgetMin: number, reason: string, over: Partial<SessionBlock> = {}): SessionBlock => ({
+    kind, budgetSec: budgetMin * 60, spentSec: 0, status: 'pending', conceptId: null, reason, notice: null, attemptUuids: [], ...over,
+  });
+  return {
+    id: input.id,
+    kind: 'play',
+    date: localDate(now),
+    createdAt: now,
+    updatedAt: now,
+    budgetMin: PLAY_MINUTES.review + PLAY_MINUTES.play + PLAY_MINUTES.reflect,
+    plannerVersion: PLANNER_VERSION,
+    status: 'active',
+    blocks: [
+      dueCount > 0
+        ? block('review', PLAY_MINUTES.review, `Warm up on ${dueCount} due position${dueCount === 1 ? '' : 's'} before playing.`)
+        : block('review', 0, 'Nothing is due, so go straight to the game.', { status: 'skipped' }),
+      block('play', PLAY_MINUTES.play, 'One rapid game at 10 minutes plus 5 seconds a move, played with full attention. The session stretches if the game runs long.'),
+      block('reflect', PLAY_MINUTES.reflect, 'Write down the result and the moment the game turned, in your own words, while it is fresh.'),
+    ],
+  };
+}
+
+export const PLAY_DAYS_PER_WEEK = 2;
+export const STUDY_SESSIONS_BETWEEN_PLAY = 2;
+
+/**
+ * Whether today should be a study day or a play day (v1 rule, always overridable):
+ * a play day is suggested once two study sessions have been done since the last play day,
+ * unless two play days already happened in the previous six days.
+ */
+export function suggestSessionKind(history: SessionRecord[], now: number): { kind: 'study' | 'play'; reason: string } {
+  const today = localDate(now);
+  const past = history.filter((s) => s.date < today).sort((a, b) => a.createdAt - b.createdAt);
+  const weekAgo = localDate(now - 6 * 86_400_000);
+  const recentPlay = past.filter((s) => s.kind === 'play' && s.date >= weekAgo).length;
+  if (recentPlay >= PLAY_DAYS_PER_WEEK) return { kind: 'study', reason: `You already had two play days in the last week, so today is for study.` };
+  let lastPlay = -1;
+  past.forEach((s, i) => {
+    if (s.kind === 'play') lastPlay = i;
+  });
+  const studySince = past.slice(lastPlay + 1).length;
+  if (studySince >= STUDY_SESSIONS_BETWEEN_PLAY) {
+    return { kind: 'play', reason: `${studySince} study sessions since your last play day: time to use it in a real game.` };
+  }
+  const need = STUDY_SESSIONS_BETWEEN_PLAY - studySince;
+  return { kind: 'study', reason: `Study today; a play day is suggested after ${need} more study session${need === 1 ? '' : 's'}.` };
 }

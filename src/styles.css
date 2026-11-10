@@ -214,6 +214,18 @@ progress::-moz-progress-bar { background: var(--felt); }
 .outcome-mark.is-fail { background: var(--flag); border-color: var(--flag); }
 .outcome-mark.is-assisted { background: var(--pencil); border-color: var(--pencil); }
 
+/* Forms */
+.journal-row { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.65rem 0.75rem; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.95rem; }
+.field span, .choice legend { color: var(--muted); padding: 0; }
+.choice { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+textarea, input[type='number'], input[type='url'] {
+  font: inherit; color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; width: 100%;
+}
+.plain-list { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
+details.plan summary { cursor: pointer; font-weight: 600; min-height: 2.75rem; display: flex; align-items: center; }
+.plan-table td:first-child { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* Progress */
 .card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .card.focus { border: 1.5px solid var(--ink); }

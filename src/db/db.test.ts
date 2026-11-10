@@ -89,7 +89,7 @@ describe('backup and restore', () => {
     const text = serializeBackup(await exportBackup(src, T0 + 3 * DAY));
     const dst = fresh();
     const report = await importBackup(dst, text);
-    expect(report.added).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1 });
+    expect(report.added).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0 });
     expect(await dst.attempts.orderBy('uuid').toArray()).toEqual(await src.attempts.orderBy('uuid').toArray());
     expect(await dst.lessonEvents.toArray()).toEqual(await src.lessonEvents.toArray());
     expect(await dst.sessions.toArray()).toEqual(await src.sessions.toArray());
@@ -99,8 +99,8 @@ describe('backup and restore', () => {
   it('manifest carries schema version, counts and per-table hashes', async () => {
     const b = await exportBackup(await seeded(), T0);
     expect(b.manifest.format).toBe('chess-trainer-backup');
-    expect(b.manifest.schemaVersion).toBe(1);
-    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1 });
+    expect(b.manifest.schemaVersion).toBe(2);
+    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0 });
     expect(b.manifest.contentHashes.attempts).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
@@ -109,7 +109,7 @@ describe('backup and restore', () => {
     const dst = fresh();
     await importBackup(dst, text);
     const again = await importBackup(dst, text);
-    expect(again.added).toEqual({ attempts: 0, lessonEvents: 0, sessions: 0 });
+    expect(again.added).toEqual({ attempts: 0, lessonEvents: 0, sessions: 0, gameJournal: 0 });
     expect(await dst.attempts.count()).toBe(3);
   });
 
@@ -128,7 +128,7 @@ describe('backup and restore', () => {
     ['wrong format', (t: string) => t.replace('chess-trainer-backup', 'something-else')],
     ['tampered row (hash mismatch)', (t: string) => t.replace('"outcome":"fail"', '"outcome":"success"')],
     ['truncated', (t: string) => t.slice(0, t.length / 2)],
-    ['future schema', (t: string) => t.replace('"schemaVersion":1', '"schemaVersion":99')],
+    ['future schema', (t: string) => t.replace('"schemaVersion":2', '"schemaVersion":99')],
   ])('rejects a corrupted backup (%s) and leaves existing data untouched', async (_label, corrupt) => {
     const text = corrupt(serializeBackup(await exportBackup(await seeded(), T0)));
     const dst = fresh();
@@ -144,10 +144,10 @@ describe('backup and restore', () => {
 });
 
 describe('schema', () => {
-  it('v1 table and index definitions are frozen (change = new version + migration test)', async () => {
+  it('table and index definitions are frozen (change = new version + a case in migration.test.ts)', async () => {
     const db = fresh();
     await db.open();
-    expect(db.verno).toBe(1);
+    expect(db.verno).toBe(2);
     const shape = Object.fromEntries(db.tables.map((t) => [t.name, [t.schema.primKey.src, ...t.schema.indexes.map((i) => i.src)].join(', ')]));
     expect(shape).toEqual({
       meta: 'key',
@@ -157,6 +157,7 @@ describe('schema', () => {
       lessonEvents: 'uuid, conceptId, ts',
       reviewStates: 'itemId, due',
       sessions: 'id, date',
+      gameJournal: 'id, ts',
     });
   });
 });

@@ -7,11 +7,6 @@
   "revision": 1,
   "estMinutes": 8,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
-  "review": {
-    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
-    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
-    "ownerReview": "pending"
-  },
   "steps": [
     {
       "type": "text",
@@ -126,5 +121,10 @@
         "After the opening moves (1) P-e4, P-e5; (2) P-f4, B-C5; (3) Pxe5?? the position of Diagram 23 is reached, in which Black wins a Rook by Q-h4+. White cannot reply (4) K-e2 on account of Qxe4 mate. His only move is (4) P-g3 and then follows Qxe4 attacking King and Rook simultaneously."
       ]
     }
-  ]
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
 }

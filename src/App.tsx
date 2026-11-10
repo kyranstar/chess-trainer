@@ -6,7 +6,7 @@ import { installPack, packStatus } from './db/pack';
 import { ConceptPage, LearnHome } from './ui/Learn';
 import { PracticeHome, PracticeRun } from './ui/Practice';
 import { PositionsList, PositionView, ProgressHome } from './ui/Progress';
-import { SessionRun, Today } from './ui/Today';
+import { BaselineRun, SessionRun, Today } from './ui/Today';
 
 const db = openDb();
 
@@ -39,7 +39,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
   }, [online]);
 
   let page;
-  if (tab === 'today') page = route.parts[1] === 'run' ? <SessionRun learner={learner} /> : <Today learner={learner} />;
+  if (tab === 'today') page = route.parts[1] === 'run' ? <SessionRun learner={learner} /> : route.parts[1] === 'baseline' ? <BaselineRun learner={learner} /> : <Today learner={learner} />;
   else if (tab === 'learn') page = route.parts[1] ? <ConceptPage key={route.parts[1]} id={route.parts[1]} learner={learner} /> : <LearnHome learner={learner} />;
   else if (tab === 'practice') page = route.parts[1] === 'run' ? <PracticeRun key={route.query.toString()} route={route} learner={learner} /> : <PracticeHome learner={learner} />;
   else if (tab === 'progress') {
