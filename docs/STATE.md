@@ -2,7 +2,7 @@
 
 Updated: 2026-11-10
 Branch: `build/trainer` (`main` holds only the starter kit). Commit: see `git log -1`; this file is committed with the work it describes.
-Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtures; M5 started (exact king-and-pawn endings). Not yet verified: a real iPhone, and the owner's real games.** M6 (sync) not started and deferred by design.
+Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Verified in automated browsers, in real Mobile Safari on the iOS 27 simulator (load, install of content, all device checks, offline cold start), and on the owner's real games (87 analysed). Not done: publishing the app and installing it on the physical iPhone; publishing was blocked by the permission system and needs the owner's go-ahead (one command, below).** M6 (sync) not started and deferred by design.
 
 ## What works today (user-visible)
 
@@ -19,8 +19,8 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 
 ## What does not exist yet (do not describe as done)
 
-- **Your real games have not been analysed.** The game features were built and tested on a five-game fixture written in Chess.com's export format. Your username and PGN files are needed (commands below).
-- **Not run on a real iPhone**: Home Screen install, airplane-mode cold start, backup export to Files, storage persistence. Only Playwright WebKit at iPhone 14 size and desktop Chromium (including offline) were used.
+- **The app is not published and not on the phone.** `scripts/deploy-pages.sh <github-owner>` creates a public, deploy-only GitHub Pages repository (built files and a source snapshot; never `data/`). The permission system refused to let the agent create a public repository, so the owner must run it or allow it. After that: open the address in Safari on the iPhone, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device.
+- **On the physical iPhone nothing has been tested**: Home Screen install, touch on the board, backup to Files. The simulator run used real Mobile Safari but opened pages by URL only (no taps).
 - Exact endgames cover king and pawn against king only: no basic mates, rook endings or conversion play-outs yet, and no calculation training beyond three-move puzzles (rest of M5). No training-to-game transfer metric. No Lichess-study import. No sync (M6).
 - 5 of 29 concepts have an offline human-written lesson; 2 have no lesson at all; 7 have no independent check. "The opposition" is checked by exact endgame play-outs; every other checked concept uses tagged puzzles.
 - Opening data is deep (14 plies) only after 1.e4 e5 and 1.e4 c6 and 4 plies elsewhere; it is the start of October 2026, not a random sample; bands are Lichess ratings, not Chess.com ratings. At the lowest bands 1...d5 is more common than 1...c6, so extending the data to the Scandinavian is the obvious next pipeline run.
@@ -31,15 +31,18 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 | Command | Result |
 |---|---|
 | `npm run typecheck` | clean |
-| `npm test` | 17 files, 157 tests passed: rules; puzzle run; replay of all 8,219 shipped puzzles; FSRS review; DB; backup/restore incl. corruption cases; upgrades from frozen schema-1, -2 and -3 databases and backup files; pack install; practice metrics; curriculum; baseline and projection; selection; study and play planners; content; repertoire walk, evidence and PGN round trip; game import and game metrics; exact endgame probe, perfect play-outs and distance consistency |
-| `cd pipeline && uv run pytest -q` | 37 passed: the KPK table against theory, the known count of 111,282 wins, Stockfish on a random sample and exact distances; Lichess CSV semantics; engine uniqueness gate; 5 lessons verbatim/diagram/legal and tamper rejection; opening-frequency extraction and transposition merge; engine evidence; game import (time class, clocks, idempotence) and analysis labels |
+| `npm test` | 18 files, 160 tests passed (adds the device self-checks and a move-generation reference count): rules; puzzle run; replay of all 8,219 shipped puzzles; FSRS review; DB; backup/restore incl. corruption cases; upgrades from frozen schema-1, -2 and -3 databases and backup files; pack install; practice metrics; curriculum; baseline and projection; selection; study and play planners; content; repertoire walk, evidence and PGN round trip; game import and game metrics; exact endgame probe, perfect play-outs and distance consistency |
+| `cd pipeline && uv run pytest -q` | 43 passed (adds the Chess.com fetcher against a fake transport, coach-game exclusion, chance and label definitions on whole lines): the KPK table against theory, the known count of 111,282 wins, Stockfish on a random sample and exact distances; Lichess CSV semantics; engine uniqueness gate; 5 lessons verbatim/diagram/legal and tamper rejection; opening-frequency extraction and transposition merge; engine evidence; game import (time class, clocks, idempotence) and analysis labels |
 | `uv run python -m trainer_pipeline.lessons` | all 5 lessons `ok`; evidence in `content/verification/lessons.json`. The gate demoted one example (Lasker's 1.P-d4 in Diagram 32) from asked to shown. |
 | `uv run python -m trainer_pipeline.build_puzzle_pack --version 2026.11.10` | 6,193,530 rows → 12,139 candidates → 11,670 passed the engine gate → 8,219 shipped (2.18 MB), 1712 s |
 | opening book (`opening_stats` then `opening_evals`) | 4,588,118 games read from the first 1.5 GB of the October 2026 dump, 2,875,117 used; 4,729 positions and 24,294 moves kept (≥150 games per position, ≥15 per move); every move evaluated by Stockfish 19 at 80k nodes in 1834 s; 2.16 MB |
-| `trainer_pipeline.games` on the fixture PGN | 5 games, 20 decisions, 3 major errors, 3 opportunities of which 2 missed, 1 drill |
+| `trainer_pipeline.games` on the fixture PGN | 6 games, 27 decisions, 3 major errors, 5 chances of which 2 missed, 1 drill |
+| `trainer_pipeline.fetch_chesscom` + `trainer_pipeline.games` on the owner's account | 9 monthly files, 109 games read, 21 coach games and 1 empty game left out, 87 analysed (analysis v2, Stockfish 19 at 200k nodes); imported into the app with no errors; final ratings in the file match the ratings the owner gave |
 | `uv run python -m trainer_pipeline.kpk` | 111,282 winning positions, longest win 38 half-moves, 240 + 240 drill starts, 12 s |
 | `npm run build` | built; service worker precaches 25 entries (5.4 MB) |
-| `npm run e2e` | 29 passed, 1 skipped by design (iPhone 14 WebKit 13, desktop Chromium 16) |
+| `npm run e2e` | 32 passed, 2 skipped by design (iPhone 14 WebKit, desktop Chromium) |
+| iOS 27 simulator, Mobile Safari, opened by URL | app loads and installs 8,219 positions; Device check: all 7 pass (service worker controlling, offline cache, pack checksum, storage + backup + restore round trip, rules, endgame table); in-app update notice appears for a new build; cold start with the server stopped loads a puzzle and a lesson page |
+| `DRY_RUN=1 scripts/deploy-pages.sh` bundle served under `/chess-trainer/` | loads, service-worker scope and manifest correct, device check passes, works offline, source tarball served |
 | `npm run check` (all of the above in one command) | exit 0 on the final run |
 
 End-to-end coverage: a full study session with a linked lesson through to dashboard drill-down and restart; a local lesson played move by move and resumed; hint ⇒ assisted; iPhone-size layout; backup on one profile restored on another, damaged file rejected; offline cold start, practice, lesson, repertoire and restart with no third-party requests; baseline pause/resume; a play day through to Progress and backup; the 30-day projection; repertoire record → evidence → coverage → recall → backup; own-PGN import with conflicts and export; analysed-games import, metrics, drill-down and a drill from an own game; a king-and-pawn ending won and held with table-perfect moves, and a result-changing move named exactly; the opposition demonstrated by five exact play-outs.
@@ -48,11 +51,11 @@ Bugs found by these tests and fixed: check result vanished on passing; tab bar c
 
 ## Open decisions for the owner
 
-1. **Lasker text is US-only public domain** (author died 1981). If you are outside the US, say so and those five lessons are removed (Capablanca is cleared more widely but has no lessons built yet). ADR-009.
-2. **Chess.com lesson links** were first collected by an automated audit; the User Agreement §4(D) restricts automated/AI access for building "educational tools". Keep them, or re-collect by hand in a browser? ADR-014.
-3. **Own games**: manual PGN download only (built), or also a serial PubAPI script? ADR-014. Either way I need your Chess.com username to run the analysis.
-4. **Lesson review**: the five local lessons are marked `ownerReview: pending` until you have read them.
-5. **Opponent rating band** for opening frequencies defaults to Lichess 800–999; change it on the repertoire screen. There is no verified mapping from Chess.com rapid 457 to a Lichess band.
+1. **Publish?** Run `scripts/deploy-pages.sh <your-github-login>` (or allow the agent to). It makes a public repository with the built app. Alternative with nothing public: serve `dist/` from the Mac over HTTPS with a locally trusted certificate, which needs a certificate profile installed on the phone.
+2. **Lesson review**: the five local lessons are marked `ownerReview: pending` until you have read them.
+3. **Opponent rating band** for opening frequencies defaults to Lichess 800–999; change it on the repertoire screen.
+
+Settled on 2026-11-10 (ADR-022): US jurisdiction, so the Lasker lessons stay; own games come from Chess.com's public API on request; the Chess.com lesson links stay as collected.
 
 ## Known issues and risks
 
@@ -65,8 +68,8 @@ Bugs found by these tests and fixed: check result vanished on passing; tab bar c
 
 ## Next slice
 
-1. Owner actions: run on the iPhone (install, airplane-mode restart, backup to Files) and record the result here; answer the open decisions; put PGN files in `data/my-games/` and run the games pipeline with the real username.
-2. Rest of M5: basic mates (K+Q, K+R) with an exact table; exchange-counting drills generated and checked by engine; training-to-game transfer metric once real games exist on both sides of a drill date; use the forecast-versus-outcome replay to judge any scheduler change once there are enough real reviews.
+1. Owner: publish, install on the iPhone, run "Check this device" there, and import `my-games.json` (already copied to iCloud Drive → Chess Trainer) under Progress → Your data.
+2. Rest of M5: basic mates (K+Q, K+R) with an exact table; exchange-counting drills generated and checked by engine; training-to-game transfer metric now that real games exist (needs drill history first); use the forecast-versus-outcome replay to judge any scheduler change once there are enough real reviews.
 3. Extend the opening book to 1.e4 d5 and the owner's eventual Black repertoire (`ROOTS` in `opening_stats.py`), then rerun `opening_stats` and `opening_evals`.
 4. More offline lessons from the two cleared books; a "this link is broken" control.
 
@@ -89,7 +92,11 @@ curl -sL -r 0-1499999999 https://database.lichess.org/standard/lichess_db_standa
   | zstd -dc 2>/dev/null | uv run python -m trainer_pipeline.opening_stats --month 2026-10 --bytes 1500000000
 uv run python -m trainer_pipeline.opening_evals --workers 5
 
-# own games: download PGNs from Chess.com by hand into data/my-games/, then
+# own games: fetch monthly PGNs from Chess.com's public API (or download them by hand into data/my-games/), then analyse
+uv run python -m trainer_pipeline.fetch_chesscom --player YOUR_USERNAME
 uv run python -m trainer_pipeline.games --player YOUR_USERNAME ../data/my-games/*.pgn
 # and import data/analysis/my-games.json in the app under Progress -> Your data
+
+# publish (creates or updates a public deploy-only GitHub Pages repository)
+cd .. && scripts/deploy-pages.sh YOUR_GITHUB_LOGIN        # DRY_RUN=1 builds the bundle only
 ```

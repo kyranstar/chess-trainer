@@ -9,7 +9,7 @@ Result: `docs/CONTENT_INVENTORY.md`, `docs/audits/`, `content/`. 29 concepts map
 - Produce real clickable curriculum prototype and content inventory. **Do not** mark offline human course library complete if only links are available.
 
 ## M1 — Usable vertical slice — BUILT 2026-11-10; device gate open
-Acceptance status: PWA build + service worker ✔ (automated); mobile board, rules library ✔; local lesson flow and linked-course flow ✔; offline Lichess pack with engine-checked correctness ✔; attempts persist ✔; dashboard from real attempts ✔; export/import ✔; typecheck, tests, build, smoke ✔ (see `docs/STATE.md`). **Not yet done: install and airplane-mode restart on a real iPhone.**
+Acceptance status: PWA build + service worker ✔ (automated); mobile board, rules library ✔; local lesson flow and linked-course flow ✔; offline Lichess pack with engine-checked correctness ✔; attempts persist ✔; dashboard from real attempts ✔; export/import ✔; typecheck, tests, build, smoke ✔ (see `docs/STATE.md`). Verified in real Mobile Safari on the iOS 27 simulator, including an offline cold start. **Not yet done: publishing, and install plus airplane-mode restart on the physical iPhone.**
 
 - PWA install and launch, mobile chessboard, rules library, at least one complete learn→apply→test→review flow with rights-cleared/local fixture and linked-course flow.
 - Offline Lichess practice pack, puzzle correctness, attempts persist, dashboard derives real metrics from attempts, explicit export/import.
@@ -27,8 +27,8 @@ Done: position-keyed repertoire of the owner's own moves (transpositions merged)
 - Import permitted PGNs/Lichess studies; Italian/anti–Caro-Kann learning by position graph, transpositions, contextual explanations, sound alternatives vs bad moves, spaced decision drills.
 - Engine checked test lines and import round trips; complete repertoire session offline.
 
-## M4 — Local game analysis + real performance dashboard — BUILT ON FIXTURES 2026-11-10; not yet run on the owner's games
-Done: manual-PGN import with idempotent identity, native Stockfish analysis with versioned settings and conservative labels, file import into the app, rating per time control, major errors per 100 decisions with coverage, missed tactical chances, clock-pressure comparison with a sample-size gate, drill-down to positions, drills from own missed moves. Not done: the owner's real games (username and PGN files needed), training-to-game transfer metric, PubAPI fetch (owner decision).
+## M4 — Local game analysis + real performance dashboard — BUILT 2026-11-10; run on the owner's 87 real games
+Done: manual-PGN import with idempotent identity, native Stockfish analysis with versioned settings and conservative labels, file import into the app, rating per time control, major errors per 100 decisions with coverage, missed tactical chances, clock-pressure comparison with a sample-size gate, drill-down to positions, drills from own missed moves. Not done: training-to-game transfer metric.
 
 - Chess.com game records from supported own-game import or compliant official access; native Mac Stockfish analysis, versioned results, conservative error labels and drill creation.
 - Dashboard: rating per time control, game errors and exposure, unseen puzzle performance, curriculum/retention, drill-to-game recurrence; all with denominators/provenance.
