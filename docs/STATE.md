@@ -14,7 +14,7 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 - **Exact endgames** (Practice → Endgames): king and pawn against king played out against perfect play from 480 starts where one move keeps the result; "win it" and "hold it"; every move is checked against a complete table of the ending computed in this repository, so the verdict is a fact, not an engine opinion.
 - **Opening repertoire** (Practice): record the move you play in each position, always the most frequently reached unanswered position first, weighted by what players in a chosen Lichess rating band actually play; engine evidence for each chosen move (sound / weaker with numbers / unknown); recall on the review schedule in a disclosed recall mode; import and export of your own PGN; coverage table by move number.
 - **Own games** (Progress → Your data): import the file produced by the Mac pipeline from PGNs you downloaded. Rating after each game per time control with sparkline; major errors per 100 decisions with range, per game, per time control and by concrete label; missed tactical chances out of chances available; errors when short of time (only with 30 decisions per group); every number opens its positions; missed moves with one clearly best answer become drills.
-- **Progress**: also unseen puzzle accuracy with n and range, per-concept table with "untested", retention by gap, curriculum coverage, opening preparedness, logged games, practice-difficulty estimate, backup/restore, storage-protection status, installed content and licences.
+- **Progress**: also unseen puzzle accuracy with n and range, per-concept table with "untested", retention by gap with the scheduler's forecast beside the observed rate, exact endgame technique, curriculum coverage, opening preparedness, logged games, practice-difficulty estimate, backup/restore, storage-protection status, installed content and licences.
 - **Offline**: after one online visit the app shell, lessons, 8,219 puzzles and the opening book are on the device; everything works with no network except opening linked lessons.
 
 ## What does not exist yet (do not describe as done)
@@ -22,7 +22,7 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 - **Your real games have not been analysed.** The game features were built and tested on a five-game fixture written in Chess.com's export format. Your username and PGN files are needed (commands below).
 - **Not run on a real iPhone**: Home Screen install, airplane-mode cold start, backup export to Files, storage persistence. Only Playwright WebKit at iPhone 14 size and desktop Chromium (including offline) were used.
 - Exact endgames cover king and pawn against king only: no basic mates, rook endings or conversion play-outs yet, and no calculation training beyond three-move puzzles (rest of M5). No training-to-game transfer metric. No Lichess-study import. No sync (M6).
-- 5 of 29 concepts have an offline human-written lesson; 2 have no lesson at all; 7 have no independent check.
+- 5 of 29 concepts have an offline human-written lesson; 2 have no lesson at all; 7 have no independent check. "The opposition" is checked by exact endgame play-outs; every other checked concept uses tagged puzzles.
 - Opening data is deep (14 plies) only after 1.e4 e5 and 1.e4 c6 and 4 plies elsewhere; it is the start of October 2026, not a random sample; bands are Lichess ratings, not Chess.com ratings. At the lowest bands 1...d5 is more common than 1...c6, so extending the data to the Scandinavian is the obvious next pipeline run.
 - Concept evidence uses Lichess theme tags as a proxy; a position counts for every concept whose tag it carries, and some proxies are loose (any pawn endgame counts toward "the opposition").
 
@@ -31,7 +31,7 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 | Command | Result |
 |---|---|
 | `npm run typecheck` | clean |
-| `npm test` | 17 files, 153 tests passed: rules; puzzle run; replay of all 8,219 shipped puzzles; FSRS review; DB; backup/restore incl. corruption cases; upgrades from frozen schema-1, -2 and -3 databases and backup files; pack install; practice metrics; curriculum; baseline and projection; selection; study and play planners; content; repertoire walk, evidence and PGN round trip; game import and game metrics; exact endgame probe, perfect play-outs and distance consistency |
+| `npm test` | 17 files, 157 tests passed: rules; puzzle run; replay of all 8,219 shipped puzzles; FSRS review; DB; backup/restore incl. corruption cases; upgrades from frozen schema-1, -2 and -3 databases and backup files; pack install; practice metrics; curriculum; baseline and projection; selection; study and play planners; content; repertoire walk, evidence and PGN round trip; game import and game metrics; exact endgame probe, perfect play-outs and distance consistency |
 | `cd pipeline && uv run pytest -q` | 37 passed: the KPK table against theory, the known count of 111,282 wins, Stockfish on a random sample and exact distances; Lichess CSV semantics; engine uniqueness gate; 5 lessons verbatim/diagram/legal and tamper rejection; opening-frequency extraction and transposition merge; engine evidence; game import (time class, clocks, idempotence) and analysis labels |
 | `uv run python -m trainer_pipeline.lessons` | all 5 lessons `ok`; evidence in `content/verification/lessons.json`. The gate demoted one example (Lasker's 1.P-d4 in Diagram 32) from asked to shown. |
 | `uv run python -m trainer_pipeline.build_puzzle_pack --version 2026.11.10` | 6,193,530 rows → 12,139 candidates → 11,670 passed the engine gate → 8,219 shipped (2.18 MB), 1712 s |
@@ -39,9 +39,10 @@ Status: **M0 done. M1–M4 built and verified in automated browsers and on fixtu
 | `trainer_pipeline.games` on the fixture PGN | 5 games, 20 decisions, 3 major errors, 3 opportunities of which 2 missed, 1 drill |
 | `uv run python -m trainer_pipeline.kpk` | 111,282 winning positions, longest win 38 half-moves, 240 + 240 drill starts, 12 s |
 | `npm run build` | built; service worker precaches 25 entries (5.4 MB) |
-| `npm run e2e` | 27 passed, 1 skipped by design (iPhone 14 WebKit 12, desktop Chromium 15) |
+| `npm run e2e` | 29 passed, 1 skipped by design (iPhone 14 WebKit 13, desktop Chromium 16) |
+| `npm run check` (all of the above in one command) | exit 0 on the final run |
 
-End-to-end coverage: a full study session with a linked lesson through to dashboard drill-down and restart; a local lesson played move by move and resumed; hint ⇒ assisted; iPhone-size layout; backup on one profile restored on another, damaged file rejected; offline cold start, practice, lesson, repertoire and restart with no third-party requests; baseline pause/resume; a play day through to Progress and backup; the 30-day projection; repertoire record → evidence → coverage → recall → backup; own-PGN import with conflicts and export; analysed-games import, metrics, drill-down and a drill from an own game; a king-and-pawn ending won and held with table-perfect moves, and a result-changing move named exactly.
+End-to-end coverage: a full study session with a linked lesson through to dashboard drill-down and restart; a local lesson played move by move and resumed; hint ⇒ assisted; iPhone-size layout; backup on one profile restored on another, damaged file rejected; offline cold start, practice, lesson, repertoire and restart with no third-party requests; baseline pause/resume; a play day through to Progress and backup; the 30-day projection; repertoire record → evidence → coverage → recall → backup; own-PGN import with conflicts and export; analysed-games import, metrics, drill-down and a drill from an own game; a king-and-pawn ending won and held with table-perfect moves, and a result-changing move named exactly; the opposition demonstrated by five exact play-outs.
 
 Bugs found by these tests and fixed: check result vanished on passing; tab bar covered the board (tabs now hide during board tasks); repertoire screen crashed after saving a move (stale choice applied to the next position). A screen-level error boundary now shows the error instead of a blank page.
 
@@ -65,7 +66,7 @@ Bugs found by these tests and fixed: check result vanished on passing; tab bar c
 ## Next slice
 
 1. Owner actions: run on the iPhone (install, airplane-mode restart, backup to Files) and record the result here; answer the open decisions; put PGN files in `data/my-games/` and run the games pipeline with the real username.
-2. Rest of M5: use the exact king-and-pawn play-outs as the check for "the opposition" instead of the loose puzzle proxy; basic mates (K+Q, K+R) with an exact table; exchange-counting drills generated and checked by engine; training-to-game transfer metric once real games exist on both sides of a drill date; a replay harness that compares scheduler versions on the recorded attempt log.
+2. Rest of M5: basic mates (K+Q, K+R) with an exact table; exchange-counting drills generated and checked by engine; training-to-game transfer metric once real games exist on both sides of a drill date; use the forecast-versus-outcome replay to judge any scheduler change once there are enough real reviews.
 3. Extend the opening book to 1.e4 d5 and the owner's eventual Black repertoire (`ROOTS` in `opening_stats.py`), then rerun `opening_stats` and `opening_evals`.
 4. More offline lessons from the two cleared books; a "this link is broken" control.
 

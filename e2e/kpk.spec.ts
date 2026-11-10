@@ -65,3 +65,19 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   await page.goto('/#/practice');
   await expect(page.getByTestId('practice-review')).toContainText('3 in the queue');
 });
+
+test('the opposition is demonstrated by playing five unseen endings correctly, not by tagged puzzles', async ({ page }) => {
+  await openApp(page, '#/learn/endgame.opposition');
+  await expect(page.getByTestId('concept-evidence')).toHaveText('Untested');
+  await page.getByTestId('start-check').click();
+  for (let i = 0; i < 5; i++) {
+    await expect(page.getByTestId('kpk-drill')).toContainText(`${i + 1} of 5`);
+    await expect(page.getByRole('button', { name: 'Show a move that keeps it' })).toHaveCount(0);
+    await playPerfectly(page);
+    await page.getByTestId('kpk-next').click();
+  }
+  await expect(page.getByTestId('check-result')).toHaveAttribute('data-passed', 'true');
+  await page.getByTestId('check-done').click();
+  await expect(page.getByTestId('concept-stage')).toHaveText('Demonstrated by pre-test');
+  await expect(page.getByTestId('concept-evidence')).toContainText('5 of 5 endings played out correctly first time');
+});

@@ -100,3 +100,17 @@ describe('next concept to learn', () => {
     expect(nextToLearn(conceptStatuses(CONCEPTS, events, []), { online: true }).pick).toBeNull();
   });
 });
+
+describe('a concept assessed by exact endgame play-outs', () => {
+  const kpk = (over: Partial<Attempt>) => att({ exerciseKind: 'endgame', themes: ['kpk', 'win'], rating: null, ...over });
+  it('takes its evidence from endgame play-outs, not from puzzles tagged as pawn endgames', () => {
+    const s = get(conceptStatuses(CONCEPTS, [], [kpk({}), kpk({ outcome: 'fail' }), att({ themes: ['pawnEndgame'] })]), 'endgame.opposition');
+    expect(s.assessable).toBe(true);
+    expect(s.evidence.n).toBe(2);
+    expect(s.evidence.successes).toBe(1);
+    expect(s.evidenceState).toBe('provisional');
+  });
+  it('is untested until an ending has been played out', () => {
+    expect(get(conceptStatuses(CONCEPTS, [], [att({ themes: ['pawnEndgame'] })]), 'endgame.opposition').evidenceState).toBe('untested');
+  });
+});

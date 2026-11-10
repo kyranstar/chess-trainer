@@ -78,3 +78,40 @@ export function dueItems(states: ReviewState[], now: number): ReviewState[] {
 export function predictedRecall(state: ReviewState, now: number): number {
   return scheduler.get_retrievability(deserialize(state.card), new Date(now), false);
 }
+
+export interface Calibration {
+  schedulerVersion: string;
+  n: number;
+  /** Mean recall probability the scheduler predicted at the moment of each scheduled review. */
+  predicted: number | null;
+  /** Share of those reviews that were actually recalled. */
+  observed: number | null;
+  rows: { uuid: string; itemId: string; ts: number; predicted: number; recalled: boolean }[];
+}
+
+/**
+ * Baseline for judging the scheduler: replay the attempt log, and at every scheduled review
+ * compare the recall probability FSRS predicted just before it with what happened. Any
+ * future scheduler version can be put through the same replay on the same log.
+ */
+export function reviewCalibration(attempts: Attempt[], since?: number): Calibration {
+  const sorted = [...attempts].sort((x, y) => x.ts - y.ts || (x.uuid < y.uuid ? -1 : x.uuid > y.uuid ? 1 : 0));
+  const states = new Map<string, ReviewState>();
+  const rows: Calibration['rows'] = [];
+  for (const a of sorted) {
+    const before = states.get(a.exerciseId);
+    if (before && a.scheduledReview && a.outcome !== 'skipped' && (since === undefined || a.ts >= since)) {
+      rows.push({ uuid: a.uuid, itemId: a.exerciseId, ts: a.ts, predicted: predictedRecall(before, a.ts), recalled: a.outcome === 'success' });
+    }
+    const next = applyAttempt(before, a);
+    if (next) states.set(a.exerciseId, next);
+  }
+  const n = rows.length;
+  return {
+    schedulerVersion: SCHEDULER_VERSION,
+    n,
+    predicted: n ? rows.reduce((t, r) => t + r.predicted, 0) / n : null,
+    observed: n ? rows.filter((r) => r.recalled).length / n : null,
+    rows,
+  };
+}

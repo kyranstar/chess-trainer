@@ -4,7 +4,7 @@ import { type Learner, useDb, useOnline } from '../app/store';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from '../content';
 import type { Concept, LessonLink } from '../content/types';
 import { recordLessonEvent } from '../db/db';
-import { CHECK, type ConceptStatus } from '../learn/curriculum';
+import { CHECK, type ConceptStatus, KPK_CHECK } from '../learn/curriculum';
 import { projectPlan } from '../learn/diagnostic';
 import { localDate } from '../schedule/session';
 import { formatPct } from '../metrics/metrics';
@@ -29,7 +29,8 @@ export function evidenceText(s: ConceptStatus): string {
   if (!s.assessable) return 'No independent check exists for this yet';
   if (s.evidence.n === 0) return 'Untested';
   const iv = s.evidence.interval!;
-  return `${s.evidence.successes} of ${s.evidence.n} unseen solved first try (${formatPct(s.evidence.rate)}, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)})${s.evidenceState === 'provisional' ? ', provisional' : ''}`;
+  const what = s.concept.assessment.kind === 'kpk-playout' ? 'endings played out correctly first time' : 'unseen solved first try';
+  return `${s.evidence.successes} of ${s.evidence.n} ${what} (${formatPct(s.evidence.rate)}, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)})${s.evidenceState === 'provisional' ? ', provisional' : ''}`;
 }
 
 export function LearnHome({ learner }: { learner: Learner }) {
@@ -205,13 +206,18 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
         <h2>Check understanding</h2>
         {status.assessable ? (
           <>
-            <p className="muted">{CHECK.size} positions you have never seen, no hints. {CHECK.pass} first-try solves pass. Passing without the lesson skips it.</p>
+            <p className="muted">
+              {concept.assessment.kind === 'kpk-playout'
+                ? `${KPK_CHECK.size} king-and-pawn endings you have never seen, played out against perfect play with no help. ${KPK_CHECK.pass} must be kept correct on every move. Passing without the lesson skips it.`
+                : `${CHECK.size} positions you have never seen, no hints. ${CHECK.pass} first-try solves pass. Passing without the lesson skips it.`}
+            </p>
             {status.lastCheck && <p data-testid="last-check">Last check: {status.lastCheck.passed ? 'passed' : 'not passed'}{status.lastCheck.total ? ` (${status.lastCheck.correct} of ${status.lastCheck.total})` : ''}.</p>}
             <div className="actions">
               <button className={status.stage === 'taught' ? 'primary' : ''} data-testid="start-check" onClick={() => setMode({ kind: 'check' })}>
                 {status.stage === 'demonstrated' ? 'Take another check' : status.stage === 'taught' ? 'Check understanding' : 'Pre-test this concept'}
               </button>
               {concept.themes.length > 0 && <button onClick={() => go('practice/run', { concept: concept.id })}>Practise with hints</button>}
+              {concept.assessment.kind === 'kpk-playout' && <button onClick={() => go('practice/run', { mode: 'kpk' })}>Practise this ending</button>}
             </div>
           </>
         ) : (

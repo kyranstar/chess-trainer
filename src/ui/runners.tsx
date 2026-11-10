@@ -3,13 +3,13 @@ import { CONCEPT_BY_ID, conceptOpenings, conceptThemes, LESSON_BY_ID } from '../
 import type { Concept } from '../content/types';
 import { recordLessonEvent } from '../db/db';
 import type { Attempt, AttemptContext, ReviewState } from '../db/types';
-import { CHECK, gradeCheck } from '../learn/curriculum';
+import { CHECK, gradeCheck, KPK_CHECK } from '../learn/curriculum';
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
 import { drillPositions } from '../games/metrics';
 import { OwnGameDrill, useGames } from './Games';
-import { KpkDrill, type KpkGoal } from './Kpk';
+import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
@@ -96,8 +96,63 @@ export function conceptPicker(pool: Puzzle[], concept: Concept, target: number, 
     selectPuzzles(pool, { themes: conceptThemes(concept), openings: conceptOpenings(concept), target, count: 1, exclude, seed: `${seed}|${i}` })[0] ?? null;
 }
 
+/** The check for concepts assessed by exact endgame play-outs. */
+function KpkCheckRunner({ concept, learner, sessionId, onDone }: { concept: Concept; learner: Learner; sessionId: string | null; onDone: (passed: boolean | null) => void }) {
+  const db = useDb();
+  const attempts = useRef<Attempt[]>([]);
+  const [i, setI] = useState(0);
+  const [result, setResult] = useState<ReturnType<typeof gradeCheck> | null>(null);
+  const set = useMemo(
+    () => kpkCheckSet(new Set(learner.attempts.filter((a) => a.exerciseKind === 'endgame').map((a) => a.exerciseId)), KPK_CHECK.size),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [concept.id],
+  );
+  if (set.length < KPK_CHECK.size) {
+    return (
+      <div className="empty" data-testid="check-unavailable">
+        <h2>Check not available</h2>
+        <p>A fair check needs {KPK_CHECK.size} endgame starts you have never seen; only {set.length} are left.</p>
+        <div className="actions"><button className="primary" onClick={() => onDone(null)}>Back</button></div>
+      </div>
+    );
+  }
+  if (result) {
+    return (
+      <div className="check-result" data-testid="check-result" data-passed={result.passed}>
+        <p className="kicker">Check: {concept.title}</p>
+        <h2>{result.correct} of {result.total} played out correctly</h2>
+        <p>{result.passed ? `Passed (needs ${KPK_CHECK.pass} of ${KPK_CHECK.size}). This concept now counts as demonstrated.` : `Not passed yet (needs ${KPK_CHECK.pass} of ${KPK_CHECK.size}). You can retake it with new starts.`}</p>
+        <p className="muted">Each start counts only if every move kept the theoretical result against perfect play, with no help. Five starts is a small sample: treat it as a gate, not a measurement.</p>
+        <div className="actions"><button className="primary" data-testid="check-done" onClick={() => onDone(result.passed)}>Continue</button></div>
+      </div>
+    );
+  }
+  const item = set[i]!;
+  return (
+    <KpkDrill
+      key={`${item.goal}:${item.start}`} start={item.start} goal={item.goal} sessionId={sessionId} context="check" allowShow={false}
+      heading={`Check: ${concept.title}, ${i + 1} of ${KPK_CHECK.size}`}
+      onRecorded={(a) => attempts.current.push(a)}
+      onDone={() => {
+        if (i + 1 < KPK_CHECK.size) return setI(i + 1);
+        const decided = attempts.current;
+        const correct = decided.filter((a) => a.outcome === 'success').length;
+        const g = { complete: true, passed: correct >= KPK_CHECK.pass, correct, total: decided.length };
+        void recordLessonEvent(db, {
+          conceptId: concept.id, lessonId: null, url: null, type: g.passed ? 'check-passed' : 'check-failed', ts: Date.now(),
+          detail: { correct: g.correct, total: g.total, attemptUuids: decided.map((a) => a.uuid), rubric: KPK_CHECK.rubric },
+        }).then(() => setResult(g));
+      }}
+    />
+  );
+}
+
 /** The independent check: a fixed-size set of unseen puzzles in a fixed rating band, no hints. */
-export function CheckRunner({ concept, learner, sessionId, onDone }: { concept: Concept; learner: Learner; sessionId: string | null; onDone: (passed: boolean | null) => void }) {
+export function CheckRunner(props: { concept: Concept; learner: Learner; sessionId: string | null; onDone: (passed: boolean | null) => void }) {
+  return props.concept.assessment.kind === 'kpk-playout' ? <KpkCheckRunner {...props} /> : <PuzzleCheckRunner {...props} />;
+}
+
+function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: Concept; learner: Learner; sessionId: string | null; onDone: (passed: boolean | null) => void }) {
   const db = useDb();
   const pool = usePool();
   const attempts = useRef<Attempt[]>([]);

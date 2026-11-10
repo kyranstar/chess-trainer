@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Attempt } from '../db/types';
-import { applyAttempt, dueItems, rebuildReviewStates, SCHEDULER_VERSION } from './review';
+import { applyAttempt, dueItems, rebuildReviewStates, reviewCalibration, SCHEDULER_VERSION } from './review';
 
 const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 10, 10, 12, 0, 0);
@@ -86,5 +86,35 @@ describe('review scheduling (FSRS via ts-fsrs)', () => {
     expect(dueItems(states, T0)).toEqual([]);
     const later = dueItems(states, T0 + 30 * DAY).map((s) => s.itemId);
     expect(later).toEqual(['lichess:a', 'lichess:b']);
+  });
+});
+
+describe('forecast against outcome (scheduler baseline)', () => {
+  it('replays the log and compares predicted recall with what happened at each scheduled review', () => {
+    const first = att({ exerciseId: 'lichess:a', outcome: 'fail', ts: T0, uuid: '1' });
+    const due1 = applyAttempt(undefined, first)!.due;
+    const log = [
+      first,
+      att({ exerciseId: 'lichess:a', outcome: 'success', ts: due1, uuid: '2', fresh: false, scheduledReview: true }),
+      att({ exerciseId: 'lichess:b', outcome: 'fail', ts: T0, uuid: '3' }),
+      att({ exerciseId: 'lichess:b', outcome: 'fail', ts: T0 + 40 * DAY, uuid: '4', fresh: false, scheduledReview: true }),
+      att({ exerciseId: 'lichess:b', outcome: 'success', ts: T0 + 41 * DAY - 1000, uuid: '5', fresh: false, scheduledReview: false }), // early repeat: ignored
+    ];
+    const c = reviewCalibration(log);
+    expect(c.n).toBe(2);
+    expect(c.observed).toBe(0.5);
+    // After a first miss the earliest review is a day later, which FSRS forecasts below its 90%
+    // target (the memory is still weak); 40 days late the forecast is far lower again.
+    expect(c.rows[0]!.predicted).toBeGreaterThan(0.7);
+    expect(c.rows[0]!.predicted).toBeLessThanOrEqual(0.9);
+    expect(c.rows[1]!.predicted).toBeLessThan(c.rows[0]!.predicted - 0.2);
+    expect(c.predicted).toBeCloseTo((c.rows[0]!.predicted + c.rows[1]!.predicted) / 2);
+    expect(c.schedulerVersion).toBe(SCHEDULER_VERSION);
+  });
+
+  it('is empty, not zero, when there are no scheduled reviews, and ignores input order', () => {
+    expect(reviewCalibration([])).toMatchObject({ n: 0, predicted: null, observed: null });
+    const log = [att({ exerciseId: 'lichess:a', outcome: 'fail', ts: T0, uuid: '1' }), att({ exerciseId: 'lichess:a', outcome: 'success', ts: T0 + 3 * DAY, uuid: '2', fresh: false, scheduledReview: true })];
+    expect(reviewCalibration([...log].reverse())).toEqual(reviewCalibration(log));
   });
 });

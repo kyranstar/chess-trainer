@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "revision": 2,
+ "revision": 3,
  "concepts": [
   {
    "id": "safety.hanging-pieces",
@@ -537,10 +537,8 @@
    "order": 13,
    "week": 3,
    "prereqs": [],
-   "descriptionTheme": "pawnEndgame",
-   "themes": [
-    "pawnEndgame"
-   ],
+   "descriptionTheme": null,
+   "themes": [],
    "localLessons": [
     "lasker-opposition"
    ],
@@ -575,13 +573,11 @@
     }
    ],
    "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "pawnEndgame"
-    ]
+    "kind": "kpk-playout",
+    "note": "King and pawn against king played out against perfect play; every move is judged by the exact table of the ending."
    },
    "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 2
+   "revision": 3
   },
   {
    "id": "endgame.passed-pawn",

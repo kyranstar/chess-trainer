@@ -8,6 +8,7 @@ import { endgameAccuracy, formatPct, PROVISIONAL_N, type RateMetric, retention, 
 import { startRun } from '../puzzles/run';
 import { Board } from './Board';
 import { walkRepertoire } from '../openings/repertoire';
+import { reviewCalibration } from '../schedule/review';
 import { DataPanel } from './Data';
 import { GameCards } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
@@ -64,6 +65,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const overall = useMemo(() => unseenAccuracy(learner.attempts, { since: from }), [learner.attempts, from]);
   const ret = useMemo(() => retention(learner.attempts, from), [learner.attempts, from]);
   const endgame = useMemo(() => endgameAccuracy(learner.attempts, from), [learner.attempts, from]);
+  const calibration = useMemo(() => reviewCalibration(learner.attempts, from), [learner.attempts, from]);
   const perConcept = useMemo(
     () => learner.statuses.filter((s) => s.concept.themes.length > 0 && s.assessable).map((s) => ({ s, m: unseenAccuracy(learner.attempts, { themes: s.concept.themes, since: from }) })),
     [learner.attempts, learner.statuses, from],
@@ -146,7 +148,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
       <section className="card" data-testid="card-retention">
         <h2>Retention</h2>
         <RateLine m={ret} unit="scheduled reviews" />
-        <p className="definition-small">Positions you missed before, solved when they came back on schedule; {periodLabel}. Repeats done early are left out. The scheduler aims for 90% recall, so a much lower figure with enough reviews means intervals are too long.</p>
+        <p className="definition-small">Positions you missed before, solved when they came back on schedule; {periodLabel}. Repeats done early are left out. The scheduler aims for 90% recall once an item is established and forecasts less for items missed only recently; the forecast line below is what it predicted for exactly these reviews.</p>
         {ret.n > 0 && (
           <table className="concept-table">
             <thead><tr><th scope="col">Days since last seen</th><th scope="col">Recalled</th></tr></thead>
@@ -156,6 +158,11 @@ export function ProgressHome({ learner }: { learner: Learner }) {
               ))}
             </tbody>
           </table>
+        )}
+        {calibration.n > 0 && (
+          <p data-testid="calibration">
+            Scheduler forecast for these reviews: {formatPct(calibration.predicted)} expected, {formatPct(calibration.observed)} recalled (n={calibration.n}{calibration.n < PROVISIONAL_N ? ', too few to judge the scheduler' : ''}).
+          </p>
         )}
         {ret.n > 0 && <a href={href('progress/positions', { set: 'retention', period })}>View the {ret.n} reviews</a>}
       </section>

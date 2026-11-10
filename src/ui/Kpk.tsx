@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { type Learner, useDb, useFocusMode } from '../app/store';
 import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
+import type { Attempt } from '../db/types';
 import { distanceKpk, evaluateMove, fastestWin, HOLD_MOVES, keepingMoves, KPK_DRILLS, KPK_VERSION, type KpkOutcome, learnerColor, opponentReply, outcomeAfter, WIN_MOVE_CAP } from '../endgames/kpk';
 import { Board } from './Board';
 
@@ -17,7 +18,9 @@ const OUTCOME_TEXT: Record<KpkOutcome, string> = {
 };
 
 /** One king-and-pawn ending played out against the exact table. */
-export function KpkDrill({ start, goal, sessionId, heading, onDone }: { start: string; goal: KpkGoal; sessionId: string | null; heading?: string; onDone: () => void }) {
+export function KpkDrill({ start, goal, sessionId, heading, context = 'practice', allowShow = true, onRecorded, onDone }: {
+  start: string; goal: KpkGoal; sessionId: string | null; heading?: string; context?: 'practice' | 'check' | 'review'; allowShow?: boolean; onRecorded?: (a: Attempt) => void; onDone: () => void;
+}) {
   const db = useDb();
   useFocusMode();
   const me = useMemo(() => learnerColor(start, goal), [start, goal]);
@@ -33,12 +36,13 @@ export function KpkDrill({ start, goal, sessionId, heading, onDone }: { start: s
 
   async function finish(ok: boolean, shown: boolean, text: string, detail?: string) {
     setEnd({ ok, text, detail });
-    await recordAttempt(db, {
-      sessionId, context: 'practice', exerciseId: kpkId(goal, start), exerciseKind: 'endgame', contentVersion: KPK_VERSION,
+    const a = await recordAttempt(db, {
+      sessionId, context, exerciseId: kpkId(goal, start), exerciseKind: 'endgame', contentVersion: KPK_VERSION,
       conceptId: 'endgame.opposition', themes: ['kpk', goal], rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current,
       firstMove: first.current, played: played.current, mistakes: ok || shown ? 0 : 1, hints: shown ? 1 : 0,
       outcome: shown ? 'assisted' : ok ? 'success' : 'fail', acceptedAlternative: false,
     });
+    onRecorded?.(a);
   }
 
   function onMove(uci: string) {
@@ -104,7 +108,7 @@ export function KpkDrill({ start, goal, sessionId, heading, onDone }: { start: s
         )}
       </div>
       <div className="actions">
-        {!end && <button onClick={show} disabled={busy}>Show a move that keeps it</button>}
+        {!end && allowShow && <button onClick={show} disabled={busy}>Show a move that keeps it</button>}
         {end && <button className="primary" data-testid="kpk-next" onClick={onDone}>Continue</button>}
       </div>
     </section>
@@ -131,4 +135,17 @@ export function KpkRun({ learner, onFinished }: { learner: Learner; onFinished: 
     );
   }
   return <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} heading="King and pawn against king" onDone={() => setN(n + 1)} />;
+}
+
+/** Unseen starts for a check: three to win, two to hold, in the table's fixed order. */
+export function kpkCheckSet(seen: Set<string>, size: number): { goal: KpkGoal; start: string }[] {
+  const fresh = (goal: KpkGoal) => KPK_DRILLS[goal].filter((f) => !seen.has(kpkId(goal, f)));
+  const win = fresh('win');
+  const hold = fresh('hold');
+  const out: { goal: KpkGoal; start: string }[] = [];
+  for (let i = 0; out.length < size && (win[i] || hold[i]); i++) {
+    if (win[i]) out.push({ goal: 'win', start: win[i]! });
+    if (hold[i] && out.length < size) out.push({ goal: 'hold', start: hold[i]! });
+  }
+  return out.slice(0, size);
 }

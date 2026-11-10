@@ -13,7 +13,14 @@
 import { conceptOpenings, conceptThemes, hasAssessment } from '../content';
 import type { Concept } from '../content/types';
 import type { Attempt, LessonEvent } from '../db/types';
-import { type Band, PROVISIONAL_N, unseenAccuracy, type UnseenAccuracy } from '../metrics/metrics';
+import { type Band, endgameAccuracy, PROVISIONAL_N, unseenAccuracy, type UnseenAccuracy } from '../metrics/metrics';
+
+/** Check for concepts assessed by exact endgame play-outs instead of puzzles. */
+export const KPK_CHECK = {
+  size: 5,
+  pass: 4,
+  rubric: 'check-kpk-v1: 5 unseen king-and-pawn starts (3 to win, 2 to hold) against perfect play; a start counts only if every move kept the theoretical result with no help; pass = 4 or more',
+};
 
 export const CHECK = {
   size: 5,
@@ -44,6 +51,7 @@ export function evidenceFor(concept: Concept, attempts: Attempt[]): UnseenAccura
   const themes = conceptThemes(concept);
   if (themes.length) return unseenAccuracy(attempts, { themes });
   if (conceptOpenings(concept).length) return unseenAccuracy(attempts, { conceptId: concept.id });
+  if (concept.assessment.kind === 'kpk-playout') return { ...endgameAccuracy(attempts), excluded: { repeats: 0, skipped: 0, guided: 0 } };
   return unseenAccuracy([]);
 }
 

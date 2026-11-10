@@ -25,6 +25,7 @@ export interface LessonLink {
 export type Assessment =
   | { kind: 'unseen-puzzles'; themes: string[] }
   | { kind: 'opening-puzzles'; openings: string[]; note?: string }
+  | { kind: 'kpk-playout'; note?: string }
   | { kind: 'none-yet'; reason?: string };
 
 export interface Concept {
