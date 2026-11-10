@@ -41,7 +41,6 @@ git init -q -b gh-pages
 git add -A
 git -c user.name="$OWNER" -c user.email="$OWNER@users.noreply.github.com" commit -q -m "Deploy build of $(cd "$ROOT" && git rev-parse --short HEAD)"
 git push -q --force "git@github.com:$OWNER/$REPO.git" gh-pages
-if ! gh api "repos/$OWNER/$REPO/pages" >/dev/null 2>&1; then
-  gh api -X POST "repos/$OWNER/$REPO/pages" -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null
-fi
+# GitHub usually turns Pages on by itself when a gh-pages branch appears; ask anyway and ignore "already enabled".
+gh api -X POST "repos/$OWNER/$REPO/pages" -f 'source[branch]=gh-pages' -f 'source[path]=/' >/dev/null 2>&1 || true
 echo "Published. It can take a minute to appear at https://$OWNER.github.io/$REPO/"

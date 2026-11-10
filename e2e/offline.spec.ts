@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { failPuzzle, openApp, solvePuzzle } from './helpers';
 
-test('after one online visit the app runs with no network: launch, practise, persist, restart', async ({ page, context }) => {
+test('after one online visit the app runs with no network: launch, practise, persist, restart', async ({ page, context, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
   await openApp(page);
   // Wait until the service worker is active, which means the app shell is cached.
   await page.evaluate(async () => {
@@ -25,37 +26,38 @@ test('after one online visit the app runs with no network: launch, practise, per
   await expect(page.getByTestId('block-learn')).toContainText('the opposition');
 
   // Practice works and is stored.
-  await page.goto('/#/practice/run?concept=tactics.double-attack');
+  await page.goto('./#/practice/run?concept=tactics.double-attack');
   await solvePuzzle(page);
   await page.getByTestId('next').click();
   await failPuzzle(page);
 
   // The local lesson opens offline; linked lessons say they need a connection.
-  await page.goto('/#/learn/tactics.double-attack');
+  await page.goto('./#/learn/tactics.double-attack');
   await expect(page.getByTestId('offline-links')).toBeVisible();
   await page.getByTestId('start-lesson').click();
   await expect(page.getByTestId('lesson')).toContainText('There are two kinds of elementary attack.');
 
   // Restart while still offline: attempts survived.
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await page.reload();
   await expect(page.getByTestId('card-unseen')).toContainText('1 of 2');
   await expect(page.getByTestId('pack-info')).toContainText('practice positions');
 
   // No request to a third party was attempted during the offline session.
-  expect(requests.filter((u) => !u.startsWith('http://localhost:4173'))).toEqual([]);
+  expect(requests.filter((u) => !u.startsWith(origin))).toEqual([]);
 });
 
-test('no personal data leaves the device: only same-origin GET requests are made', async ({ page }) => {
+test('no personal data leaves the device: only same-origin GET requests are made', async ({ page, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
   const foreign: string[] = [];
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (!r.url().startsWith('http://localhost:4173') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) foreign.push(r.url());
+    if (!r.url().startsWith(origin) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) foreign.push(r.url());
     if (r.method() !== 'GET') writes.push(`${r.method()} ${r.url()}`);
   });
   await openApp(page, '#/practice/run?concept=mate.in-one');
   await solvePuzzle(page);
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen')).toContainText('1 of 1');
   await page.getByTestId('tab-learn').click();
   await page.getByTestId('tab-today').click();

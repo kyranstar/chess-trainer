@@ -7,7 +7,7 @@ test('backup on one device restores on a clean one; a damaged file changes nothi
   await solvePuzzle(page);
   await page.getByTestId('next').click();
   await failPuzzle(page);
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen')).toContainText('1 of 2');
   await expect(page.getByTestId('last-backup')).toContainText('No backup has been made');
 

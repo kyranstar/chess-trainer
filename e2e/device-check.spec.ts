@@ -5,7 +5,7 @@ test('device check passes online and again after going offline, and leaves no te
   test.skip(test.info().project.name !== 'desktop-chromium', 'service-worker offline is exercised in Chromium');
   await openApp(page);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await page.getByTestId('open-device-check').click();
   const check = page.getByTestId('device-check');
   await expect(check).toHaveAttribute('data-state', 'passed', { timeout: 30_000 });

@@ -50,9 +50,9 @@ test('repertoire: record own moves by frequency, see engine evidence and coverag
   await expect(page.getByTestId('recall-done')).toBeVisible();
 
   // Both positions are now in the spaced-review queue; nothing is due again today.
-  await page.goto('/#/practice/openings');
+  await page.goto('./#/practice/openings');
   await expect(page.getByTestId('recall-card')).toContainText('0 to recall now');
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   const card = page.getByTestId('card-openings');
   await expect(card).toContainText('1 of 2 recalled');
   await expect(card).toContainText('1 sound by engine evidence');

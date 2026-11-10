@@ -8,7 +8,7 @@ export default defineConfig({
   fullyParallel: true,
   retries: 0,
   reporter: [['list']],
-  use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure' },
+  use: { baseURL: 'http://localhost:4173/', trace: 'retain-on-failure' },
   webServer: { command: 'npm run preview', url: 'http://localhost:4173', reuseExistingServer: true, timeout: 60_000 },
   projects: [
     { name: 'iphone-webkit', use: { ...devices['iPhone 14'] }, testIgnore: /offline/ },

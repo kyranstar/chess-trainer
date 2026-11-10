@@ -112,7 +112,7 @@ test('a hint makes the attempt assisted and keeps it out of first-try successes'
   await expect(page.getByTestId('puzzle')).toHaveAttribute('data-outcome', 'assisted');
   await solvePuzzle(page);
   await expect(page.getByTestId('verdict-solved')).toContainText('assisted');
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen')).toContainText('0 of 1');
 });
 

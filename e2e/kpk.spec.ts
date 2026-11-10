@@ -56,13 +56,13 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   await expect(verdict).toContainText('Exact result from the table, not an opinion');
 
   // Progress reports the three play-outs with their split, separately from puzzles.
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   const card = page.getByTestId('card-endgame');
   await expect(card).toContainText('2 of 3');
   await expect(card).toContainText('Winning: 1 of 2. Holding the draw: 1 of 1.');
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
   // All three are scheduled for a later retention check.
-  await page.goto('/#/practice');
+  await page.goto('./#/practice');
   await expect(page.getByTestId('practice-review')).toContainText('3 in the queue');
 });
 

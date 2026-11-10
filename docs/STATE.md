@@ -2,7 +2,7 @@
 
 Updated: 2026-11-10
 Branch: `build/trainer` (`main` holds only the starter kit). Commit: see `git log -1`; this file is committed with the work it describes.
-Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Verified in automated browsers, in real Mobile Safari on the iOS 27 simulator (load, install of content, all device checks, offline cold start), and on the owner's real games (87 analysed). Not done: publishing the app and installing it on the physical iPhone; publishing was blocked by the permission system and needs the owner's go-ahead (one command, below).** M6 (sync) not started and deferred by design.
+Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Verified in automated browsers, in real Mobile Safari on the iOS 27 simulator (load, install of content, all device checks, offline cold start), and on the owner's real games (87 analysed). Published 2026-11-10: source at https://github.com/kyranstar/chess-trainer (public, `main`), app at https://kyranstar.github.io/chess-trainer/ (`gh-pages`); the full browser suite passes against the live site. Not done: installing it on the physical iPhone, which needs a tap on the phone.** M6 (sync) not started and deferred by design.
 
 ## What works today (user-visible)
 
@@ -19,7 +19,7 @@ Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Veri
 
 ## What does not exist yet (do not describe as done)
 
-- **The app is not published and not on the phone.** `scripts/deploy-pages.sh <github-owner>` publishes the built files to the `gh-pages` branch of the project's GitHub repository (never `data/`). The permission system refused to let the agent create a public repository, so the owner must run it or allow it. After that: open the address in Safari on the iPhone, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device.
+- **The app is published but not yet on the phone.** On the iPhone: open https://kyranstar.github.io/chess-trainer/ in Safari, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device. Redeploy after changes with `scripts/deploy-pages.sh <github-owner>` (publishes built files to `gh-pages`; never `data/`).
 - **On the physical iPhone nothing has been tested**: Home Screen install, touch on the board, backup to Files. The simulator run used real Mobile Safari but opened pages by URL only (no taps).
 - Exact endgames cover king and pawn against king only: no basic mates, rook endings or conversion play-outs yet, and no calculation training beyond three-move puzzles (rest of M5). No training-to-game transfer metric. No Lichess-study import. No sync (M6).
 - 5 of 29 concepts have an offline human-written lesson; 2 have no lesson at all; 7 have no independent check. "The opposition" is checked by exact endgame play-outs; every other checked concept uses tagged puzzles.
@@ -43,6 +43,7 @@ Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Veri
 | `npm run e2e` | 32 passed, 2 skipped by design (iPhone 14 WebKit, desktop Chromium) |
 | iOS 27 simulator, Mobile Safari, opened by URL | app loads and installs 8,219 positions; Device check: all 7 pass (service worker controlling, offline cache, pack checksum, storage + backup + restore round trip, rules, endgame table); in-app update notice appears for a new build; cold start with the server stopped loads a puzzle and a lesson page |
 | `DRY_RUN=1 scripts/deploy-pages.sh` bundle served under `/chess-trainer/` | loads, service-worker scope and manifest correct, device check passes, works offline, source tarball served |
+| `npx playwright test --config data/playwright.live.config.ts` against https://kyranstar.github.io/chess-trainer/ | 32 passed, 2 skipped by design (the config lives in git-ignored `data/`; it is the normal config with `baseURL` set to the site and no local server) |
 | `npm run check` (all of the above in one command) | exit 0 on the final run |
 
 End-to-end coverage: a full study session with a linked lesson through to dashboard drill-down and restart; a local lesson played move by move and resumed; hint ⇒ assisted; iPhone-size layout; backup on one profile restored on another, damaged file rejected; offline cold start, practice, lesson, repertoire and restart with no third-party requests; baseline pause/resume; a play day through to Progress and backup; the 30-day projection; repertoire record → evidence → coverage → recall → backup; own-PGN import with conflicts and export; analysed-games import, metrics, drill-down and a drill from an own game; a king-and-pawn ending won and held with table-perfect moves, and a result-changing move named exactly; the opposition demonstrated by five exact play-outs.
@@ -51,9 +52,8 @@ Bugs found by these tests and fixed: check result vanished on passing; tab bar c
 
 ## Open decisions for the owner
 
-1. **Publish?** Run `scripts/deploy-pages.sh <your-github-login>` (or allow the agent to). It makes a public repository with the built app. Alternative with nothing public: serve `dist/` from the Mac over HTTPS with a locally trusted certificate, which needs a certificate profile installed on the phone.
-2. **Lesson review**: the five local lessons are marked `ownerReview: pending` until you have read them.
-3. **Opponent rating band** for opening frequencies defaults to Lichess 800–999; change it on the repertoire screen.
+1. **Lesson review**: the five local lessons are marked `ownerReview: pending` until you have read them.
+2. **Opponent rating band** for opening frequencies defaults to Lichess 800–999; change it on the repertoire screen.
 
 Settled on 2026-11-10 (ADR-022): US jurisdiction, so the Lasker lessons stay; own games come from Chess.com's public API on request; the Chess.com lesson links stay as collected.
 
@@ -68,7 +68,7 @@ Settled on 2026-11-10 (ADR-022): US jurisdiction, so the Lasker lessons stay; ow
 
 ## Next slice
 
-1. Owner: publish, install on the iPhone, run "Check this device" there, and import `my-games.json` (already copied to iCloud Drive → Chess Trainer) under Progress → Your data.
+1. Owner: install on the iPhone (Safari → Share → Add to Home Screen), run "Check this device" there, and import `my-games.json` (already copied to iCloud Drive → Chess Trainer) under Progress → Your data.
 2. Rest of M5: basic mates (K+Q, K+R) with an exact table; exchange-counting drills generated and checked by engine; training-to-game transfer metric now that real games exist (needs drill history first); use the forecast-versus-outcome replay to judge any scheduler change once there are enough real reviews.
 3. Extend the opening book to 1.e4 d5 and the owner's eventual Black repertoire (`ROOTS` in `opening_stats.py`), then rerun `opening_stats` and `opening_evals`.
 4. More offline lessons from the two cleared books; a "this link is broken" control.

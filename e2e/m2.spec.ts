@@ -22,7 +22,7 @@ test('baseline: samples unseen positions, can be paused and resumed, and never c
   expect(readings.every((r) => ['', 'provisional', 'pre-test to skip'].includes(r))).toBe(true);
 
   // Progress is derived from attempts, so leaving and returning resumes where it stopped.
-  await page.goto('/#/today');
+  await page.goto('./#/today');
   await expect(page.getByTestId('start-baseline')).toHaveText('Continue the baseline');
   await page.getByTestId('start-baseline').click();
   // A position can carry several concept tags, so two positions remove at least two from the count.

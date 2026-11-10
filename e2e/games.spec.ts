@@ -48,7 +48,7 @@ test('own games: import the analysed file, see ratings and error metrics with th
   await expect(ev).toContainText('Why the move was played. The app does not guess.');
 
   // The missed mate has one clearly best move, so it becomes a personal drill.
-  await page.goto('/#/practice');
+  await page.goto('./#/practice');
   await expect(page.getByTestId('practice-own')).toContainText('1 position where you missed a move');
   await page.getByTestId('practice-own').click();
   const drill = page.getByTestId('own-drill');
@@ -60,9 +60,9 @@ test('own games: import the analysed file, see ratings and error metrics with th
   await expect(page.getByTestId('own-done')).toBeVisible();
 
   // It is now in the review queue, and it never counts as an unseen puzzle.
-  await page.goto('/#/practice');
+  await page.goto('./#/practice');
   await expect(page.getByTestId('practice-review')).toContainText('1 in the queue');
-  await page.goto('/#/progress');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
 
   // Re-importing the same file changes nothing.

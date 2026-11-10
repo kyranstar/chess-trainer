@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Waits until the first-run pack install has finished and the app is usable. */
 export async function openApp(page: Page, path = '#/today') {
-  await page.goto(`/${path}`);
+  await page.goto(`./${path}`);
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
 }
