@@ -132,7 +132,8 @@ export const LEVEL_PRIOR = 1200;
  */
 export function estimateLevel(attempts: Attempt[]): { level: number; n: number } {
   const rows = attempts
-    .filter((a) => a.exerciseKind === 'puzzle' && a.fresh && a.outcome !== 'skipped' && a.rating !== null)
+    // Asking for a hint is a way of learning, not a failed test: hinted attempts do not move the estimate.
+    .filter((a) => a.exerciseKind === 'puzzle' && a.fresh && (a.outcome === 'success' || a.outcome === 'fail') && a.rating !== null)
     .sort((x, y) => x.ts - y.ts || (x.uuid < y.uuid ? -1 : 1));
   let level = LEVEL_PRIOR;
   rows.forEach((a, i) => {

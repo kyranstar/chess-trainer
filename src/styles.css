@@ -58,7 +58,7 @@ h1 { font-size: 2rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.01e
 h2 { font-size: 1.25rem; line-height: 1.2; font-weight: 700; }
 h3 { font-size: 1rem; font-weight: 700; margin-top: 1rem; }
 a { color: var(--felt); text-underline-offset: 0.15em; }
-:focus-visible { outline: 3px solid var(--pencil); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
 
 .app { min-height: 100dvh; padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom)); }
 .focus-mode .tabs { display: none; }
@@ -215,17 +215,21 @@ progress::-moz-progress-bar { background: var(--felt); }
 .outcome-mark.is-assisted { background: var(--pencil); border-color: var(--pencil); }
 
 /* Forms */
+.headline-facts { grid-template-columns: 1fr; gap: 0.15rem 0; }
+.headline-facts dt { font-weight: 600; color: var(--ink); margin-top: 0.5rem; }
+.headline-facts dd strong { font-size: 1.2rem; }
 .spark { width: 100%; height: 1.75rem; color: var(--board-dark); display: block; }
 code { font-size: 0.85em; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05rem 0.3rem; word-break: break-word; }
 .journal-row { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.65rem 0.75rem; }
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.95rem; }
 .field span, .choice legend { color: var(--muted); padding: 0; }
 .choice { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
-textarea, input[type='number'], input[type='url'] {
-  font: inherit; color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; width: 100%;
+textarea, input[type='number'], input[type='url'], input[type='text'] {
+  font: inherit; font-size: max(1rem, 16px); /* below 16px iOS zooms the page on focus */ color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; width: 100%;
 }
 .plain-list { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
 details.plan summary { cursor: pointer; font-weight: 600; min-height: 2.75rem; display: flex; align-items: center; }
+.plan-table td:nth-child(2) { white-space: normal; }
 .plan-table td:first-child { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Progress */

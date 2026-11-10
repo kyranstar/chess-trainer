@@ -1,12 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { href, type Route } from '../app/router';
 import { type Learner, useDb, useDueReviews, useFocusMode, useNow } from '../app/store';
 import { STARTING_PROFILE } from '../app/profile';
 import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
-import { recordAttempt } from '../db/db';
+import { getMeta, recordAttempt, setMeta } from '../db/db';
+import { runSyncRound, useSyncState } from '../app/useAutoSync';
+import { DEFAULT_USERNAME } from '../games/autosync';
+import type { RatingSnapshot } from '../games/chesscom';
 import { importGames } from '../games/import';
-import { clockPressure, CLOCK_MIN_DECISIONS, type DrillPosition, drillPositions, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries } from '../games/metrics';
+import { clockPressure, CLOCK_MIN_DECISIONS, COMPARE_WINDOW, type DrillPosition, drillPositions, EARLY_MOVES, earlyBlunderGames, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries, UNDECIDED_BELOW } from '../games/metrics';
+import { senseStats } from '../games/sense';
+import type { Attempt } from '../db/types';
 import type { GameRecord, TimeClass } from '../games/types';
 import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
@@ -45,6 +50,7 @@ function Sparkline({ values }: { values: number[] }) {
 
 export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: string | undefined; periodLabel: string; period: string }) {
   const games = useGames();
+  const live = useLiveRatings();
   if (!games) return null;
   if (games.length === 0) {
     return (
@@ -53,7 +59,7 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
         <ul className="rating-list">
           {STARTING_PROFILE.ratings.map((r) => (<li key={r.label}><span>{r.label}</span><strong>{r.value}</strong></li>))}
         </ul>
-        <p className="definition-small">{STARTING_PROFILE.source}, {STARTING_PROFILE.enteredOn}. Each is a separate scale and they are not comparable. No games are imported yet, so there is no trend and no game-error analysis. Import analysed games under “Your data”.</p>
+        <p className="definition-small">{STARTING_PROFILE.source}, {STARTING_PROFILE.enteredOn}. Each is a separate scale and they are not comparable. No games are on this device yet, so there is no trend and no game-error analysis. Enter your Chess.com username under “Your games” and they arrive by themselves.</p>
       </section>
     );
   }
@@ -83,7 +89,12 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
             })}
           </tbody>
         </table>
-        <p className="definition-small">Your rating after each imported game, all time, never combined across time controls. Ratings move with opponents and luck as well as skill; a few games show nothing.</p>
+        {live && (
+          <p data-testid="live-ratings">
+            Chess.com now: {([['rapid', 'Rapid'], ['blitz', 'Blitz'], ['daily', 'Daily'], ['bullet', 'Bullet']] as const).filter(([k]) => live[k]).map(([k, label]) => `${label} ${live[k]!.rating}`).join(', ')} (checked {new Date(live.checkedAt).toLocaleString()}).
+          </p>
+        )}
+        <p className="definition-small">Your rating after each game on this device, all time, never combined across time controls. Ratings move with opponents and luck as well as skill; a few games show nothing.</p>
       </section>
 
       <section className="card" data-testid="card-errors">
@@ -124,29 +135,37 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
           <p className="metric-empty">No tactical chances were found in the analysed games for this period.</p>
         ) : (
           <>
-            <p className="metric-line">
-              <span className="metric-value">{missed.missed} of {missed.available}</span>
-              <span className="metric-pct">{formatPct(missed.rate)}</span>
-              <span className="metric-range">missed, plausible range {formatPct(missed.interval!.lo)}–{formatPct(missed.interval!.hi)}</span>
-              {missed.confidence === 'provisional' && <span className="badge">provisional, n&lt;{PROVISIONAL_N}</span>}
-            </p>
+            {missed.clear.available > 0 ? (
+              <p className="metric-line" data-testid="missed-clear">
+                <span className="metric-value">{missed.clear.missed} of {missed.clear.available}</span>
+                <span className="metric-pct">{formatPct(missed.clear.rate)}</span>
+                <span className="metric-range">chances with one clearly best move were never taken, plausible range {formatPct(missed.clear.interval!.lo)}–{formatPct(missed.clear.interval!.hi)}</span>
+              </p>
+            ) : (
+              <p className="metric-empty" data-testid="missed-clear">No chance with one clearly best move was found in these games.</p>
+            )}
+            <p className="definition-small">A chance counts here only if one move beats every other by 20 points or more, and it counts once however many moves it stayed on the board. Where several moves win about as much there is nothing to find.</p>
+            {missed.undecided.available > 0 && (
+              <p data-testid="missed-undecided">While the game was still open: {missed.undecided.missed} of {missed.undecided.available} chances were answered with a move other than the engine’s first choice ({formatPct(missed.undecided.rate)}).</p>
+            )}
+            <p data-testid="missed-all">Counting every chance, including those in positions already won: {missed.missed} of {missed.available} cost 10 points or more ({formatPct(missed.rate)}).</p>
             {missed.missed > 0 && <a href={href('progress/game-events', { kind: 'missed', period })} data-testid="view-missed">View the {missed.missed} positions</a>}
           </>
         )}
-        <p className="definition-small">A chance is a position on your move where the engine’s best line mates, or ends at least two points of material up on where things stood before the opponent’s last move (so simply taking a piece back is not counted). It is missed when your move gave up 10 or more points of expected score. Chances are only looked for at your own moves; {periodLabel}.</p>
+        <p className="definition-small">A chance is a position on your move where the engine’s best line mates, or ends at least two points of material up on where things stood before the opponent’s last move (so simply taking a piece back is not counted). The first figure counts chances where the best line scored under {UNDECIDED_BELOW}% (the game was still open) and you played something other than the engine’s first choice. In a position that is already won a miss barely registers, which is why the second figure looks kinder. Chances are only looked for at your own moves; {periodLabel}.</p>
       </section>
 
       <section className="card" data-testid="card-clock">
         <h2>Errors when short of time</h2>
         {clock.enough ? (
           <p>
-            Under 10% of the starting time: {clock.low.errors} major errors in {clock.low.decisions} decisions ({((100 * clock.low.errors) / clock.low.decisions).toFixed(1)} per 100).
+            Moves begun with under 10% of the starting time left: {clock.low.errors} major errors in {clock.low.decisions} decisions ({((100 * clock.low.errors) / clock.low.decisions).toFixed(1)} per 100).
             Otherwise: {clock.normal.errors} in {clock.normal.decisions} ({((100 * clock.normal.errors) / clock.normal.decisions).toFixed(1)} per 100).
           </p>
         ) : (
-          <p className="metric-empty" data-testid="clock-insufficient">Insufficient data: {clock.low.decisions} decisions made under 10% of the starting time and {clock.normal.decisions} otherwise; at least {CLOCK_MIN_DECISIONS} are needed in each group before the two are compared.</p>
+          <p className="metric-empty" data-testid="clock-insufficient">Insufficient data: {clock.low.decisions} moves begun with under 10% of the starting time left and {clock.normal.decisions} otherwise; at least {CLOCK_MIN_DECISIONS} are needed in each group before the two are compared.</p>
         )}
-        <p className="definition-small">Clock times come from the game file; {clock.noClock} analysed game{clock.noClock === 1 ? ' has' : 's have'} no clock data and {clock.noClock === 1 ? 'is' : 'are'} left out; {periodLabel}. Positions late in a game differ from earlier ones (many are already decided either way), so a difference here says little about the clock itself.</p>
+        <p className="definition-small">Clock times come from the game file; {clock.noClock} analysed game{clock.noClock === 1 ? ' has' : 's have'} no clock data and {clock.noClock === 1 ? 'is' : 'are'} left out; {periodLabel}. Only positions that were still undecided are compared (expected score 10 to 90 before the move, from this device’s own analysis): most moves made with little time come in games already won or lost, where a major error is impossible.{clock.unmeasured > 0 ? ` ${clock.unmeasured} game${clock.unmeasured === 1 ? ' is' : 's are'} waiting to be measured and not yet included.` : ''} The clock is the time left when the move was begun.</p>
       </section>
     </>
   );
@@ -154,6 +173,7 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
 
 function eventsFor(games: GameRecord[], kind: string, sinceDate: string | undefined): { title: string; rows: EventRef[] } {
   if (kind === 'missed') return { title: 'Missed tactical chances', rows: missedOpportunities(games, { sinceDate }).events };
+  if (kind === 'early') return { title: 'Early blunders in rapid games', rows: earlyBlunderGames(games, { timeClass: 'rapid', sinceDate }).events };
   return { title: 'Major errors', rows: majorErrors(games, { sinceDate }).events };
 }
 
@@ -186,7 +206,7 @@ export function GameEventView({ gameId, ply }: { gameId: string; ply: number }) 
   const games = useGames();
   if (!games) return <div className="page"><p className="muted">Loading</p></div>;
   const game = games.find((g) => g.id === gameId);
-  const event = game?.analysis?.events.find((e) => e.ply === ply);
+  const event = game?.analysis?.events.find((e) => e.ply === ply) ?? game?.measure?.events.find((e) => e.ply === ply);
   if (!game || !event) return <div className="page"><a className="back" href={href('progress')}>Progress</a><p>Position not found.</p></div>;
   const mins = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   return (
@@ -286,12 +306,42 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
   return <OwnGameDrill key={drill.id} drill={drill} sessionId={null} heading={`Your games, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
 }
 
-/** File import for the analysed-games file, shown under "Your data". */
+const SYNC_TEXT: Record<string, string> = {
+  ok: 'up to date',
+  offline: 'could not reach Chess.com (offline); it will try again next time',
+  'rate-limited': 'Chess.com asked us to slow down; it will try again later',
+  'not-found': 'Chess.com does not know this username',
+  error: 'Chess.com returned an error; it will try again later',
+};
+
+/** Automatic import from Chess.com (and, tucked away, the manual file route). Shown under "Your data". */
 export function GamesImport() {
   const db = useDb();
   const games = useGames();
+  const sync = useSyncState();
   const input = useRef<HTMLInputElement>(null);
+  const [username, setUsername] = useState('');
+  const [saved, setSaved] = useState('');
+  const [lastSync, setLastSync] = useState<{ at: number; status: string; added: number } | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    void getMeta<string>(db, 'chesscom.username').then((u) => {
+      const name = u ?? DEFAULT_USERNAME;
+      setUsername(name);
+      setSaved(name);
+    });
+  }, [db]);
+  useEffect(() => {
+    void getMeta<{ at: number; status: string; added: number }>(db, 'chesscom.lastSync').then((l) => setLastSync(l ?? null));
+  }, [db, sync.last, sync.syncing]);
+
+  async function saveUsername() {
+    const name = username.trim();
+    await setMeta(db, 'chesscom.username', name);
+    setSaved(name);
+    if (name) void runSyncRound(db, true);
+  }
   async function load(file: File) {
     try {
       const r = await importGames(db, await file.text());
@@ -302,20 +352,104 @@ export function GamesImport() {
       if (input.current) input.current.value = '';
     }
   }
+  const analysed = games?.filter((g) => g.analysis).length ?? 0;
   return (
-    <section className="card" data-testid="card-games-import">
+    <section className="card" data-testid="card-games-import" data-sync={sync.syncing ? 'syncing' : (lastSync?.status ?? 'never')} data-analysing={sync.analysing ? 'yes' : 'no'}>
       <h2>Your games</h2>
-      <p>{games?.length ?? 0} imported, {games?.filter((g) => g.analysis).length ?? 0} with engine analysis. Games are analysed on your Mac and brought in as a file; the app never contacts a chess site.</p>
-      <ol className="plain-list definition-small">
-        <li>On Chess.com: Game History, select games, Download (keep the clock option on). Save the PGN files in <code>data/my-games/</code>.</li>
-        <li>On the Mac: <code>cd pipeline && uv run python -m trainer_pipeline.games --player YOUR_NAME ../data/my-games/*.pgn</code></li>
-        <li>Import <code>data/analysis/my-games.json</code> here (AirDrop or Files gets it to the iPhone).</li>
-      </ol>
+      <p data-testid="games-count">{games?.length ?? 0} games on this device, {analysed} analysed.</p>
+      <label className="field">
+        <span>Chess.com username</span>
+        <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={username} data-testid="chesscom-username" onChange={(e) => setUsername(e.target.value)} />
+      </label>
       <div className="actions">
-        <button data-testid="games-button" onClick={() => input.current?.click()}>Import analysed games</button>
-        <input ref={input} data-testid="games-input" type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && void load(e.target.files[0])} />
+        {username.trim() !== saved && <button className="primary" data-testid="save-username" onClick={() => void saveUsername()}>{username.trim() ? 'Save and fetch my games' : 'Stop fetching'}</button>}
+        {saved && username.trim() === saved && <button data-testid="sync-now" disabled={sync.syncing} onClick={() => void runSyncRound(db, true)}>Check Chess.com now</button>}
       </div>
+      <p className="definition-small" data-testid="sync-status" role="status">
+        {!saved
+          ? 'With a username, the app fetches your ratings and new games by itself every time it is opened and analyses them on this device. Nothing to do by hand.'
+          : sync.syncing
+            ? 'Checking Chess.com'
+            : lastSync
+              ? `Last checked ${new Date(lastSync.at).toLocaleString()}: ${SYNC_TEXT[lastSync.status] ?? lastSync.status}${lastSync.added ? `, ${lastSync.added} new game${lastSync.added === 1 ? '' : 's'}` : ''}. Checked again whenever the app is opened (at most every 3 hours).`
+              : 'Not checked yet.'}
+        {sync.analysing ? ` Analysing games on this device: ${sync.analysing.done} of ${sync.analysing.total} done; it continues while the app is open.` : ''}
+        {sync.engineError ? ` The in-app engine could not start (${sync.engineError}).` : ''}
+      </p>
+      <p className="definition-small">Your device asks Chess.com’s public API directly for your own public games and ratings. Nothing is sent anywhere else, and analysis happens here with a small built-in engine.</p>
+      <details className="plan">
+        <summary>Deeper analysis from the Mac (optional)</summary>
+        <ol className="plain-list definition-small">
+          <li><code>cd pipeline && uv run python -m trainer_pipeline.fetch_chesscom --player YOUR_NAME</code></li>
+          <li><code>uv run python -m trainer_pipeline.games --player YOUR_NAME ../data/my-games/*.pgn</code></li>
+          <li>Import <code>data/analysis/my-games.json</code> here. It replaces the in-app analysis of the same games and is labelled with its own engine settings.</li>
+        </ol>
+        <div className="actions">
+          <button data-testid="games-button" onClick={() => input.current?.click()}>Import analysed games</button>
+        </div>
+      </details>
+      <input ref={input} data-testid="games-input" type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && void load(e.target.files[0])} />
       {message && <p className={`note ${message.kind === 'error' ? 'is-error' : 'is-ok'}`} role="status" data-testid="games-message">{message.text}</p>}
+    </section>
+  );
+}
+
+/** Current ratings as Chess.com reports them, when the automatic check has run. */
+export function useLiveRatings(): RatingSnapshot | null {
+  const db = useDb();
+  const sync = useSyncState();
+  const [r, setR] = useState<RatingSnapshot | null>(null);
+  useEffect(() => {
+    void getMeta<RatingSnapshot>(db, 'chesscom.ratings').then((x) => setR(x ?? null));
+  }, [db, sync.last]);
+  return r;
+}
+
+/** The three questions Progress leads with: stronger games, fewer target errors, fresh ordinary positions. */
+export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts: Attempt[]; sinceDate: string | undefined; since: number | undefined; periodLabel: string }) {
+  const games = useGames();
+  const live = useLiveRatings();
+  if (!games) return null;
+  const rapid = ratingSeries(games, 'rapid');
+  const early = earlyBlunderGames(games, { timeClass: 'rapid', sinceDate });
+  const sense = senseStats(attempts, since);
+  const s = sense['safe-or-not'];
+  const c = sense['chance-or-not'];
+  const pct = (x: number | null) => (x === null ? 'no data' : formatPct(x));
+  return (
+    <section className="card focus" data-testid="card-headline">
+      <h2>Is it working?</h2>
+      <dl className="facts headline-facts">
+        <dt>Rapid rating</dt>
+        <dd data-testid="headline-rating">
+          {live?.rapid ? <strong>{live.rapid.rating}</strong> : rapid.current ? <strong>{rapid.current.rating}</strong> : 'No games yet'}
+          {rapid.twentyAgo !== null && rapid.current ? ` (${rapid.current.rating - rapid.twentyAgo >= 0 ? '+' : ''}${rapid.current.rating - rapid.twentyAgo} over the last 20 games)` : rapid.n > 0 ? ` after ${rapid.n} game${rapid.n === 1 ? '' : 's'}` : ''}
+        </dd>
+        <dt>Early blunders</dt>
+        <dd data-testid="headline-early">
+          {early.games === 0 ? (early.pending > 0 ? `${early.pending} rapid games are waiting to be measured on this device` : 'No rapid games yet') : (
+            <>
+              <strong>{early.withBlunder} of {early.games}</strong> rapid games had a move in the first {EARLY_MOVES} that lost material or allowed mate ({formatPct(early.rate)}, plausible range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)}).
+              {early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`}
+              {` All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.`}
+              {early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
+            </>
+          )}
+        </dd>
+        <dt>Fresh positions</dt>
+        <dd data-testid="headline-sense">
+          {s.detected.n + s.quiet.n + c.detected.n + c.quiet.n === 0 ? 'No questions from your own games answered yet' : (
+            <>
+              Unsafe moves spotted: {s.noticed.successes} of {s.noticed.n} ({pct(s.noticed.rate)}); false alarms on safe moves: {s.quiet.n - s.quiet.successes} of {s.quiet.n}.
+              {' '}Chances spotted: {c.noticed.successes} of {c.noticed.n} ({pct(c.noticed.rate)}); false alarms: {c.quiet.n - c.quiet.successes} of {c.quiet.n}.
+            </>
+          )}
+        </dd>
+      </dl>
+      <p className="definition-small">
+        These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so a deeper analysis imported from the Mac never changes this number. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
+      </p>
+      {early.withBlunder > 0 && <a href={href('progress/game-events', { kind: 'early', period: 'all' })} data-testid="view-early">View the {early.withBlunder} games’ positions</a>}
     </section>
   );
 }

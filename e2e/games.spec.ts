@@ -8,7 +8,7 @@ test('own games: import the analysed file, see ratings and error metrics with th
   await openApp(page, '#/progress');
 
   // Before any import the dashboard says so and shows only the ratings that were typed in.
-  await expect(page.getByTestId('card-ratings')).toContainText('No games are imported yet');
+  await expect(page.getByTestId('card-ratings')).toContainText('No games are on this device yet');
   await expect(page.getByTestId('card-errors')).toHaveCount(0);
 
   // A wrong file is rejected and nothing is stored.
@@ -16,7 +16,7 @@ test('own games: import the analysed file, see ratings and error metrics with th
   writeFileSync(bad, JSON.stringify({ manifest: { format: 'chess-trainer-backup' }, games: [] }));
   await page.getByTestId('games-input').setInputFiles(bad);
   await expect(page.getByTestId('games-message')).toContainText('not an analysed-games file');
-  await expect(page.getByTestId('card-games-import')).toContainText('0 imported');
+  await expect(page.getByTestId('games-count')).toHaveText('0 games on this device, 0 analysed.');
 
   await page.getByTestId('games-input').setInputFiles(FIXTURE);
   await expect(page.getByTestId('games-message')).toContainText('6 new, 0 re-analysed, 0 unchanged');
@@ -49,7 +49,7 @@ test('own games: import the analysed file, see ratings and error metrics with th
 
   // The missed mate has one clearly best move, so it becomes a personal drill.
   await page.goto('./#/practice');
-  await expect(page.getByTestId('practice-own')).toContainText('1 position where you missed a move');
+  await expect(page.getByTestId('practice-own')).toContainText('1 position where one move was clearly best and you played another');
   await page.getByTestId('practice-own').click();
   const drill = page.getByTestId('own-drill');
   await expect(drill).toHaveAttribute('data-expected', 'h5f7');

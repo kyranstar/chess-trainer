@@ -2,6 +2,8 @@ import { expect, type Page, test } from '@playwright/test';
 import { legalDests, positionFromFen } from '../src/chess/rules';
 import { openApp, playMove } from './helpers';
 
+let cancelTried = false;
+
 /** Plays the drill on screen with table-perfect moves until it ends. */
 async function playPerfectly(page: Page) {
   const drill = page.getByTestId('kpk-drill');
@@ -11,6 +13,14 @@ async function playPerfectly(page: Page) {
     const goal = await drill.getAttribute('data-goal');
     const move = goal === 'win' ? (await drill.getAttribute('data-fastest'))! : (await drill.getAttribute('data-keeping'))!.split(' ')[0]!;
     const before = await drill.getAttribute('data-fen');
+    if (move.length === 5 && !cancelTried) {
+      // Start the promotion, cancel the piece choice: the pawn goes back and the board stays playable.
+      cancelTried = true;
+      await playMove(page, move.slice(0, 4));
+      await page.getByTestId('promo-cancel').click();
+      await expect(drill).toHaveAttribute('data-fen', before!);
+      await expect(page.locator('.board').first()).not.toHaveAttribute('data-movable', 'none');
+    }
     await playMove(page, move);
     await expect(drill).not.toHaveAttribute('data-fen', before!);
     // wait for the reply (or the end)

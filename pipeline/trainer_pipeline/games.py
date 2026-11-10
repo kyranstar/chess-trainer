@@ -280,21 +280,25 @@ def main() -> int:
     text = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for p in args.pgn)
     games, stats = parse_games(text, args.player)
     print(f"{stats['read']} games read, {len(games)} importable ({stats})", flush=True)
+    engine_name = None
+    path = None if args.no_engine else shutil.which("stockfish")
+    if path:
+        with chess.engine.SimpleEngine.popen_uci(path) as e:
+            engine_name = e.id.get("name")
     previous = {}
     if args.out.exists():
         old = json.loads(args.out.read_text())
-        if old["manifest"].get("analysisVersion") == ANALYSIS_VERSION and old["manifest"].get("engine", {}).get("nodes") == NODES:
+        om = old["manifest"]
+        # Reuse earlier analyses only if they were made by this exact analysis version, engine and node budget.
+        same = om.get("analysisVersion") == ANALYSIS_VERSION and (om.get("engine") or {}).get("nodes") == NODES and (om.get("engine") or {}).get("name") == engine_name
+        if same and engine_name:
             previous = {g["id"]: g["analysis"] for g in old["games"] if g.get("analysis")}
-    engine_name = None
     todo = [g for g in games if g["id"] not in previous and g["timeClass"] != "unknown"]
     results = dict(previous)
     if not args.no_engine and todo:
-        path = shutil.which("stockfish")
         if not path:
             print("native Stockfish not found", file=sys.stderr)
             return 2
-        with chess.engine.SimpleEngine.popen_uci(path) as e:
-            engine_name = e.id.get("name")
         t0 = time.time()
         with mp.Pool(args.workers, initializer=_init, initargs=(path,)) as pool:
             for n, (gid, analysis) in enumerate(pool.imap_unordered(_work, todo), 1):

@@ -12,7 +12,7 @@
  * Positions are identified by `positionKey` (placement, side to move, castling rights,
  * legally relevant en passant), so transpositions are one decision.
  */
-import { applyUci, fenOf, positionFromFen, positionKey, sanOf } from '../chess/rules';
+import { applyUci, canonicalUci, fenOf, isLegalUci, positionFromFen, positionKey, sanOf } from '../chess/rules';
 
 export const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 export type Side = 'white' | 'black';
@@ -168,19 +168,40 @@ export interface MoveEvidence {
 /** Engine evidence for playing `uci` in a book position. Missing data is 'unknown', never 'bad'. */
 export function classifyMove(book: OpeningBook, key: string, uci: string, bands?: number[]): MoveEvidence {
   const pos = book.positions[key];
-  const move = pos?.moves.find((m) => m.uci === uci);
+  const canon = canonicalIn(`${key} 0 1`, uci);
+  const move = pos?.moves.find((m) => m.uci === canon);
   const played = pos && move && bands ? sum(move.n, bands) / Math.max(1, sum(pos.n, bands)) : undefined;
   if (!pos || !move || move.wp === undefined || pos.bestWp === undefined) return { verdict: 'unknown', played };
   return { verdict: pos.bestWp - move.wp <= SOUND_MARGIN ? 'sound' : 'weaker', wp: move.wp, bestWp: pos.bestWp, bestSan: pos.bestSan, played };
 }
 
-export function makeEntry(side: Side, fen: string, path: string[], uci: string, now: number): RepertoireEntry {
-  const key = positionKey(fen);
-  return { id: entryId(side, key), side, positionKey: key, fen, uci, san: sanOf(positionFromFen(fen), uci), path, addedAt: now, updatedAt: now };
+/** The move in the app's one spelling (castling as the king's two-square move). Unknown or illegal input is returned unchanged. */
+function canonicalIn(fen: string, uci: string): string {
+  try {
+    const pos = positionFromFen(fen);
+    return isLegalUci(pos, uci) ? canonicalUci(pos, uci) : uci;
+  } catch {
+    return uci;
+  }
 }
 
-/** Review-queue id for recalling the repertoire move in a position. */
+export function makeEntry(side: Side, fen: string, path: string[], uci: string, now: number): RepertoireEntry {
+  const key = positionKey(fen);
+  const move = canonicalIn(fen, uci);
+  return { id: entryId(side, key), side, positionKey: key, fen, uci: move, san: sanOf(positionFromFen(fen), move), path, addedAt: now, updatedAt: now };
+}
+
+/**
+ * Review-queue id for recalling the repertoire move in a position. The move is part of the
+ * id: choosing a different move for the same position is a new thing to learn and must not
+ * inherit the old move's schedule.
+ */
 export function drillId(entry: RepertoireEntry): string {
+  return `opening:${entry.id}:${entry.uci}`;
+}
+
+/** Id used before the move became part of it (database v4 and earlier). */
+export function legacyDrillId(entry: Pick<RepertoireEntry, 'id'>): string {
   return `opening:${entry.id}`;
 }
 

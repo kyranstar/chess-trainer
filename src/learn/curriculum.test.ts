@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONCEPTS } from '../content';
 import type { Attempt, LessonEvent } from '../db/types';
-import { CHECK, conceptStatuses, gradeCheck, nextToLearn } from './curriculum';
+import { CHECK, checkForSession, conceptStatuses, gradeCheck, needsRefresh, nextToLearn, REFRESH_AFTER_DAYS } from './curriculum';
 
 const T0 = Date.UTC(2026, 10, 10, 12);
 let k = 0;
@@ -114,3 +114,63 @@ describe('a concept assessed by exact endgame play-outs', () => {
     expect(get(conceptStatuses(CONCEPTS, [], [att({ themes: ['pawnEndgame'] })]), 'endgame.opposition').evidenceState).toBe('untested');
   });
 });
+
+describe('when a check is given inside a session', () => {
+  const DAY = 86_400_000;
+  const morning = new Date(2026, 10, 10, 9, 0).getTime();
+  const statuses = (events: LessonEvent[]) => conceptStatuses(CONCEPTS, events, []);
+
+  it('is not given on the day the lesson was studied: solving the same idea minutes later shows little', () => {
+    const ss = statuses([ev('tactics.skewer', 'local-completed', morning)]);
+    expect(checkForSession(ss, morning + 3_600_000)).toBeNull();
+    expect(checkForSession(ss, new Date(2026, 10, 10, 23, 50).getTime())).toBeNull();
+    const next = checkForSession(ss, new Date(2026, 10, 11, 0, 30).getTime());
+    expect(next?.concept.id).toBe('tactics.skewer');
+    // A new calendar day alone is not a delay: a lesson at 23:55 is not checked at 00:05.
+    const late = statuses([ev('tactics.skewer', 'local-completed', new Date(2026, 10, 10, 23, 55).getTime())]);
+    expect(checkForSession(late, new Date(2026, 10, 11, 0, 5).getTime())).toBeNull();
+    expect(checkForSession(late, new Date(2026, 10, 11, 8, 0).getTime())?.concept.id).toBe('tactics.skewer');
+    expect(next?.why).toBe('first');
+  });
+
+  it('takes the concept that has waited longest first', () => {
+    const ss = statuses([ev('tactics.pin', 'local-completed', morning - 2 * DAY), ev('tactics.skewer', 'local-completed', morning - 5 * DAY)]);
+    expect(checkForSession(ss, morning)?.concept.id).toBe('tactics.skewer');
+  });
+
+  it('a passed check is not permanent: it is asked again after a few weeks, and a later miss shows as needing a refresh', () => {
+    const passedAt = morning - (REFRESH_AFTER_DAYS + 1) * DAY;
+    const base = [ev('tactics.skewer', 'local-completed', passedAt - DAY), ev('tactics.skewer', 'check-passed', passedAt)];
+    let ss = statuses(base);
+    const fork = () => get(ss, 'tactics.skewer');
+    expect(fork().stage).toBe('demonstrated');
+    expect(needsRefresh(fork(), passedAt + 5 * DAY)).toBe(false);
+    expect(checkForSession(ss, passedAt + 5 * DAY)).toBeNull();
+    expect(needsRefresh(fork(), morning)).toBe(true);
+    expect(checkForSession(ss, morning)).toMatchObject({ why: 'refresh' });
+    expect(checkForSession(ss, morning)?.concept.id).toBe('tactics.skewer');
+
+    // The re-check is failed: still counted as demonstrated for what it unlocks, but flagged, and asked again on a later day.
+    ss = statuses([...base, ev('tactics.skewer', 'check-failed', morning)]);
+    expect(fork().stage).toBe('demonstrated');
+    expect(needsRefresh(fork(), morning + 1000)).toBe(true);
+    expect(checkForSession(ss, morning + 1000)).toBeNull(); // not twice on one day
+    expect(checkForSession(ss, morning + DAY)?.concept.id).toBe('tactics.skewer');
+
+    // Passed again: fresh for another period.
+    ss = statuses([...base, ev('tactics.skewer', 'check-failed', morning), ev('tactics.skewer', 'check-passed', morning + DAY)]);
+    expect(needsRefresh(fork(), morning + 2 * DAY)).toBe(false);
+    expect(checkForSession(ss, morning + 2 * DAY)).toBeNull();
+  });
+
+  it('a first check comes before a refresh', () => {
+    const old = morning - 40 * DAY;
+    const ss = statuses([
+      ev('tactics.skewer', 'local-completed', old - DAY), ev('tactics.skewer', 'check-passed', old),
+      ev('tactics.pin', 'local-completed', morning - DAY),
+    ]);
+    expect(checkForSession(ss, morning)).toMatchObject({ why: 'first' });
+    expect(checkForSession(ss, morning)?.concept.id).toBe('tactics.pin');
+  });
+});
+

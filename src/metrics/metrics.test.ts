@@ -102,9 +102,9 @@ describe('practice level estimate', () => {
     const weak = estimateLevel(Array.from({ length: 12 }, (_, i) => att({ rating: 900, outcome: 'fail', ts: T0 + i })));
     expect(weak.level).toBeLessThan(900);
   });
-  it('ignores repeats, reviews, skips and unrated items, and is order-independent', () => {
+  it('ignores repeats, reviews, skips, hinted attempts and unrated items, and is order-independent', () => {
     const log = [att({ rating: 1500, ts: T0 }), att({ rating: 1500, ts: T0 + 1, outcome: 'fail' })];
-    const noise = [att({ fresh: false, rating: 2500 }), att({ outcome: 'skipped', rating: 2500 }), att({ rating: null })];
+    const noise = [att({ fresh: false, rating: 2500 }), att({ outcome: 'skipped', rating: 2500 }), att({ rating: null }), att({ outcome: 'assisted', hints: 1, rating: 2500 })];
     expect(estimateLevel([...noise, ...log.slice().reverse()])).toEqual(estimateLevel(log));
   });
 });

@@ -46,9 +46,19 @@ function budgets(totalMin: number): Record<StudyBlockKind, number> {
   return out;
 }
 
+/**
+ * True when unseen puzzles can be selected for the concept (by theme or by opening). A
+ * concept checked by endgame play-outs has no such filter; asking the pack for it would
+ * return arbitrary puzzles.
+ */
+export function puzzleBacked(s: ConceptStatus): boolean {
+  const a = s.concept.assessment;
+  return (a.kind === 'unseen-puzzles' && a.themes.length > 0) || (a.kind === 'opening-puzzles' && a.openings.length > 0);
+}
+
 /** Concept to practise when there is nothing newly taught: fewest unseen observations first. */
 function practiceFallback(statuses: ConceptStatus[]): ConceptStatus | null {
-  const pool = statuses.filter((s) => s.assessable && s.concept.themes.length > 0 && s.prereqsMet);
+  const pool = statuses.filter((s) => s.assessable && puzzleBacked(s) && s.prereqsMet);
   return pool.slice().sort((a, b) => a.evidence.n - b.evidence.n || a.concept.order - b.concept.order)[0] ?? null;
 }
 
@@ -92,9 +102,9 @@ export function planSession(input: PlanInput): SessionRecord {
   }
 
   // Apply
-  const waiting = awaitingCheck(statuses);
+  const waiting = awaitingCheck(statuses).filter(puzzleBacked);
   const applyTarget =
-    (pick?.assessable && pick.concept.themes.length ? pick : null) ?? waiting[waiting.length - 1] ?? practiceFallback(statuses);
+    (pick?.assessable && puzzleBacked(pick) ? pick : null) ?? waiting[waiting.length - 1] ?? practiceFallback(statuses);
   const apply = block('apply', {
     conceptId: applyTarget?.concept.id ?? null,
     reason: !applyTarget
@@ -194,27 +204,61 @@ export function planPlaySession(input: { id: string; now: number; dueCount: numb
   };
 }
 
+/** How long after its last change an unfinished session from yesterday still counts as running. */
+export const ACROSS_MIDNIGHT_MS = 3 * 3_600_000;
+
+/**
+ * The session the Today screen is about. An unfinished session is found by its state, not by
+ * the wall-clock date alone, so one that is being used when midnight passes keeps running.
+ *  1. an unfinished session of today, or one from yesterday that was still being used within
+ *     the last three hours (most recently used first);
+ *  2. otherwise the most recent session of today (its summary);
+ *  3. otherwise none: a new day.
+ */
+export function currentSession(sessions: SessionRecord[], now: number): SessionRecord | null {
+  const today = localDate(now);
+  const yesterday = localDate(new Date(now).setHours(0, 0, 0, 0) - 1);
+  const running = sessions
+    .filter((s) => s.status === 'active' && (s.date === today || (s.date === yesterday && now - s.updatedAt <= ACROSS_MIDNIGHT_MS)))
+    .sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt);
+  if (running[0]) return running[0];
+  return sessions.filter((s) => s.date === today).sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+}
+
 export const PLAY_DAYS_PER_WEEK = 2;
 export const STUDY_SESSIONS_BETWEEN_PLAY = 2;
 
 /**
  * Whether today should be a study day or a play day (v1 rule, always overridable):
- * a play day is suggested once two study sessions have been done since the last play day,
- * unless two play days already happened in the previous six days.
+ * a play day is suggested once two study sessions have been done since the last day with a
+ * game, unless games were already played on two days in the previous six.
+ *
+ * `playedDates` are the local dates of games actually played (fetched from Chess.com). They
+ * count as play days whether or not a play session was logged, so the app does not prescribe
+ * more games to someone who is already playing.
  */
-export function suggestSessionKind(history: SessionRecord[], now: number): { kind: 'study' | 'play'; reason: string } {
+export function suggestSessionKind(history: SessionRecord[], now: number, playedDates: string[] = []): { kind: 'study' | 'play'; reason: string } {
   const today = localDate(now);
-  const past = history.filter((s) => s.date < today).sort((a, b) => a.createdAt - b.createdAt);
+  // A session that was opened and left untouched is not a day of study or play.
+  const used = (s: SessionRecord) => s.status === 'done' || s.blocks.some((b) => b.spentSec > 0 || b.attemptUuids.length > 0);
+  const sessions = history.filter((s) => s.date < today && used(s));
+  const logged = new Set(sessions.filter((s) => s.kind === 'play').map((s) => s.date));
+  // One entry per day with a game and no logged play session, placed at the end of that day.
+  const fetched = [...new Set(playedDates)].filter((d) => d < today && !logged.has(d));
+  const past: { kind: 'study' | 'play'; date: string; at: number }[] = [
+    ...sessions.map((s) => ({ kind: s.kind === 'play' ? ('play' as const) : ('study' as const), date: s.date, at: s.createdAt })),
+    ...fetched.map((d) => ({ kind: 'play' as const, date: d, at: Number.MAX_SAFE_INTEGER })),
+  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.at - b.at));
   const weekAgo = localDate(now - 6 * 86_400_000);
-  const recentPlay = past.filter((s) => s.kind === 'play' && s.date >= weekAgo).length;
-  if (recentPlay >= PLAY_DAYS_PER_WEEK) return { kind: 'study', reason: `You already had two play days in the last week, so today is for study.` };
+  const recentPlay = new Set(past.filter((s) => s.kind === 'play' && s.date >= weekAgo).map((s) => s.date)).size;
+  if (recentPlay >= PLAY_DAYS_PER_WEEK) return { kind: 'study', reason: `You already played on two days in the last week (two play days a week is the plan), so today is for study.` };
   let lastPlay = -1;
   past.forEach((s, i) => {
     if (s.kind === 'play') lastPlay = i;
   });
   const studySince = past.slice(lastPlay + 1).length;
   if (studySince >= STUDY_SESSIONS_BETWEEN_PLAY) {
-    return { kind: 'play', reason: `${studySince} study sessions since your last play day: time to use it in a real game.` };
+    return { kind: 'play', reason: `${studySince} study sessions since your last game day: time to use it in a real game.` };
   }
   const need = STUDY_SESSIONS_BETWEEN_PLAY - studySince;
   return { kind: 'study', reason: `Study today; a play day is suggested after ${need} more study session${need === 1 ? '' : 's'}.` };

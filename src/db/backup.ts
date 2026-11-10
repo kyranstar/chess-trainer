@@ -28,6 +28,17 @@ const TABLES = [
 export type BackupTable = (typeof TABLES)[number]['name'];
 type Row = Record<string, unknown>;
 
+/**
+ * Preferences that are the learner's own choices and worth carrying to another device.
+ * Device bookkeeping (device id, download caches, last-sync and last-backup times) is not.
+ */
+const SETTING_KEYS = ['openings.band', 'openings.side', 'chesscom.username'];
+const SETTING_PREFIXES = ['lessonProgress:'];
+export function isPortableSetting(key: string): boolean {
+  return SETTING_KEYS.includes(key) || SETTING_PREFIXES.some((p) => key.startsWith(p));
+}
+export interface SettingRow { key: string; value: unknown }
+
 export interface BackupData {
   attempts: Attempt[];
   lessonEvents: LessonEvent[];
@@ -35,6 +46,8 @@ export interface BackupData {
   gameJournal?: GameJournalEntry[];
   repertoire?: RepertoireEntry[];
   games?: GameRecord[];
+  /** Optional in every schema version: files written before preferences were included have none. */
+  settings?: SettingRow[];
 }
 
 export interface BackupManifest {
@@ -43,8 +56,8 @@ export interface BackupManifest {
   exporterVersion: string;
   exportTime: string; // ISO UTC
   deviceId: string;
-  itemCounts: Partial<Record<BackupTable, number>>;
-  contentHashes: Partial<Record<BackupTable, string>>;
+  itemCounts: Partial<Record<BackupTable | 'settings', number>>;
+  contentHashes: Partial<Record<BackupTable | 'settings', string>>;
 }
 
 export interface BackupFile {
@@ -90,6 +103,10 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
     itemCounts[t.name] = rows.length;
     contentHashes[t.name] = await hashOf(rows, t.key);
   }
+  const settings = sorted(((await db.meta.toArray()) as unknown as Row[]).filter((r) => isPortableSetting(String(r.key))), 'key');
+  data.settings = settings;
+  itemCounts.settings = settings.length;
+  contentHashes.settings = await hashOf(settings, 'key');
   return {
     manifest: {
       format: BACKUP_FORMAT,
@@ -135,6 +152,11 @@ export async function parseBackup(text: string): Promise<BackupFile> {
     if ((await hashOf(rows, t.key)) !== m.contentHashes?.[t.name]) throw new Error(`Backup is damaged: the "${t.name}" table does not match its checksum.`);
     for (const r of rows) if (typeof r?.[t.key] !== 'string') throw new Error(`Backup contains a malformed row in "${t.name}".`);
   }
+  const settings = data.settings;
+  if (settings !== undefined) {
+    if (!Array.isArray(settings) || settings.some((r) => typeof r?.key !== 'string')) throw new Error('Backup contains a malformed preferences section.');
+    if ((await hashOf(settings, 'key')) !== m.contentHashes?.settings) throw new Error('Backup is damaged: the preferences do not match their checksum.');
+  }
   for (const a of b.data.attempts) if (typeof a.exerciseId !== 'string' || typeof a.ts !== 'number') throw new Error('Backup contains a malformed attempt.');
   return b as BackupFile;
 }
@@ -143,7 +165,11 @@ export async function importBackup(db: TrainerDB, text: string): Promise<ImportR
   const backup = await parseBackup(text); // all validation happens before any write
   const data = backup.data as unknown as Record<string, Row[] | undefined>;
   const added = Object.fromEntries(TABLES.map((t) => [t.name, 0])) as Record<BackupTable, number>;
-  await db.transaction('rw', [...TABLES.map((t) => db.table(t.name)), db.reviewStates], async () => {
+  await db.transaction('rw', [...TABLES.map((t) => db.table(t.name)), db.reviewStates, db.meta], async () => {
+    // A preference already chosen on this device is kept; only missing ones are filled in.
+    for (const r of backup.data.settings ?? []) {
+      if (isPortableSetting(r.key) && (await db.meta.get(r.key)) === undefined) await db.meta.put({ key: r.key, value: r.value });
+    }
     for (const t of TABLES) {
       const rows = data[t.name] ?? [];
       const table = db.table(t.name);

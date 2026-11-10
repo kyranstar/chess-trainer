@@ -29,12 +29,22 @@ export const CHECK = {
   rubric: 'check-v1: 5 unseen puzzles on the concept, Lichess rating 900–1299, no hints; pass = 4 or more solved first try',
 };
 
+/**
+ * A passed check is asked again after this many days. One 4-of-5 result on the day (or the
+ * day after) a lesson says little about what is still there weeks later.
+ */
+export const REFRESH_AFTER_DAYS = 21;
+/** A first check needs a night in between, not just a new date: a lesson at 23:55 is not checked at 00:05. */
+export const MIN_CHECK_DELAY_MS = 6 * 3_600_000;
+
 export type Stage = 'new' | 'started' | 'taught' | 'demonstrated';
 
 export interface ConceptStatus {
   concept: Concept;
   stage: Stage;
   taughtVia: 'local-lesson' | 'self-reported-link' | null;
+  /** When the lesson was first finished (or reported finished). */
+  taughtAt: number | null;
   demonstratedVia: 'check' | 'pretest' | null;
   lastCheck: { passed: boolean; ts: number; correct: number | null; total: number | null } | null;
   prereqsMet: boolean;
@@ -72,10 +82,12 @@ export function conceptStatuses(concepts: Concept[], events: LessonEvent[], atte
     const last = checks[checks.length - 1];
     const taughtBefore = passed ? evs.some((e) => (e.type === 'local-completed' || e.type === 'link-marked-done') && e.ts <= passed.ts) : false;
     const evidence = evidenceFor(concept, attempts);
+    const taughtEvent = evs.find((e) => e.type === 'local-completed' || e.type === 'link-marked-done');
     partial.set(concept.id, {
       concept,
       stage: passed ? 'demonstrated' : local || linked ? 'taught' : evs.length ? 'started' : 'new',
       taughtVia: local ? 'local-lesson' : linked ? 'self-reported-link' : null,
+      taughtAt: taughtEvent?.ts ?? null,
       demonstratedVia: passed ? (taughtBefore ? 'check' : 'pretest') : null,
       lastCheck: last ? { passed: last.type === 'check-passed', ts: last.ts, correct: last.detail?.correct ?? null, total: last.detail?.total ?? null } : null,
       prereqsMet: true,
@@ -122,7 +134,38 @@ export function nextToLearn(statuses: ConceptStatus[], opts: { online: boolean }
   return { pick: null, deferred };
 }
 
-/** Concepts that were taught but not yet shown on unseen positions, most recent first. */
+const sameLocalDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
+
+/**
+ * A demonstrated concept whose evidence has gone stale: the last check was passed more than
+ * REFRESH_AFTER_DAYS ago, or a later re-check was not passed. It still unlocks what depends
+ * on it (taking that away would lock lessons already begun); it is flagged and re-checked.
+ */
+export function needsRefresh(s: ConceptStatus, now: number): boolean {
+  if (s.stage !== 'demonstrated' || !s.assessable || !s.lastCheck) return false;
+  return !s.lastCheck.passed || now - s.lastCheck.ts >= REFRESH_AFTER_DAYS * 86_400_000;
+}
+
+/**
+ * The check to give inside today's session, if any.
+ *  - A first check is never given on the day the lesson was studied, and the concept that
+ *    has waited longest goes first.
+ *  - Otherwise a demonstrated concept that needs a refresh is re-checked.
+ *  - No concept is checked twice on one day.
+ */
+export function checkForSession(statuses: ConceptStatus[], now: number): { concept: Concept; why: 'first' | 'refresh' } | null {
+  const notToday = (s: ConceptStatus) => !s.lastCheck || !sameLocalDay(s.lastCheck.ts, now);
+  const first = statuses
+    .filter((s) => s.stage === 'taught' && s.assessable && s.taughtAt !== null && now - s.taughtAt >= MIN_CHECK_DELAY_MS && !sameLocalDay(s.taughtAt, now) && notToday(s))
+    .sort((a, b) => a.taughtAt! - b.taughtAt! || a.concept.order - b.concept.order)[0];
+  if (first) return { concept: first.concept, why: 'first' };
+  const stale = statuses
+    .filter((s) => needsRefresh(s, now) && notToday(s))
+    .sort((a, b) => a.lastCheck!.ts - b.lastCheck!.ts || a.concept.order - b.concept.order)[0];
+  return stale ? { concept: stale.concept, why: 'refresh' } : null;
+}
+
+/** Concepts that were taught but not yet shown on unseen positions, in curriculum order. */
 export function awaitingCheck(statuses: ConceptStatus[]): ConceptStatus[] {
   return statuses.filter((s) => s.stage === 'taught' && s.assessable);
 }

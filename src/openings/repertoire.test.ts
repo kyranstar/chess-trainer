@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fenAfter, positionKey } from '../chess/rules';
-import { classifyMove, entryId, type OpeningBook, type RepertoireEntry, START_FEN, walkRepertoire } from './repertoire';
+import { classifyMove, drillId, entryId, makeEntry, type OpeningBook, type RepertoireEntry, START_FEN, walkRepertoire } from './repertoire';
 
 const START = START_FEN;
 const key = (ucis: string[]) => positionKey(fenAfter(START, ucis));
@@ -93,5 +93,23 @@ describe('engine evidence for a chosen move', () => {
     expect(classifyMove(book, key(['e2e4', 'e7e5']), 'a2a3').verdict).toBe('unknown');
     expect(classifyMove(book, key(['e2e4']), 'e7e5').verdict).toBe('unknown');
     expect(classifyMove(book, 'nope', 'e2e4').verdict).toBe('unknown');
+  });
+});
+
+describe('audit regressions', () => {
+  it('a changed repertoire move gets its own review identity, so it starts unlearned', () => {
+    const e4 = makeEntry('white', START_FEN, [], 'e2e4', 1);
+    const d4 = makeEntry('white', START_FEN, [], 'd2d4', 2);
+    expect(e4.id).toBe(d4.id); // same position, one decision
+    expect(drillId(e4)).not.toBe(drillId(d4));
+  });
+
+  it('castling is stored and looked up in one spelling', () => {
+    const fen = 'r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4';
+    expect(makeEntry('white', fen, [], 'e1h1', 1).uci).toBe('e1g1');
+    expect(makeEntry('white', fen, [], 'e1g1', 1).san).toBe('O-O');
+    const k = positionKey(fen);
+    const castleBook: OpeningBook = { ...book, positions: { [k]: pos([mv('e1g1', 'O-O', [10, 10], 52)], 53) } };
+    expect(classifyMove(castleBook, k, 'e1h1').verdict).toBe('sound');
   });
 });

@@ -9,8 +9,10 @@ import { Board } from './Board';
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
 /** One "find the author's move" interaction inside a lesson (also reused for spaced review). */
-export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone }: {
+export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone, hideBefore = false }: {
   lesson: Lesson; stepIndex: number; step: TryStep; sessionId: string | null; context: 'lesson' | 'review'; onDone: () => void;
+  /** Review shows the position without the lead-in text, which would give the move away. */
+  hideBefore?: boolean;
 }) {
   const db = useDb();
   const [ply, setPly] = useState(0);
@@ -29,7 +31,10 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone 
   useEffect(() => {
     setPly(0); setFen(step.fen); setLastMove(null); setMistakes(0); setRevealed(false); setWrong(null); setFinished(false);
     first.current = null; started.current = Date.now(); recorded.current = false;
-  }, [step]);
+    // Keyed on what the example is, not on the object passed in: a parent that builds a new
+    // `step` object on every render must not reset the board in the middle of the answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson.id, lesson.revision, stepIndex]);
 
   async function finish(m: number, shown: boolean) {
     setFinished(true);
@@ -87,7 +92,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone 
   const side = solver === 'white' ? 'White' : 'Black';
   return (
     <div className="lesson-try" data-testid="lesson-try" data-expected={finished ? '' : step.moves[ply]} data-finished={finished}>
-      {step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
+      {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
       <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Play the move the text goes on to explain.`}</p>
       <Board fen={fen} orientation={solver} movable={finished ? null : solver} lastMove={lastMove} onMove={onMove} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">

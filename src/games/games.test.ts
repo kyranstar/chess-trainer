@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { deleteDb, openDb, type TrainerDB } from '../db/db';
 import fixture from './fixtures/my-games.fixture.json';
 import { importGames, parseGamesFile } from './import';
-import { clockPressure, drillPositions, gameCoverage, majorErrors, missedOpportunities, ratingSeries } from './metrics';
+import { withMeasure } from './fixtures/measure';
+import { clockPressure, drillPositions, earlyBlunderGames, gameCoverage, majorErrors, missedOpportunities, ratingSeries } from './metrics';
 import type { GameRecord, GamesFile } from './types';
 
 const FILE = fixture as unknown as GamesFile;
@@ -121,13 +122,17 @@ describe('game metrics', () => {
   });
 
   it('clock pressure compares low-time and normal decisions and refuses to conclude from few', async () => {
-    const games = await loaded();
+    const games = (await loaded()).map((g) => withMeasure(g));
     const c = clockPressure(games);
-    expect(c.low.decisions).toBe(2); // the two moves made with 20 s and 18 s left of 10 minutes
-    expect(c.low.errors).toBe(1);
+    // Only one move was BEGUN with under a minute left (the one after the clock read 0:20). The
+    // queen blunder before it was played with over nine minutes available: a long think, not time
+    // trouble. (That decided positions are left out is tested with exact data further down.)
+    expect(c.low).toEqual({ decisions: 1, errors: 0 });
     expect(c.normal.decisions).toBeGreaterThan(5);
+    expect(c.normal.errors).toBeGreaterThanOrEqual(1);
     expect(c.enough).toBe(false);
     expect(c.noClock).toBe(1); // the daily game has no clock data
+    expect(c.unmeasured).toBe(0);
   });
 
   it('drill positions are missed moves with one clearly best answer', async () => {
@@ -136,4 +141,102 @@ describe('game metrics', () => {
     expect(drills.map((d) => d.event.bestSan)).toEqual(['Qxf7#']);
     expect(drills[0]!.id).toMatch(/^game:[0-9a-f]{16}:6$/);
   });
+
+  it('headline transfer measure: games with an early concrete blunder, counted per game', async () => {
+    const stored = await loaded();
+    // Without a measurement record nothing is counted, however good the imported analysis is.
+    expect(earlyBlunderGames(stored, { timeClass: 'rapid' })).toMatchObject({ games: 0, pending: 4, protocol: null });
+    const games = stored.map((g) => withMeasure(g));
+    const m = earlyBlunderGames(games, { timeClass: 'rapid' });
+    // Rapid fixture games: clean mate; 4...Nf6 loses the queen (move 4); 4.Qxe5+ loses the queen; clean game.
+    expect(m).toMatchObject({ games: 4, withBlunder: 2 });
+    expect(m.rate).toBe(0.5);
+    expect(m.interval!.lo).toBeLessThan(0.5);
+    expect(m.events.map((e) => e.event.playedSan).sort()).toEqual(['Nf6', 'Qxe5+']);
+    // A missed win that lost nothing is not a blunder of this kind.
+    expect(earlyBlunderGames(games, { timeClass: 'blitz' })).toMatchObject({ games: 1, withBlunder: 0 });
+    // Only the first 20 moves count, and unrated or unanalysed games are left out.
+    expect(earlyBlunderGames(games, { timeClass: 'rapid', maxMove: 3 }).withBlunder).toBe(0);
+    const unrated = games.map((g) => ({ ...g, rated: false }));
+    expect(earlyBlunderGames(unrated, { timeClass: 'rapid' }).games).toBe(0);
+    // Secondary count: every such move per decision in the same move range.
+    expect(m.moves.events).toBe(2);
+    expect(m.moves.decisions).toBeGreaterThan(10);
+    // One engine setting only: a game measured with another setting waits and is reported as pending.
+    const rapid = games.filter((g) => g.timeClass === 'rapid');
+    const mixed = games.map((g) => (g.id === rapid[0]!.id ? { ...g, measureKey: 'game-analysis-v3/Other engine/9' } : g));
+    expect(earlyBlunderGames(mixed, { timeClass: 'rapid' })).toMatchObject({ games: 3, pending: 1, protocol: 'game-analysis-v3/Test engine/1' });
+    // A deeper imported analysis does not change the number: only the measurement record is read.
+    const reimported = games.map((g) => ({ ...g, analysis: { decisions: [], events: [] }, analysisKey: 'game-analysis-v2/Stockfish 19/900000' }));
+    expect(earlyBlunderGames(reimported, { timeClass: 'rapid' })).toMatchObject({ games: m.games, withBlunder: m.withBlunder });
+  });
+
+  it('compares the most recent games with the ones before them, and says when there are too few', async () => {
+    const games = (await loaded()).map((g) => withMeasure(g));
+    const m = earlyBlunderGames(games, { timeClass: 'rapid', window: 2 });
+    expect(m.recent).toMatchObject({ games: 2, withBlunder: 1 });
+    expect(m.previous).toMatchObject({ games: 2, withBlunder: 1 });
+    expect(earlyBlunderGames(games, { timeClass: 'rapid', window: 20 }).previous).toBeNull();
+  });
+
+  it('missed chances are also reported for positions that were not already won', async () => {
+    const games = await loaded();
+    const m = missedOpportunities(games);
+    expect(m.undecided.available).toBeLessThanOrEqual(m.available);
+    expect(m.undecided.missed).toBeLessThanOrEqual(m.missed);
+    for (const e of m.undecided.events) expect(e.event.bestWp).toBeLessThan(100);
+  });
 });
+
+describe('after the validity audit', () => {
+  it('an unrated game is left out of the rating series (its rating is often that of another time control)', async () => {
+    const db = fresh();
+    await importGames(db, text, 1);
+    const games = await db.games.toArray();
+    const before = ratingSeries(games, 'rapid');
+    const one = games.find((g) => g.timeClass === 'rapid' && g.playerRating !== null)!;
+    const after = ratingSeries(games.map((g) => (g.id === one.id ? { ...g, rated: false } : g)), 'rapid');
+    expect(after.n).toBe(before.n - 1);
+    expect(after.points.some((p) => p.gameId === one.id)).toBe(false);
+  });
+
+  it('a chance counts when one move is clearly best, and once however long it stayed on the board', async () => {
+    const db = fresh();
+    await importGames(db, text, 1);
+    const games = await db.games.toArray();
+    const m = missedOpportunities(games);
+    const clearEvents = games.flatMap((g) => g.analysis!.events.filter((e) => e.opportunity && e.secondWp !== null && e.bestWp - e.secondWp >= 20));
+    expect(m.clear.available).toBeGreaterThan(0);
+    expect(m.clear.available).toBeLessThanOrEqual(clearEvents.length);
+    expect(m.clear.available).toBeLessThan(m.available); // positions where several moves win are not chances to find
+    // The same chance left on the board for three moves in a row and never taken is one miss, not three.
+    const e = clearEvents[0]!;
+    const g0 = games.find((g) => g.analysis!.events.includes(e))!;
+    const run = [0, 2, 4].map((d) => ({ ...e, ply: 100 + d, played: 'a2a3', best: 'h5f7', missed: true }));
+    const one = missedOpportunities([{ ...g0, analysis: { decisions: [], events: run } }]);
+    expect(one.clear).toMatchObject({ available: 1, missed: 1 });
+    const taken = missedOpportunities([{ ...g0, analysis: { decisions: [], events: [run[0]!, { ...run[1]!, played: 'h5f7', missed: false }] } }]);
+    expect(taken.clear).toMatchObject({ available: 1, missed: 0 });
+  });
+
+  it('time trouble is compared only on positions that were still undecided, from the measurement record', async () => {
+    const db = fresh();
+    await importGames(db, text, 1);
+    const games = await db.games.toArray();
+    expect(clockPressure(games).unmeasured).toBeGreaterThan(0); // nothing measured yet: nothing compared
+    expect(clockPressure(games).low.decisions + clockPressure(games).normal.decisions).toBe(0);
+    const g = games.find((x) => x.clocks && x.timeClass === 'rapid' && x.analysis && x.analysis.decisions.length >= 3)!;
+    const base = Number(g.timeControl.split('+')[0]);
+    const plies = g.analysis!.decisions.map((d) => d[0]).slice(0, 3);
+    const measured = { ...g, measure: {
+      decisions: [[plies[0]!, 0, base * 0.05], [plies[1]!, 30, base * 0.04], [plies[2]!, 30, 1]] as [number, number, number | null][],
+      events: [],
+      facts: [{ ply: plies[0]!, wp: 50, played: 0, best: 0 }, { ply: plies[1]!, wp: 50, played: 0, best: 0 }, { ply: plies[2]!, wp: 97, played: 0, best: 0 }],
+    }, measureKey: 'k' };
+    const c = clockPressure([measured]);
+    expect(c.normal).toEqual({ decisions: 1, errors: 0 }); // first move: full clock
+    expect(c.low).toEqual({ decisions: 1, errors: 1 }); // second: begun with 5% left, undecided, a major error
+    // third: begun with 4% left but the game was already won (97): not compared
+  });
+});
+

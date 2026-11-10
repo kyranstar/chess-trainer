@@ -118,3 +118,23 @@ describe('forecast against outcome (scheduler baseline)', () => {
     expect(reviewCalibration([...log].reverse())).toEqual(reviewCalibration(log));
   });
 });
+
+describe('due means due today', () => {
+  it('a position missed in the evening is due the next day from the morning, not only after the same clock time', () => {
+    const evening = new Date(2026, 10, 9, 20, 30).getTime();
+    const s = applyAttempt(undefined, att({ outcome: 'fail', ts: evening }))!;
+    const nextMorning = new Date(2026, 10, 10, 8, 0).getTime();
+    expect(s.due).toBeGreaterThan(nextMorning); // stored due time is still 24 h later
+    expect(dueItems([s], nextMorning).map((x) => x.itemId)).toEqual(['lichess:a']);
+    expect(dueItems([s], new Date(2026, 10, 9, 23, 59).getTime())).toEqual([]); // but not on the same day
+  });
+});
+
+describe('repertoire drills from before the move was part of the id', () => {
+  it('are never offered again: the entry is re-learned under its new id instead of blocking the queue forever', () => {
+    const old = applyAttempt(undefined, att({ exerciseId: 'opening:white|rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -', exerciseKind: 'opening', outcome: 'fail', ts: T0 }))!;
+    const current = applyAttempt(undefined, att({ exerciseId: 'opening:white|rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -:e2e4', exerciseKind: 'opening', outcome: 'fail', ts: T0 }))!;
+    expect(dueItems([old, current], T0 + 3 * 86_400_000).map((x) => x.itemId)).toEqual([current.itemId]);
+  });
+});
+

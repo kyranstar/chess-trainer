@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportBackup, importBackup, parseBackup, serializeBackup } from './backup';
-import { deleteDb, getDeviceId, openDb, recordAttempt, recordLessonEvent, saveSession, type TrainerDB } from './db';
+import { deleteDb, getDeviceId, getMeta, openDb, recordAttempt, recordLessonEvent, saveSession, setMeta, type TrainerDB, updateSession } from './db';
 import type { AttemptDraft, SessionRecord } from './types';
 
 const DAY = 86_400_000;
@@ -53,6 +53,33 @@ describe('attempt log', () => {
     expect(due.fresh).toBe(false);
   });
 
+  it('the gap since last seen ignores showings that were skipped', async () => {
+    const db = fresh();
+    await recordAttempt(db, draft({ outcome: 'fail', ts: T0 }));
+    await recordAttempt(db, draft({ outcome: 'skipped', ts: T0 + 10 * DAY }));
+    const real = await recordAttempt(db, draft({ outcome: 'success', ts: T0 + 10 * DAY + 3_600_000 }));
+    expect(real.daysSinceLast).toBe(10);
+    expect(real.fresh).toBe(false);
+  });
+
+  it('session changes made at the same moment are all kept', async () => {
+    const db = fresh();
+    const block = { kind: 'review' as const, budgetSec: 420, spentSec: 10, status: 'active' as const, conceptId: null, reason: '', notice: null, attemptUuids: [] };
+    await saveSession(db, { ...session('s1'), blocks: [block] });
+    // The clock tick and a recorded attempt both start from the same stale snapshot.
+    await Promise.all([
+      updateSession(db, 's1', (s) => ({ ...s, blocks: s.blocks.map((b, i) => (i === 0 ? { ...b, spentSec: b.spentSec + 5 } : b)) })),
+      updateSession(db, 's1', (s) => ({ ...s, blocks: s.blocks.map((b, i) => (i === 0 ? { ...b, attemptUuids: [...b.attemptUuids, 'u-1'] } : b)) })),
+    ]);
+    const row = (await db.sessions.get('s1'))!;
+    expect(row.blocks[0]!.attemptUuids).toContain('u-1');
+    expect(row.blocks[0]!.spentSec).toBe(15);
+    // A session that does not exist is never created by an update.
+    await updateSession(db, '', (s) => s);
+    await updateSession(db, 'nope', (s) => s);
+    expect(await db.sessions.count()).toBe(1);
+  });
+
   it('attempts are append-only: the same uuid cannot be written twice', async () => {
     const db = fresh();
     const a = await recordAttempt(db, draft());
@@ -100,7 +127,7 @@ describe('backup and restore', () => {
     const b = await exportBackup(await seeded(), T0);
     expect(b.manifest.format).toBe('chess-trainer-backup');
     expect(b.manifest.schemaVersion).toBe(4);
-    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0, repertoire: 0, games: 0 });
+    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0, repertoire: 0, games: 0, settings: 0 });
     expect(b.manifest.contentHashes.attempts).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
@@ -163,3 +190,43 @@ describe('schema', () => {
     });
   });
 });
+
+describe('preferences travel with a backup', () => {
+  it('carries the choices the learner made, not device bookkeeping, and never overwrites a choice already made here', async () => {
+    const a = fresh();
+    await setMeta(a, 'openings.band', 2);
+    await setMeta(a, 'openings.side', 'black');
+    await setMeta(a, 'chesscom.username', 'someone');
+    await setMeta(a, 'lessonProgress:lasker-pins@1', 3);
+    await setMeta(a, 'chesscom.etags', { x: 'y' });
+    await setMeta(a, 'lastBackupAt', 5);
+    const file = await exportBackup(a, T0);
+    expect(file.data.settings!.map((r) => r.key).sort()).toEqual(['chesscom.username', 'lessonProgress:lasker-pins@1', 'openings.band', 'openings.side']);
+
+    const b = fresh();
+    await setMeta(b, 'openings.side', 'white'); // already chosen on this device
+    const myDevice = await getDeviceId(b);
+    await importBackup(b, serializeBackup(file));
+    expect(await getMeta(b, 'openings.band')).toBe(2);
+    expect(await getMeta(b, 'chesscom.username')).toBe('someone');
+    expect(await getMeta(b, 'lessonProgress:lasker-pins@1')).toBe(3);
+    expect(await getMeta(b, 'openings.side')).toBe('white');
+    expect(await getMeta(b, 'chesscom.etags')).toBeUndefined();
+    expect(await getDeviceId(b)).toBe(myDevice);
+  });
+
+  it('a file without preferences (every earlier backup) still restores, and a damaged preferences section is refused', async () => {
+    const a = fresh();
+    await setMeta(a, 'openings.band', 2);
+    const file = await exportBackup(a, T0);
+    const { settings: _drop, ...rest } = file.data;
+    void _drop;
+    const older = { manifest: { ...file.manifest, itemCounts: { ...file.manifest.itemCounts }, contentHashes: { ...file.manifest.contentHashes } }, data: rest };
+    delete (older.manifest.itemCounts as Record<string, unknown>).settings;
+    delete (older.manifest.contentHashes as Record<string, unknown>).settings;
+    await expect(importBackup(fresh(), JSON.stringify(older))).resolves.toBeTruthy();
+    const tampered = { ...file, data: { ...file.data, settings: [{ key: 'openings.band', value: 9 }] } };
+    await expect(parseBackup(JSON.stringify(tampered))).rejects.toThrow(/checksum/);
+  });
+});
+

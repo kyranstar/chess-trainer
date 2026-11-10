@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { failPuzzle, openApp, playUntilAccepted, solvePuzzle } from './helpers';
 
-test('daily session: linked lesson -> apply -> check -> mixed test -> summary -> progress, surviving a restart', async ({ page, context }) => {
+test('daily session: linked lesson -> apply -> mixed test (no check on the lesson day) -> summary -> progress, surviving a restart', async ({ page, context }) => {
   await openApp(page);
   await expect(page.getByTestId('today')).toHaveAttribute('data-state', 'unplanned');
 
@@ -28,22 +28,39 @@ test('daily session: linked lesson -> apply -> check -> mixed test -> summary ->
   await expect(page.getByTestId('verdict-solved')).toContainText('Solved first try');
   await page.getByTestId('end-block').click();
 
-  // Test: the independent check for the concept just studied (5 unseen, no hints).
+  // Test: no check on the day of the lesson. The mixed test starts at once; miss one on
+  // purpose: it must be recorded as a miss and queued for review.
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
+  await expect(page.getByTestId('puzzle')).toContainText('Mixed test, no hints');
+  await failPuzzle(page);
+  // The wrong move can be followed up: the built-in engine's reply is shown as evidence.
+  await page.getByTestId('show-reply').click();
+  await expect(page.getByTestId('engine-reply')).toContainText('the built-in engine continues', { timeout: 30_000 });
+
+  // Ending the day asks once.
+  await page.getByTestId('end-block').click();
+  await page.getByTestId('end-confirm-no').click();
+  await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
+  await page.getByTestId('end-block').click();
+  await page.getByTestId('end-confirm-yes').click();
+
+  // Summary derives from the recorded attempts; the concept is studied, not yet demonstrated.
+  await expect(page.getByTestId('summary')).toBeVisible();
+  await expect(page.getByTestId('summary-unseen')).toHaveText('1 of 2 solved first try');
+  await expect(page.getByTestId('summary')).toContainText('its check comes on a later day');
+
+  // The learner may still take the check at any time from the concept's own page
+  // (5 unseen, no hints, not skippable, and it does not name its theme while running).
+  await page.goto('./#/learn/safety.hanging-pieces');
+  await page.getByTestId('start-check').click();
+  await expect(page.getByTestId('puzzle')).toContainText('Check: 5 unseen positions, no hints');
+  await expect(page.getByTestId('skip')).toHaveCount(0);
   for (let i = 0; i < 5; i++) {
     await solvePuzzle(page);
     await page.getByTestId('next').click();
   }
   await expect(page.getByTestId('check-result')).toHaveAttribute('data-passed', 'true');
   await page.getByTestId('check-done').click();
-
-  // Mixed test: miss one on purpose; it must be recorded as a miss and queued for review.
-  await failPuzzle(page);
-  await page.getByTestId('end-block').click();
-
-  // Summary and dashboard derive from the recorded attempts.
-  await expect(page.getByTestId('summary')).toBeVisible();
-  await expect(page.getByTestId('summary-unseen')).toHaveText('6 of 7 solved first try');
   await page.getByTestId('tab-progress').click();
   await expect(page.getByTestId('card-unseen')).toContainText('6 of 7');
   await expect(page.getByTestId('card-unseen')).toContainText('provisional');
@@ -135,3 +152,73 @@ test('fits an iPhone-size screen: board fully visible and tabs reachable', async
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
 });
+
+test('a tap lands on the right square after something appears above the board without a scroll', async ({ page }) => {
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  const puzzle = page.getByTestId('puzzle');
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  const board = page.locator('.board').first();
+  await expect(board).not.toHaveAttribute('data-movable', 'none');
+  const expected = (await puzzle.getAttribute('data-expected'))!;
+  // Touch the board once so the board library has measured where it is ...
+  await board.click({ position: { x: 2, y: 2 } });
+  // ... then push it down the way a notice appearing above it does: no scroll, no resize.
+  await page.evaluate(() => {
+    const note = document.createElement('p');
+    note.textContent = 'This block’s minutes are used.';
+    note.style.cssText = 'height:73px;margin:0';
+    const main = document.querySelector('main')!;
+    main.insertBefore(note, main.firstChild);
+  });
+  const box = (await board.boundingBox())!;
+  const orientation = (await board.getAttribute('data-orientation'))!;
+  const at = (square: string) => {
+    const file = square.charCodeAt(0) - 97;
+    const rank = Number(square[1]) - 1;
+    const col = orientation === 'white' ? file : 7 - file;
+    const row = orientation === 'white' ? 7 - rank : rank;
+    return { x: box.x + ((col + 0.5) * box.width) / 8, y: box.y + ((row + 0.5) * box.height) / 8 };
+  };
+  // Raw taps at the squares' real screen positions (the usual helper scrolls first, which would hide the fault).
+  for (const sq of [expected.slice(0, 2), expected.slice(2, 4)]) {
+    const p = at(sq);
+    await page.mouse.click(p.x, p.y);
+  }
+  await expect(page.getByTestId('verdict-wrong')).toHaveCount(0);
+  await expect(puzzle).toHaveAttribute('data-phase', 'solved');
+  await expect(puzzle).toHaveAttribute('data-outcome', 'success');
+});
+
+test('the check for a studied concept comes in a later day’s session, unannounced, and passing it demonstrates the concept', async ({ page, context }) => {
+  await page.clock.install({ time: new Date(2026, 10, 10, 9, 0, 0) });
+  await openApp(page, '#/learn/safety.hanging-pieces');
+  const popup = context.waitForEvent('page');
+  await page.getByTestId('open-link').first().click();
+  await (await popup).close();
+  await page.getByTestId('mark-done').click();
+  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you, not yet checked');
+
+  // Next morning: the session's test block opens with the check.
+  await page.clock.setSystemTime(new Date(2026, 10, 11, 9, 0, 0));
+  await page.goto('./#/today');
+  await page.reload();
+  await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
+  await page.getByTestId('start-session').click();
+  for (const blockName of ['learn', 'apply']) {
+    await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', blockName);
+    await page.getByTestId('end-block').click();
+  }
+  await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
+  await expect(page.getByTestId('puzzle')).toContainText('Check: 5 unseen positions, no hints');
+  await expect(page.getByTestId('puzzle')).not.toContainText('Hanging pieces');
+  for (let i = 0; i < 5; i++) {
+    await solvePuzzle(page);
+    await page.getByTestId('next').click();
+  }
+  await expect(page.getByTestId('check-result')).toHaveAttribute('data-passed', 'true');
+  await expect(page.getByTestId('check-result')).toContainText('Hanging pieces');
+  await page.getByTestId('check-done').click();
+  await page.goto('./#/learn');
+  await expect(page.getByTestId('concept-safety.hanging-pieces')).toHaveAttribute('data-stage', 'demonstrated');
+});
+

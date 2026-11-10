@@ -6,8 +6,8 @@
  * touching history. Review results never feed the "unseen" accuracy metric.
  *
  * Policy v1:
- *  - puzzles enter the queue on their first non-success (fail or assisted);
- *  - lesson examples always enter the queue;
+ *  - puzzles and own-game "game sense" questions enter the queue on their first non-success;
+ *  - lesson examples, repertoire moves, endgame starts and own-game drills always enter the queue;
  *  - success -> Good; fail or assisted -> Again; skipped -> no change;
  *  - no same-day learning steps: an item is never due again on the day it was seen, so a
  *    review always tests recall after at least one night, not short-term rehearsal.
@@ -52,7 +52,7 @@ function gradeOf(a: Attempt): Grade | null {
 export function applyAttempt(state: ReviewState | undefined, a: Attempt): ReviewState | undefined {
   const grade = gradeOf(a);
   if (grade === null) return state;
-  if (!state && a.exerciseKind === 'puzzle' && a.outcome === 'success') return undefined;
+  if (!state && (a.exerciseKind === 'puzzle' || a.exerciseKind === 'sense') && a.outcome === 'success') return undefined;
   const now = new Date(a.ts);
   const card = state ? deserialize(state.card) : createEmptyCard(now);
   const next = scheduler.next(card, now, grade).card;
@@ -70,8 +70,33 @@ export function rebuildReviewStates(attempts: Attempt[]): Map<string, ReviewStat
   return out;
 }
 
+/** Last millisecond of the local calendar day that contains `ts`. */
+export function endOfLocalDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+/**
+ * Due means "due today": the scheduler works in whole days, so an item missed yesterday
+ * evening belongs to today's review from the morning on, not only after the same clock time.
+ */
+export function isDue(state: Pick<ReviewState, 'due'>, now: number): boolean {
+  return state.due <= endOfLocalDay(now);
+}
+
+/**
+ * Repertoire drills used to be identified by the position alone (`opening:<side>|<key>`).
+ * The chosen move is now part of the id, so those older states can no longer be matched to
+ * a drill. They stay in the log (attempts are never rewritten) but are not offered again;
+ * the position is simply recalled once more under its new id.
+ */
+export function isLegacyOpeningId(itemId: string): boolean {
+  return itemId.startsWith('opening:') && !/:[a-h][1-8][a-h][1-8][qrbn]?$/.test(itemId);
+}
+
 export function dueItems(states: ReviewState[], now: number): ReviewState[] {
-  return states.filter((s) => s.due <= now).sort((a, b) => a.due - b.due || (a.itemId < b.itemId ? -1 : 1));
+  return states.filter((s) => isDue(s, now) && !isLegacyOpeningId(s.itemId)).sort((a, b) => a.due - b.due || (a.itemId < b.itemId ? -1 : 1));
 }
 
 /** FSRS's predicted probability of recall for an item at `now` (0..1). */

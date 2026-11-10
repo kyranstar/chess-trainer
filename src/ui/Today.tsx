@@ -3,13 +3,16 @@ import { go, href } from '../app/router';
 import { type Learner, useDb, useDueReviews, useJournal, useNow, useOnline, usePack, usePool, useRecentSessions, useTodaySession } from '../app/store';
 import { CONCEPT_BY_ID } from '../content';
 import type { Concept } from '../content/types';
-import { newUuid, saveSession } from '../db/db';
+import { newUuid, saveSession, updateSession } from '../db/db';
 import type { Attempt, BlockKind, GameJournalEntry, SessionBlock, SessionRecord } from '../db/types';
-import { awaitingCheck } from '../learn/curriculum';
+import { checkForSession } from '../learn/curriculum';
 import { baselineProgress, DIAGNOSTIC, nextBaselineConcept } from '../learn/diagnostic';
 import { activeBlockIndex, addAttempt, completeBlock, pickTestConcept, planPlaySession, planSession, SESSION_LENGTHS, spend, suggestSessionKind } from '../schedule/session';
 import { ConceptStudy } from './Learn';
+import { useGames } from './Games';
 import { PlayBlock, ReflectBlock } from './PlayDay';
+import { SenseDrill, senseItemsFrom } from './Sense';
+import { pickSense, type SenseItem } from '../games/sense';
 import { CheckRunner, conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
 const BLOCK_NAME: Record<BlockKind, string> = { review: 'Review', learn: 'Learn', apply: 'Apply', test: 'Test', play: 'Play', reflect: 'Reflect' };
@@ -62,7 +65,7 @@ function PlaySummary({ session, entry }: { session: SessionRecord; entry: GameJo
         {entry?.turningPoint && (<><dt>Turning point</dt><dd>{entry.turningPoint}</dd></>)}
         {entry?.nextTime && (<><dt>Next time</dt><dd>{entry.nextTime}</dd></>)}
       </dl>
-      <p className="muted">These are your own notes. The app has not analysed this game; engine analysis of imported games is not built yet.</p>
+      <p className="muted">These are your own notes. Once the game is fetched from Chess.com and analysed, its turning points appear under Progress, in “Your games”.</p>
       <div className="actions"><a className="button primary" href={href('progress')}>See progress</a></div>
     </section>
   );
@@ -85,7 +88,7 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
         <dt>Time</dt>
         <dd>{Math.round(total / 60)} of {session.budgetMin} minutes</dd>
         <dt>New concept</dt>
-        <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? 'studied, check still to pass' : 'started'}` : (learn?.notice ?? 'None today')}</dd>
+        <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? 'studied; its check comes on a later day' : 'started'}` : (learn?.notice ?? 'None today')}</dd>
         <dt>Unseen positions</dt>
         <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None attempted' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
         <dt>Reviews</dt>
@@ -118,7 +121,11 @@ export function Today({ learner }: { learner: Learner }) {
   const [length, setLength] = useState<number>(30);
   const history = useRecentSessions();
   const journal = useJournal();
-  const suggestion = useMemo(() => suggestSessionKind(history, now), [history, now]);
+  const myGames = useGames();
+  // Live games only: a move in a daily game is not a sitting at the board.
+  const playedDates = useMemo(() => (myGames ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'blitz' || g.timeClass === 'bullet').map((g) => g.endDate), [myGames]);
+  const suggestion = useMemo(() => suggestSessionKind(history, now, playedDates), [history, now, playedDates]);
+  const starting = useRef(false);
   const baseline = useMemo(() => baselineProgress(learner.statuses), [learner.statuses]);
 
   const preview = useMemo(
@@ -129,11 +136,17 @@ export function Today({ learner }: { learner: Learner }) {
   if (session === undefined || !learner.ready) return <div className="page"><p className="muted">Loading</p></div>;
 
   async function start(kind: 'study' | 'play') {
+    if (starting.current) return; // a second tap must not plan a second session
+    starting.current = true;
     const s = kind === 'play'
       ? planPlaySession({ id: newUuid(), now: Date.now(), dueCount: due.length })
       : planSession({ id: newUuid(), now: Date.now(), budgetMin: length, statuses: learner.statuses, dueCount: due.length, online });
-    await saveSession(db, s);
-    go('today/run');
+    try {
+      await saveSession(db, s);
+      go('today/run');
+    } finally {
+      starting.current = false;
+    }
   }
 
   const packReady = pack?.state === 'installed';
@@ -195,24 +208,23 @@ export function Today({ learner }: { learner: Learner }) {
 }
 
 /** Counts seconds while the page is visible and saves them to the session every few seconds. */
-function useBlockClock(session: SessionRecord, index: number, running: boolean) {
+function useBlockClock(session: SessionRecord | null, index: number, running: boolean) {
   const db = useDb();
-  const [spent, setSpent] = useState(session.blocks[index]?.spentSec ?? 0);
+  const id = session?.id ?? '';
+  const [spent, setSpent] = useState(session?.blocks[index]?.spentSec ?? 0);
   const pending = useRef(0);
-  const latest = useRef(session);
-  latest.current = session;
   useEffect(() => {
-    setSpent(session.blocks[index]?.spentSec ?? 0);
+    setSpent(session?.blocks[index]?.spentSec ?? 0);
     pending.current = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.id, index]);
+  }, [id, index]);
   useEffect(() => {
-    if (!running) return;
+    if (!running || !id) return;
     const flush = () => {
       if (pending.current === 0) return;
       const add = pending.current;
       pending.current = 0;
-      void saveSession(db, spend(latest.current, index, add, Date.now()));
+      void updateSession(db, id, (s) => spend(s, index, add, Date.now()));
     };
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
@@ -224,7 +236,7 @@ function useBlockClock(session: SessionRecord, index: number, running: boolean) 
       clearInterval(t);
       flush();
     };
-  }, [db, index, running]);
+  }, [db, id, index, running]);
   return spent;
 }
 
@@ -236,12 +248,17 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const dueNow = useDueReviews(learner.reviews, now);
   const idx = session ? activeBlockIndex(session) : -1;
   const block = session && idx >= 0 ? session.blocks[idx]! : null;
-  const spent = useBlockClock(session ?? ({ id: '', blocks: [] } as unknown as SessionRecord), Math.max(idx, 0), !!block);
+  const spent = useBlockClock(session ?? null, Math.max(idx, 0), !!block);
   const [testPhase, setTestPhase] = useState<'check' | 'mixed'>('check');
   const lastTestConcept = useRef<string | null>(null);
   const checkConcept = useRef<Concept | null>(null);
-  const latest = useRef<SessionRecord | null>(null);
-  latest.current = session ?? null;
+  const games = useGames();
+  const [testIndex, setTestIndex] = useState(0);
+  const senseShown = useRef(new Set<string>());
+  const learnShown = useRef(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  // The item for a turn is chosen once: recording its attempt must not swap it for another mid-question.
+  const senseLatch = useRef<{ index: number; item: SenseItem | null } | null>(null);
   // Review items due when the block started; kept stable for the whole block.
   const dueAtStart = useRef<typeof dueNow | null>(null);
   if (block?.kind === 'review' && dueAtStart.current === null && learner.ready) dueAtStart.current = dueNow;
@@ -257,12 +274,12 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const untimed = block.kind === 'play' || block.kind === 'reflect';
   const left = Math.max(0, block.budgetSec - spent);
   const timeUp = !untimed && left === 0;
-  const finish = (how: 'done' | 'skipped' = 'done') => saveSession(db, completeBlock(latest.current!, idx, Date.now(), how));
-  const onAttempt = (a: Attempt) => void saveSession(db, addAttempt(latest.current!, idx, a.uuid, Date.now()));
+  const finish = (how: 'done' | 'skipped' = 'done') => updateSession(db, session.id, (s) => (s.blocks[idx]?.status === 'done' || s.blocks[idx]?.status === 'skipped' ? s : completeBlock(s, idx, Date.now(), how)));
+  const onAttempt = (a: Attempt) => void updateSession(db, session.id, (s) => addAttempt(s, idx, a.uuid, Date.now()));
   const concept = block.conceptId ? CONCEPT_BY_ID.get(block.conceptId) ?? null : null;
   const seed = `${session.date}|${session.id}|${block.kind}`;
-  const waiting = awaitingCheck(learner.statuses);
-  const checkTarget = waiting[waiting.length - 1]?.concept ?? null;
+  // Never on the day of the lesson; the longest-waiting concept first; then stale passes (see checkForSession).
+  const checkTarget = checkForSession(learner.statuses, now)?.concept ?? null;
   // One check per concept per session. The concept is latched when the check starts: passing
   // it removes the concept from the awaiting list, and the result screen must still be shown.
   const checkedThisSession = !!checkTarget && learner.events.some(
@@ -271,6 +288,21 @@ export function SessionRun({ learner }: { learner: Learner }) {
   if (block.kind === 'test' && testPhase === 'check' && !checkConcept.current && checkTarget && !checkedThisSession) checkConcept.current = checkTarget;
   const activeCheck = block.kind === 'test' && testPhase === 'check' ? checkConcept.current : null;
   const learnStatus = block.kind === 'learn' && concept ? learner.statuses.find((s) => s.concept.id === concept.id) : null;
+  // Test block: questions from the learner's own games alternate with mixed puzzles.
+  const nextTestItem = () => {
+    if (timeUp) return void finish();
+    senseShown.current.add(senseTurn?.id ?? '');
+    setTestIndex((n) => n + 1);
+  };
+  const senseTurn: SenseItem | null = (() => {
+    if (block.kind !== 'test' || activeCheck || !games || testIndex % 2 === 1) return null;
+    const seen = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId), ...senseShown.current]);
+    const kind = (testIndex / 2) % 2 === 0 ? 'safe-or-not' : 'chance-or-not';
+    if (senseLatch.current?.index === testIndex) return senseLatch.current.item;
+    const item = pickSense(senseItemsFrom(games), kind, seen, 2, `${session.id}|${testIndex}`)[0] ?? null;
+    senseLatch.current = { index: testIndex, item };
+    return item;
+  })();
 
   return (
     <div className="page run" data-testid="session-run" data-block={block.kind}>
@@ -289,8 +321,8 @@ export function SessionRun({ learner }: { learner: Learner }) {
         <>
           {block.notice && <p className="note">{block.notice}</p>}
           {learnStatus && (learnStatus.stage === 'taught' || learnStatus.stage === 'demonstrated') && (
-            <div className="return-card" data-testid="learn-complete">
-              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson recorded as studied.'}</strong> Next: new positions on this concept.</p>
+            <div className="return-card" data-testid="learn-complete" ref={(el) => { if (el && !learnShown.current) { learnShown.current = true; el.scrollIntoView({ block: 'start' }); } }}>
+              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson recorded as studied.'}</strong> Next: new positions on this concept. Its check comes on a later day, not today.</p>
               <div className="actions"><button className="primary" data-testid="learn-continue" onClick={() => void finish()}>Continue to Apply</button></div>
             </div>
           )}
@@ -312,27 +344,40 @@ export function SessionRun({ learner }: { learner: Learner }) {
         <CheckRunner key={`check-${activeCheck.id}`} concept={activeCheck} learner={learner} sessionId={session.id} onDone={() => { checkConcept.current = null; setTestPhase('mixed'); }} />
       )}
       {block.kind === 'test' && pool && !activeCheck && (
-        <PuzzleStream
-          key="mixed"
-          pick={(exclude, i) => {
-            const s = pickTestConcept(learner.statuses, lastTestConcept.current);
-            if (!s) return null;
-            lastTestConcept.current = s.concept.id;
-            return conceptPicker(pool.puzzles, s.concept, learner.level.level, seed)(exclude, i);
-          }}
-          context="test" conceptId={() => lastTestConcept.current}
-          sessionId={session.id} allowHints={false} seen={learner.seen} stop={timeUp} heading="Mixed test, no hints"
-          onAttempt={onAttempt} onFinished={() => void finish()}
-        />
+        senseTurn ? (
+          <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="test" heading="From your own games, nothing announced" onRecorded={onAttempt} onDone={nextTestItem} />
+        ) : (
+          <PuzzleStream
+            key={`mixed-${testIndex}`}
+            limit={1}
+            pick={(exclude, i) => {
+              const s = pickTestConcept(learner.statuses, lastTestConcept.current);
+              if (!s) return null;
+              lastTestConcept.current = s.concept.id;
+              return conceptPicker(pool.puzzles, s.concept, learner.level.level, `${seed}|${testIndex}`)(exclude, i);
+            }}
+            context="test" conceptId={() => lastTestConcept.current}
+            sessionId={session.id} allowHints={false} seen={learner.seen} heading="Mixed test, no hints"
+            onAttempt={onAttempt} onFinished={nextTestItem}
+          />
+        )
       )}
 
       {block.kind === 'play' && <PlayBlock onFinished={() => void finish()} />}
       {block.kind === 'reflect' && <ReflectBlock sessionId={session.id} onSaved={() => void finish()} />}
 
       <footer className="run-foot">
-        <button className="quiet" data-testid="end-block" onClick={() => void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped')}>
-          {idx === session.blocks.length - 1 ? 'End session' : `End ${BLOCK_NAME[block.kind].toLowerCase()} and move on`}
-        </button>
+        {confirmEnd ? (
+          <div className="actions" data-testid="end-confirm">
+            <p className="muted">{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? It cannot be reopened.'}</p>
+            <button data-testid="end-confirm-yes" onClick={() => { setConfirmEnd(false); void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'); }}>End session</button>
+            <button className="primary" data-testid="end-confirm-no" onClick={() => setConfirmEnd(false)}>Keep going</button>
+          </div>
+        ) : (
+          <button className="quiet" data-testid="end-block" onClick={() => (idx === session.blocks.length - 1 ? setConfirmEnd(true) : void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'))}>
+            {idx === session.blocks.length - 1 ? 'End session' : `End ${BLOCK_NAME[block.kind].toLowerCase()} and move on`}
+          </button>
+        )}
       </footer>
     </div>
   );
@@ -344,9 +389,13 @@ export function BaselineRun({ learner }: { learner: Learner }) {
   const last = useRef<string | null>(null);
   const [stopped, setStopped] = useState(false);
   const progress = baselineProgress(learner.statuses);
+  // Whether the baseline was already complete when this screen opened. While it is running,
+  // the last position's first move completes the sample; the position must still be finished.
+  const completeOnEntry = useRef<boolean | null>(null);
   if (!pool || !learner.ready) return <div className="page"><p className="muted">Loading positions</p></div>;
+  completeOnEntry.current ??= progress.complete;
 
-  if (progress.complete || stopped) {
+  if (completeOnEntry.current || stopped) {
     return (
       <div className="page" data-testid="baseline-result" data-complete={progress.complete}>
         <a className="back" href={href('today')}>Today</a>
@@ -382,7 +431,10 @@ export function BaselineRun({ learner }: { learner: Learner }) {
       <PuzzleStream
         pick={(exclude, i) => {
           const c = nextBaselineConcept(learner.statuses, last.current);
-          if (!c) return null;
+          if (!c) {
+            setStopped(true);
+            return null;
+          }
           last.current = c.id;
           return conceptPicker(pool.puzzles, c, learner.level.level, `baseline|${DIAGNOSTIC.version}`)(exclude, i);
         }}

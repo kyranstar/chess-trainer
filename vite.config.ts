@@ -31,7 +31,8 @@ export default defineConfig({
       },
       workbox: {
         // App shell + rights-cleared packs only. Never caches third-party course pages.
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,wasm}'],
+        globIgnores: ['engine/package.json'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

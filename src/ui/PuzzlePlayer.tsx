@@ -7,6 +7,8 @@ import { expectedMove, hintSquare, type PuzzleRun, remainingLine, startRun, subm
 import type { Puzzle } from '../puzzles/types';
 import { useDb, useFocusMode } from '../app/store';
 import { Board } from './Board';
+import { bestLineFor } from '../engine/interactive';
+import { lineSan } from '../games/analyse';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -37,6 +39,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [wrongSan, setWrongSan] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The engine's answer to the learner's wrong move: evidence about this position, shown on request. */
+  const [reply, setReply] = useState<{ after: string; state: 'loading' | 'none' | 'shown'; line?: string; wp?: number } | null>(null);
   const startedAt = useRef(0);
   const decided = useRef(false);
 
@@ -48,14 +52,34 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     setMarks([]);
     setOutcome(null);
     setWrongSan(null);
+    setReply(null);
     decided.current = false;
     const t = setTimeout(() => {
       setLastMove(initial.setupMove);
       setPhase('solving');
       startedAt.current = Date.now();
     }, 450);
+    startedAt.current = 0;
     return () => clearTimeout(t);
   }, [initial]);
+
+  // A position that was shown has been seen: if the learner leaves before answering, record
+  // it as skipped so it can never be counted as "unseen" later.
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    return () => {
+      if (decided.current || startedAt.current === 0) return;
+      decided.current = true;
+      const r = runRef.current;
+      void recordAttempt(db, {
+        sessionId: props.sessionId, context: props.context, exerciseId: `lichess:${puzzle.id}`, exerciseKind: 'puzzle', contentVersion: props.packVersion,
+        conceptId: props.conceptId, themes: puzzle.themes, rating: puzzle.rating, ts: Date.now(), elapsedMs: Date.now() - startedAt.current,
+        firstMove: null, played: [], mistakes: 0, hints: r.hints, outcome: 'skipped', acceptedAlternative: false,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puzzle.id]);
 
   async function decide(o: Outcome, r: PuzzleRun) {
     if (decided.current) return;
@@ -89,6 +113,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     const res = submitMove(run, uci);
     setMarks([]);
     if (res.verdict === 'wrong') {
+      setReply({ after: positionAfter(run.fen, uci), state: 'none' });
       setWrongSan(sanOf(before, uci));
       setRun(res.run);
       setResetKey((k) => k + 1);
@@ -115,7 +140,17 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     }, 380);
   }
 
+  async function showReply() {
+    if (!reply || reply.state === 'loading') return;
+    const after = reply.after;
+    setReply({ after, state: 'loading' });
+    const best = await bestLineFor(after);
+    // The learner may have moved on meanwhile; only fill in the request that is still on screen.
+    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { after, state: 'shown', line: lineSan(after, best.pv), wp: Math.round(100 - best.wp) } : { after, state: 'shown' }) : r));
+  }
+
   function hint() {
+    if (busy) return;
     const h = hintSquare(run);
     setRun(h.run);
     setMarks([h.square]);
@@ -123,6 +158,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   }
 
   function reveal() {
+    if (busy) return;
     void decide(run.hints > 0 ? 'assisted' : 'fail', run);
     setPhase('revealed');
     setMarks([expectedMove(run).slice(0, 2), expectedMove(run).slice(2, 4)]);
@@ -165,6 +201,13 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
           <div className="verdict wrong" data-testid="verdict-wrong">
             <strong>{wrongSan} is not the move.</strong>
             <p>An engine check found one move here clearly better than every other. Recorded as missed; this position returns in your review queue.</p>
+            {reply?.state === 'shown' && (
+              <p data-testid="engine-reply">
+                {reply.line
+                  ? `After ${wrongSan} the built-in engine continues ${reply.line} and then rates your side at ${reply.wp} out of 100. This is the engine’s line for this position, not an explanation.`
+                  : 'The built-in engine did not answer on this device, so no reply can be shown.'}
+              </p>
+            )}
           </div>
         )}
         {phase === 'solved' && (
@@ -194,9 +237,11 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
         {phase === 'solving' && (
           <>
             {wrongSan && <button className="primary" onClick={() => setWrongSan(null)}>Try again</button>}
-            {allowHints && !wrongSan && <button onClick={hint} disabled={marks.length > 0}>Show which piece</button>}
-            {(wrongSan || outcome) && <button onClick={reveal}>Show solution</button>}
-            {!outcome && <button className="quiet" onClick={() => void skip()}>Skip</button>}
+            {wrongSan && reply && reply.state !== 'shown' && <button data-testid="show-reply" disabled={reply.state === 'loading'} onClick={() => void showReply()}>{reply.state === 'loading' ? 'Asking the engine' : `What happens after ${wrongSan}?`}</button>}
+            {allowHints && !wrongSan && <button onClick={hint} disabled={busy || marks.length > 0}>Show which piece</button>}
+            {(wrongSan || outcome) && <button onClick={reveal} disabled={busy}>Show solution</button>}
+            {/* A check is a fixed set of positions: skipping one would shrink it. */}
+            {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={busy} onClick={() => void skip()}>Skip</button>}
           </>
         )}
         {done && <button className="primary" data-testid="next" onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}

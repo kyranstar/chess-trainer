@@ -90,7 +90,9 @@ function squareOf(name: string): number {
 function resultAfter(pos: Pos, uci: Uci, strong: Color): KpkResult {
   const after = applyUci(pos, uci);
   if (uci.length === 5) {
-    // Promotion: a win if the new piece cannot be taken and it is not stalemate.
+    // Promotion. A bishop or knight cannot mate a lone king: that throws the win away.
+    if (uci[4] !== 'q' && uci[4] !== 'r') return 'draw';
+    // A queen or rook wins if it cannot be taken at once and the position is not stalemate.
     const weakCanCapture = [...legalDests(after)].some(([, tos]) => tos.includes(uci.slice(2, 4)));
     return !after.isStalemate() && !weakCanCapture ? 'win' : 'draw';
   }
@@ -120,7 +122,8 @@ export function keepingMoves(fen: string): Uci[] {
 
 export function evaluateMove(fen: string, uci: Uci): { kept: boolean; keeping: Uci[]; result: KpkResult } {
   const pos = positionFromFen(fen);
-  const p = parts(pos)!;
+  const p = parts(pos);
+  if (!p) return { kept: false, keeping: [], result: 'draw' }; // not K+P v K: nothing this table can judge
   const keeping = keepingMoves(fen);
   const result = resultAfter(pos, uci, p.strong);
   const want: KpkResult = pos.turn === p.strong ? 'win' : 'draw';
@@ -154,7 +157,10 @@ export function opponentReply(fen: string, goal: 'win' | 'hold'): Uci {
     const promoted = u.length === 5;
     const pawnSq = after.board.pawn.first();
     const hangs = !promoted && pawnSq !== undefined && [...legalDests(after)].some(([, tos]) => tos.includes(makeSquare(pawnSq)));
-    const options = promoted ? 99 : keepingMoves(fenOf(after)).length;
+    // In a drawn position a promotion can only be into a capture or stalemate: it ends the
+    // game at once, so it is the attacker's last choice.
+    if (promoted) return { u, key: 5000 };
+    const options = keepingMoves(fenOf(after)).length;
     return { u, key: (hangs ? 1000 : 0) + (options === 0 ? 500 : options) };
   });
   scored.sort((a, b) => a.key - b.key || (a.u < b.u ? -1 : 1));
@@ -172,7 +178,13 @@ export function outcomeAfter(fen: string, goal: 'win' | 'hold', learnerMoves: nu
   }
   if (pos.board.occupied.size() === 2) return 'pawn-captured';
   if (pos.isStalemate()) return 'stalemate';
-  if (pos.board.pawn.isEmpty()) return null; // promoted: the defence failed earlier and was reported then
+  if (pos.board.pawn.isEmpty()) {
+    // The pawn promoted. If the new piece can be taken at once the draw is certain and the
+    // play-out is over; otherwise the defence failed earlier and was reported then.
+    const piece = [...pos.board.occupied].find((sq) => !pos.board.king.has(sq));
+    const capturable = piece !== undefined && pos.board[pos.turn].has(piece) === false && [...legalDests(pos)].some(([, tos]) => tos.includes(makeSquare(piece)));
+    return capturable ? 'held' : null;
+  }
   return learnerMoves >= HOLD_MOVES ? 'held' : null;
 }
 

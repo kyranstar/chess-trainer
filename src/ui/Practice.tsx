@@ -7,6 +7,7 @@ import type { Puzzle } from '../puzzles/types';
 import { OwnGameRun, useGames } from './Games';
 import { KpkRun } from './Kpk';
 import { OpeningRecallRun } from './Openings';
+import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
@@ -20,6 +21,11 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   const due = useDueReviews(learner.reviews, now);
   const games = useGames();
   const ownDrills = useMemo(() => (games ? drillPositions(games).length : 0), [games]);
+  const senseLeft = useMemo(() => {
+    if (!games) return null;
+    const seen = new Set(learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId));
+    return senseItemsFrom(games).filter((i) => i.truth && !seen.has(i.id)).length;
+  }, [games, learner.attempts]);
   const kpkSeen = useMemo(() => new Set(learner.attempts.filter((a) => a.exerciseKind === 'endgame').map((a) => a.exerciseId)).size, [learner.attempts]);
   const remaining = useMemo(() => {
     const out = new Map<string, number>();
@@ -57,13 +63,19 @@ export function PracticeHome({ learner }: { learner: Learner }) {
       <p className="lede">Extra practice outside today’s session. Everything here is recorded the same way: first tries on unseen positions count as evidence, repeats do not.</p>
 
       <section className="concept-group">
+        <h2>From your own games</h2>
+        <ul className="concept-list">
+          {row('sense', 'Is it safe? Is there something to win?', senseLeft === null ? 'Loading' : senseLeft > 0 ? `Real positions from your games with nothing announced: ${senseLeft} with something in them still unseen, mixed with as many that have nothing` : 'Appears once your games have been fetched and analysed (Progress, Your games)', { mode: 'sense' })}
+          {row('own', 'Find the move you missed', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where one move was clearly best and you played another` : 'Appears once your games have been fetched and analysed', { mode: 'own' })}
+        </ul>
+      </section>
+
+      <section className="concept-group">
         <h2>Missed positions</h2>
         <ul className="concept-list">
           {row('review', 'Review what is due', `${due.length} due now, ${learner.reviews.length} in the queue`, { mode: 'review' })}
         </ul>
-        <ul className="concept-list">
-          {row('own', 'Positions from your own games', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where you missed a move the engine found clearly best` : 'Appears after analysed games are imported under Progress, Your data', { mode: 'own' })}
-        </ul>
+
       </section>
 
       <section className="concept-group">
@@ -127,9 +139,10 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
     <div className="page run" data-testid="practice-run">
       <header className="run-bar">
         <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
+        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
         <span />
       </header>
+      {mode === 'sense' && <SenseRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'openings' && <OpeningRecallRun learner={learner} side={route.query.get('side') === 'black' ? 'black' : 'white'} onFinished={() => go('practice/openings')} />}

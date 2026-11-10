@@ -94,7 +94,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
       <section className="card" data-testid="card-data">
         <h2>Your data</h2>
         <p>
-          Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. Nothing is uploaded.
+          Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. Nothing is uploaded. The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
           {' '}Progress on your iPhone and your Mac is separate until you move a backup across.
         </p>
         <p className="definition-small" data-testid="last-backup">

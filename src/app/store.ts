@@ -9,7 +9,7 @@ import { conceptStatuses, type ConceptStatus } from '../learn/curriculum';
 import { estimateLevel } from '../metrics/metrics';
 import type { Puzzle } from '../puzzles/types';
 import { dueItems } from '../schedule/review';
-import { localDate } from '../schedule/session';
+import { currentSession, localDate } from '../schedule/session';
 
 export const DbContext = createContext<TrainerDB | null>(null);
 
@@ -56,8 +56,10 @@ export function useDueReviews(reviews: ReviewState[], now: number): ReviewState[
 
 export function useTodaySession(): SessionRecord | null | undefined {
   const db = useDb();
-  const date = localDate(Date.now());
-  return useLiveQuery(async () => (await db.sessions.where('date').equals(date).last()) ?? null, [db, date]);
+  const now = useNow();
+  const from = localDate(now - 86_400_000);
+  const recent = useLiveQuery(() => db.sessions.where('date').aboveOrEqual(from).toArray(), [db, from]);
+  return useMemo(() => (recent === undefined ? undefined : currentSession(recent, now)), [recent, now]);
 }
 
 export function usePack(): PackStatus | undefined {
@@ -85,8 +87,9 @@ export function usePool(): { puzzles: Puzzle[]; byId: Map<string, Puzzle>; versi
       live = false;
     };
   }, [db, key]);
-  if (!key || poolCache?.key !== key) return null;
-  return { puzzles: poolCache.puzzles, byId: poolCache.byId, version: key };
+  const ready = !!key && poolCache?.key === key ? poolCache : null;
+  // One object per pack version, so effects and memos that depend on the pool do not re-run on every render.
+  return useMemo(() => (ready ? { puzzles: ready.puzzles, byId: ready.byId, version: ready.key } : null), [ready]);
 }
 
 export function useOnline(): boolean {

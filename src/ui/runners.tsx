@@ -8,10 +8,12 @@ import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
 import { drillPositions } from '../games/metrics';
+import { drillId } from '../openings/repertoire';
 import { OwnGameDrill, useGames } from './Games';
 import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
+import { SenseDrill, senseItemsFrom } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
 export type Picker = (exclude: Set<string>, index: number) => Puzzle | null;
@@ -92,6 +94,8 @@ export function PuzzleStream(props: {
 
 /** Picker for unseen puzzles of one concept near a target rating. */
 export function conceptPicker(pool: Puzzle[], concept: Concept, target: number, seed: string): Picker {
+  // No filter would mean "any puzzle": a concept without puzzle tags has nothing to pick.
+  if (conceptThemes(concept).length === 0 && conceptOpenings(concept).length === 0) return () => null;
   return (exclude, i) =>
     selectPuzzles(pool, { themes: conceptThemes(concept), openings: conceptOpenings(concept), target, count: 1, exclude, seed: `${seed}|${i}` })[0] ?? null;
 }
@@ -158,15 +162,16 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
   const attempts = useRef<Attempt[]>([]);
   const [result, setResult] = useState<ReturnType<typeof gradeCheck> | null>(null);
   const priorChecks = learner.events.filter((e) => e.conceptId === concept.id && (e.type === 'check-passed' || e.type === 'check-failed')).length;
-  // Chosen once, so the set does not change while the check is running.
-  const set = useMemo(() => {
-    if (!pool) return null;
-    return selectPuzzles(pool.puzzles, {
+  // Drawn once and kept: answering a position adds it to "seen", and drawing again would
+  // change the set (or run out of positions) in the middle of the check.
+  const drawn = useRef<Puzzle[] | null>(null);
+  if (pool && drawn.current === null) {
+    drawn.current = selectPuzzles(pool.puzzles, {
       themes: conceptThemes(concept), openings: conceptOpenings(concept), band: CHECK.band, target: (CHECK.band.lo + CHECK.band.hi) / 2,
       count: CHECK.size, exclude: learner.seen, seed: `check|${concept.id}|${priorChecks}`,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pool, concept.id]);
+  }
+  const set = drawn.current;
 
   if (!pool || !set) return <p className="muted">Loading positions</p>;
   if (set.length < CHECK.size) {
@@ -200,7 +205,7 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
       sessionId={sessionId}
       allowHints={false}
       seen={new Set()}
-      heading={`Check: ${concept.title}`}
+      heading={`Check: ${CHECK.size} unseen positions, no hints`}
       onAttempt={(a) => attempts.current.push(a)}
       onFinished={() => {
         const g = gradeCheck(attempts.current);
@@ -249,6 +254,11 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
         allowHints={false} heading={`Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
     );
   }
+  if (itemId.startsWith('sense:')) {
+    const item = games ? senseItemsFrom(games).find((x) => x.id === itemId) : undefined;
+    if (!item) return <RetiredItem onNext={advance} />;
+    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={`Review, ${left} due`} onDone={advance} />;
+  }
   if (itemId.startsWith('kpk:')) {
     const [, goal, ...rest] = itemId.split(':');
     return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
@@ -259,7 +269,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
     return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('opening:')) {
-    const entry = repertoire.find((e) => `opening:${e.id}` === itemId);
+    const entry = repertoire.find((e) => drillId(e) === itemId);
     if (!entry) return <RetiredItem onNext={advance} />;
     return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }
@@ -273,7 +283,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
         <p className="kicker">Review, {left} due</p>
         <h2>{CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title}</h2>
       </header>
-      <LessonTry key={itemId} lesson={lesson} stepIndex={Number(stepNo) - 1} step={{ ...step, before: [] }} sessionId={sessionId} context="review" onDone={advance} />
+      <LessonTry key={itemId} lesson={lesson} stepIndex={Number(stepNo) - 1} step={step} hideBefore sessionId={sessionId} context="review" onDone={advance} />
     </section>
   );
 }

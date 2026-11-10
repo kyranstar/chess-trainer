@@ -4,7 +4,7 @@ import { type Learner, useDb, useOnline } from '../app/store';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from '../content';
 import type { Concept, LessonLink } from '../content/types';
 import { recordLessonEvent } from '../db/db';
-import { CHECK, type ConceptStatus, KPK_CHECK } from '../learn/curriculum';
+import { CHECK, type ConceptStatus, KPK_CHECK, needsRefresh } from '../learn/curriculum';
 import { projectPlan } from '../learn/diagnostic';
 import { localDate } from '../schedule/session';
 import { formatPct } from '../metrics/metrics';
@@ -18,7 +18,8 @@ const STAGE_LABEL: Record<ConceptStatus['stage'], string> = {
   demonstrated: 'Demonstrated',
 };
 
-export function stageText(s: ConceptStatus): string {
+export function stageText(s: ConceptStatus, now: number = Date.now()): string {
+  if (needsRefresh(s, now)) return s.lastCheck?.passed ? 'Demonstrated, re-check due' : 'Demonstrated earlier, last re-check not passed';
   if (s.stage === 'demonstrated') return s.demonstratedVia === 'pretest' ? 'Demonstrated by pre-test' : 'Demonstrated';
   if (s.stage === 'taught' && !s.assessable) return 'Studied';
   if (s.stage === 'taught' && s.taughtVia === 'self-reported-link') return 'Marked done by you, not yet checked';
@@ -51,8 +52,8 @@ export function LearnHome({ learner }: { learner: Learner }) {
         {counts.offline} concept{counts.offline === 1 ? ' has' : 's have'} a lesson stored on this device. The rest link to lessons on Lichess, Chess.com or Chessreps, which need a connection{online ? '' : ' (you are offline now)'}.
       </p>
       <details className="plan" data-testid="plan-30">
-        <summary>Next 30 days, if each check is passed on the day</summary>
-        <p className="definition-small">A projection, not a schedule: one new concept per study day in prerequisite order, play days on Wednesdays and Saturdays. Concepts with no lesson anywhere are left out. Real days follow what you actually demonstrate.</p>
+        <summary>Next 30 days, if each check is passed first time</summary>
+        <p className="definition-small">A projection, not a schedule: one new concept per study day in prerequisite order (each is checked on a later day), play days on Wednesdays and Saturdays. Concepts with no lesson anywhere are left out. Real days follow what you actually demonstrate.</p>
         <table className="concept-table plan-table">
           <tbody>
             {projectPlan(learner.statuses, { startDate: localDate(Date.now()), days: 30, playWeekdays: [3, 6] }).map((d) => (

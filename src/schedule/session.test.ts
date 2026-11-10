@@ -3,7 +3,7 @@ import { CONCEPTS } from '../content';
 import type { LessonEvent } from '../db/types';
 import { conceptStatuses } from '../learn/curriculum';
 import type { SessionRecord } from '../db/types';
-import { activeBlock, BLOCK_MINUTES, completeBlock, localDate, planPlaySession, planSession, PLANNER_VERSION, pickTestConcept, spend, suggestSessionKind } from './session';
+import { activeBlock, BLOCK_MINUTES, completeBlock, currentSession, localDate, planPlaySession, planSession, PLANNER_VERSION, pickTestConcept, spend, suggestSessionKind } from './session';
 
 const T0 = new Date(2026, 10, 10, 9, 0, 0).getTime();
 let k = 0;
@@ -141,3 +141,80 @@ describe('play days', () => {
     expect(suggestSessionKind(legacy, T0).kind).toBe('play');
   });
 });
+
+describe('audit regressions', () => {
+  it('the apply block never targets a concept that has no puzzle filter (it would serve arbitrary puzzles)', () => {
+    // The opposition was studied (its check is an endgame play-out, it has no puzzle tags) and the next concept to learn has none either.
+    const events = [ev('safety.hanging-pieces', 'check-passed'), ev('endgame.opposition', 'local-completed')];
+    const s = plan(events);
+    expect(s.blocks[1]!.conceptId).toBe('safety.counting');
+    const apply = CONCEPTS.find((c) => c.id === s.blocks[2]!.conceptId)!;
+    expect(apply.themes.length + (apply.assessment.kind === 'opening-puzzles' ? 1 : 0)).toBeGreaterThan(0);
+    expect(apply.id).not.toBe('endgame.opposition');
+  });
+
+  it('a session that was started but never used does not count toward the play-day suggestion', () => {
+    const DAY = 86_400_000;
+    const untouched = (daysAgo: number): SessionRecord => ({
+      id: `u${daysAgo}`, kind: 'study', date: localDate(T0 - daysAgo * DAY), createdAt: T0 - daysAgo * DAY, updatedAt: T0 - daysAgo * DAY,
+      budgetMin: 30, plannerVersion: PLANNER_VERSION, status: 'active',
+      blocks: [{ kind: 'review', budgetSec: 420, spentSec: 0, status: 'pending', conceptId: null, reason: '', notice: null, attemptUuids: [] }],
+    });
+    expect(suggestSessionKind([untouched(2), untouched(1)], T0).kind).toBe('study');
+    const used = (daysAgo: number): SessionRecord => ({ ...untouched(daysAgo), blocks: [{ ...untouched(daysAgo).blocks[0]!, spentSec: 300, status: 'active' }] });
+    expect(suggestSessionKind([used(2), used(1)], T0).kind).toBe('play');
+  });
+});
+
+describe('which session is "the" session right now', () => {
+  const at = (y: number, mo: number, d: number, h: number, mi = 0) => new Date(y, mo, d, h, mi).getTime();
+  const sess = (id: string, createdAt: number, over: Partial<SessionRecord> = {}): SessionRecord => ({
+    id, kind: 'study', date: localDate(createdAt), createdAt, updatedAt: createdAt, budgetMin: 30, plannerVersion: PLANNER_VERSION, status: 'active',
+    blocks: [{ kind: 'review', budgetSec: 420, spentSec: 60, status: 'active', conceptId: null, reason: '', notice: null, attemptUuids: [] }], ...over,
+  });
+
+  it('a session still being used when midnight passes stays the running session', () => {
+    const s = sess('late', at(2026, 10, 9, 23, 40), { updatedAt: at(2026, 10, 9, 23, 59) });
+    expect(currentSession([s], at(2026, 10, 10, 0, 2))?.id).toBe('late');
+  });
+
+  it('yesterday\'s abandoned or finished session is not today\'s', () => {
+    const abandoned = sess('old', at(2026, 10, 9, 18, 0), { updatedAt: at(2026, 10, 9, 18, 20) });
+    expect(currentSession([abandoned], at(2026, 10, 10, 8, 0))).toBeNull();
+    const finishedLate = sess('done', at(2026, 10, 9, 23, 40), { updatedAt: at(2026, 10, 10, 0, 5), status: 'done' });
+    expect(currentSession([finishedLate], at(2026, 10, 10, 0, 6))).toBeNull();
+  });
+
+  it('an unfinished session wins over another session of the same day, whatever the row order', () => {
+    const done = sess('zz-done', at(2026, 10, 10, 7, 0), { status: 'done' });
+    const active = sess('aa-active', at(2026, 10, 10, 9, 0));
+    expect(currentSession([done, active], at(2026, 10, 10, 10, 0))?.id).toBe('aa-active');
+    expect(currentSession([active, done], at(2026, 10, 10, 10, 0))?.id).toBe('aa-active');
+    // With nothing unfinished, the most recent one of today is shown (its summary).
+    expect(currentSession([done, sess('later-done', at(2026, 10, 10, 9, 0), { status: 'done' })], at(2026, 10, 10, 10, 0))?.id).toBe('later-done');
+  });
+});
+
+describe('games actually played count as play days', () => {
+  const DAY = 86_400_000;
+  const study = (daysAgo: number): SessionRecord => ({
+    id: `s${daysAgo}`, kind: 'study', date: localDate(T0 - daysAgo * DAY), createdAt: T0 - daysAgo * DAY, updatedAt: T0 - daysAgo * DAY,
+    budgetMin: 30, plannerVersion: PLANNER_VERSION, status: 'done',
+    blocks: [{ kind: 'review', budgetSec: 420, spentSec: 300, status: 'done', conceptId: null, reason: '', notice: null, attemptUuids: [] }],
+  });
+  it('two fetched games in the last week mean no further play day is prescribed, even though no play session was logged', () => {
+    const history = [study(3), study(2), study(1)];
+    expect(suggestSessionKind(history, T0).kind).toBe('play');
+    const played = [localDate(T0 - 2 * DAY), localDate(T0 - 1 * DAY)];
+    const s = suggestSessionKind(history, T0, played);
+    expect(s.kind).toBe('study');
+    expect(s.reason).toContain('played');
+  });
+  it('a game played after the last study sessions restarts the count', () => {
+    const history = [study(4), study(3)];
+    expect(suggestSessionKind(history, T0, [localDate(T0 - 2 * DAY)]).kind).toBe('study');
+    // Several games on one day are one play day; a game today is not yet "past".
+    expect(suggestSessionKind([study(2), study(1)], T0, [localDate(T0)]).kind).toBe('play');
+  });
+});
+

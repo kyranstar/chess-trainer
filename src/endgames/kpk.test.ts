@@ -41,6 +41,25 @@ describe('result-keeping moves', () => {
     expect(evaluateMove('8/1Pk5/8/8/8/8/8/K7 w - - 0 1', 'b7b8q').kept).toBe(false);
   });
 
+  it('promoting to a bishop or knight throws the win away (insufficient material), a rook keeps it', () => {
+    const fen = '7k/P7/2K5/8/8/8/8/8 w - - 0 1';
+    expect(evaluateMove(fen, 'a7a8q')).toMatchObject({ kept: true, result: 'win' });
+    expect(evaluateMove(fen, 'a7a8r')).toMatchObject({ kept: true, result: 'win' });
+    expect(evaluateMove(fen, 'a7a8b')).toMatchObject({ kept: false, result: 'draw' });
+    expect(evaluateMove(fen, 'a7a8n')).toMatchObject({ kept: false, result: 'draw' });
+    expect(keepingMoves(fen)).toContain('a7a8q');
+    expect(keepingMoves(fen).some((u) => u.endsWith('b') || u.endsWith('n'))).toBe(false);
+  });
+
+  it('a queen promotion that stalemates is a draw, and the rook promotion is then the keeping move', () => {
+    // Black Ka6, White Kb4 and a pawn on b7: b8=Q leaves Black no move and no check.
+    const fen = '8/1P6/k7/8/1K6/8/8/8 w - - 0 1';
+    expect(evaluateMove(fen, 'b7b8q')).toMatchObject({ kept: false, result: 'draw' });
+    expect(evaluateMove(fen, 'b7b8r')).toMatchObject({ kept: true, result: 'win' });
+    expect(keepingMoves(fen)).toContain('b7b8r');
+    expect(keepingMoves(fen)).not.toContain('b7b8q');
+  });
+
   it('every shipped drill start has exactly one keeping move for the side to move', () => {
     expect(KPK_DRILLS.win.length).toBeGreaterThanOrEqual(100);
     expect(KPK_DRILLS.hold.length).toBeGreaterThanOrEqual(100);
@@ -116,5 +135,28 @@ describe('play-out against best defence', () => {
       const next = fenOf(applyUci(positionFromFen(after), opponentReply(after, 'hold')));
       expect(probeKpk(next), start).toBe('draw'); // still king and pawn against king, still drawn
     }
+  });
+});
+
+describe('audit regressions', () => {
+  it('holding a draw never dead-ends: the attacker does not promote into a capture, and a non-KPK position is handled', () => {
+    for (const start of ['8/8/8/1P2k3/2K5/8/8/8 b - - 0 1', '8/8/8/2P2k2/3K4/8/8/8 b - - 0 1']) {
+      // Follow every draw-keeping line for a few moves; the play-out must always end or continue as K+P v K.
+      const walk = (fen: string, depth: number): void => {
+        if (depth === 0) return;
+        for (const keep of keepingMoves(fen)) {
+          const after = fenOf(applyUci(positionFromFen(fen), keep));
+          if (outcomeAfter(after, 'hold', 1)) continue;
+          const reply = opponentReply(after, 'hold');
+          const next = fenOf(applyUci(positionFromFen(after), reply));
+          if (outcomeAfter(next, 'hold', 1)) continue;
+          expect(probeKpk(next), `${start} -> ${next}`).not.toBeNull();
+          walk(next, depth - 1);
+        }
+      };
+      walk(start, 6);
+    }
+    // A position with a queen on the board is not this ending: no crash, nothing "kept".
+    expect(evaluateMove('1Q6/2k5/8/8/2K5/8/8/8 b - - 0 1', 'c7b8')).toMatchObject({ kept: false });
   });
 });

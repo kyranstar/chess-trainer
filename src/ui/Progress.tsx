@@ -10,7 +10,7 @@ import { Board } from './Board';
 import { walkRepertoire } from '../openings/repertoire';
 import { reviewCalibration } from '../schedule/review';
 import { DataPanel } from './Data';
-import { GameCards } from './Games';
+import { GameCards, Headline } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
@@ -95,7 +95,9 @@ export function ProgressHome({ learner }: { learner: Learner }) {
         ))}
       </div>
 
-      <section className="card focus" data-testid="card-focus">
+      <Headline attempts={learner.attempts} sinceDate={sinceDateOf(period)} since={from} periodLabel={periodLabel} />
+
+      <section className="card" data-testid="card-focus">
         <h2>Where to put effort</h2>
         {overall.n < PROVISIONAL_N ? (
           <p>Not enough evidence yet: {overall.n} unseen position{overall.n === 1 ? '' : 's'} so far, and nothing is called a weakness below {PROVISIONAL_N}. Today’s mixed test samples untested concepts first.</p>
@@ -312,6 +314,15 @@ export function PositionView({ uuid, learner }: { uuid: string; learner: Learner
         <h1>Lesson example</h1>
         <p>{lesson?.title ?? a.exerciseId}, part {stepNo}. {OUTCOME_TEXT[a.outcome]} on {when}.</p>
         {lesson && <a className="button" href={href(`learn/${lesson.conceptId}`)}>Open the concept</a>}
+      </div>
+    );
+  }
+  if (a.exerciseKind !== 'puzzle') {
+    const what: Record<string, string> = { opening: 'Repertoire move', endgame: 'King and pawn ending', 'own-game': 'Position from your own game', sense: 'Question from your own game' };
+    return (
+      <div className="page" data-testid="attempt-other">{back}
+        <h1>{what[a.exerciseKind] ?? 'Exercise'}</h1>
+        <p>{OUTCOME_TEXT[a.outcome]} on {when}.</p>
       </div>
     );
   }
