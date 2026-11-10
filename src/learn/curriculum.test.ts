@@ -178,3 +178,22 @@ describe('when a check is given inside a session', () => {
   });
 });
 
+describe('lessons stored on the phone come first', () => {
+  it('online too: a concept with only linked lessons does not hold up the on-device lessons behind it', () => {
+    const events = CONCEPTS.slice(0, 7).map((c) => ev(c.id, 'check-passed'));
+    const r = nextToLearn(conceptStatuses(CONCEPTS, events, []), { online: true });
+    expect(r.pick?.offlineLesson).toBe(true);
+    expect(r.pick?.concept.id).toBe('conversion.trade-when-ahead');
+    expect(r.deferred?.concept.id).toBe('defense.basics'); // said to be waiting, not silently skipped
+  });
+  it('a linked lesson is offered when online and nothing on the device is ready', () => {
+    const done = CONCEPTS.filter((c) => c.localLessons.length > 0).map((c) => ev(c.id, 'check-passed'));
+    const online = nextToLearn(conceptStatuses(CONCEPTS, done, []), { online: true });
+    expect(online.pick).not.toBeNull();
+    expect(online.pick!.offlineLesson).toBe(false);
+    const offline = nextToLearn(conceptStatuses(CONCEPTS, done, []), { online: false });
+    expect(offline.pick).toBeNull();
+    expect(offline.deferred?.concept.id).toBe(online.pick!.concept.id);
+  });
+});
+

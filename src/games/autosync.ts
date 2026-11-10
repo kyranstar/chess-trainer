@@ -9,6 +9,8 @@ import { analyseGame, ANALYSIS_VERSION, analysisKeyFor, type Evaluator, RULES } 
 import { type SyncFetch, type SyncReport, syncChessCom } from './chesscom';
 
 export const SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
+/** After a "too many requests" answer, automatic refreshes wait this long. */
+export const RATE_LIMIT_WAIT_MS = 60 * 60 * 1000;
 /** Username baked into the published build by the deploy script (from the git-ignored `data/deploy.env`); empty in every other build. It can be changed in the app. */
 export const DEFAULT_USERNAME: string = (import.meta.env?.VITE_CHESSCOM_USERNAME as string | undefined) ?? '';
 
@@ -23,6 +25,8 @@ export async function syncIfDue(db: TrainerDB, fetcher: SyncFetch, now: number =
   if (!username) return null;
   const last = await getMeta<{ at: number; status: string }>(db, 'chesscom.lastSync');
   if (!force && last?.status === 'ok' && now - last.at < SYNC_EVERY_MS) return null;
+  // Chess.com asked us to slow down: do not ask again on every launch.
+  if (!force && last?.status === 'rate-limited' && now - last.at < RATE_LIMIT_WAIT_MS) return null;
   return syncChessCom(db, fetcher, username, now);
 }
 
@@ -45,10 +49,15 @@ export function needsMeasure(g: Pick<GameRecord, 'measure' | 'measureKey' | 'tim
 export async function analysePending(
   db: TrainerDB,
   engine: Evaluator & { name: string; newGame?: () => Promise<void> | void },
-  opts: { nodes?: number; keepGoing?: () => boolean; onProgress?: (p: AnalyseProgress) => void } = {},
+  opts: { nodes?: number; keepGoing?: () => boolean; onProgress?: (p: AnalyseProgress) => void; startTimeoutMs?: number } = {},
 ): Promise<number> {
   // The engine reports its name only once it has started; the record is labelled with it.
-  await engine.newGame?.();
+  // If it never starts (its files failed to load) this says so instead of waiting for ever.
+  const started = await Promise.race([
+    Promise.resolve(engine.newGame?.()).then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), opts.startTimeoutMs ?? 30_000)),
+  ]);
+  if (!started) throw new Error('the built-in engine did not start');
   const key = analysisKeyFor(engine.name, opts.nodes ?? 0);
   const pending = (await db.games.toArray())
     .filter((g) => needsMeasure(g) || (g.timeClass !== 'unknown' && g.moves.length > 0 && g.measureKey !== key))

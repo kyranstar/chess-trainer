@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { failPuzzle, openApp, playMove, playUntilAccepted, solvePuzzle } from './helpers';
 
@@ -68,7 +69,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // 1 apply + 5 check positions carry the hanging-piece tag; the mixed-test position may carry it too.
   expect(Number(await page.getByTestId('row-safety.hanging-pieces').getAttribute('data-n'))).toBeGreaterThanOrEqual(6);
   // Concepts with no observations say "untested", never 0%.
-  expect(await page.locator('[data-testid^="row-"][data-n="0"]').count()).toBeGreaterThanOrEqual(10);
+  expect(await page.locator('[data-testid^="row-"][data-n="0"]').count()).toBeGreaterThanOrEqual(5);
   await expect(page.locator('[data-testid^="row-"][data-n="0"]').first()).toContainText('untested');
 
   // Drill-down shows exactly the attempts behind the number, and each opens its position.
@@ -222,21 +223,93 @@ test('the check for a studied concept comes in a later day’s session, unannoun
   await expect(page.getByTestId('concept-safety.hanging-pieces')).toHaveAttribute('data-stage', 'demonstrated');
 });
 
-test('a lesson example accepts a move the engine check rates as good as the text’s, and records no miss', async ({ page }) => {
-  await openApp(page, '#/learn/safety.threat-scan');
+test('a lesson example does not fault a sound move that is not the text’s: no miss is recorded and the text’s move is still asked', async ({ page }) => {
+  await openApp(page, '#/learn/mate.in-two');
   await page.getByTestId('start-lesson').click();
   const example = page.getByTestId('lesson-try');
-  // The text answers 2.Nf3 with 2...Nc6; 2...Nf6 defends just as well by the engine check.
-  await expect(example).toHaveAttribute('data-expected', 'b8c6');
-  await playMove(page, 'g8f6');
-  await expect(page.getByTestId('lesson-equal')).toContainText('Nf6 is as good here');
-  await expect(page.getByTestId('lesson-equal')).toContainText('The text plays Nc6');
-  await expect(example).toHaveAttribute('data-finished', 'true');
+  // Walk to the first asked move that has a recorded sound alternative, playing the text's moves until then.
+  const evidence = JSON.parse(readFileSync('content/verification/lessons.json', 'utf8')) as { lessons: { lesson: string; tries: { fen: string; move: string; alternatives: { uci: string; san: string }[] }[] }[] };
+  const tries = evidence.lessons.find((l) => l.lesson === 'lasker-mate-in-two')!.tries;
+  const target = tries.find((t) => t.alternatives.length > 0)!;
+  const board = (fen: string) => fen.split(' ').slice(0, 2).join(' ');
+  for (let guard = 0; guard < 30; guard++) {
+    if (await example.count()) {
+      const fen = (await example.locator('.board').getAttribute('data-fen'))!;
+      if ((await example.getAttribute('data-finished')) === 'false' && board(fen) === board(target.fen)) break;
+      if ((await example.getAttribute('data-finished')) === 'false') {
+        const expected = (await example.getAttribute('data-expected'))!;
+        await playUntilAccepted(page, example, expected, async () => (await example.getAttribute('data-finished')) === 'true');
+        continue;
+      }
+    }
+    // Move on one step and wait until the next step is really on screen before looking again.
+    const part = await page.getByText(/^Lesson, part \d+ of \d+$/).textContent();
+    await page.getByTestId('lesson-next').click();
+    await expect(page.getByText(/^Lesson, part \d+ of \d+$/)).not.toHaveText(part!);
+  }
+  const alt = target.alternatives[0]!;
+  await playMove(page, alt.uci);
+  const other = page.getByTestId('lesson-other');
+  await expect(other).toContainText(`does not fault ${alt.san}`);
+  await expect(other).toContainText('Nothing is recorded as missed');
   await expect(example.locator('.verdict.wrong')).toHaveCount(0);
-  // A move that is not as good is still told apart: next example, a plainly worse move.
-  await page.getByTestId('lesson-next').click();
+  // A move that throws the position away is still told apart (checked by the engine on the device).
+  await playMove(page, 'h6f8');
+  await expect(example.locator('.verdict.wrong')).toContainText('is not the move the text plays', { timeout: 30_000 });
+  await expect(other).toHaveCount(0);
+  // The example is not over: the text's move is still wanted, and playing it finishes the step.
   await expect(example).toHaveAttribute('data-finished', 'false');
-  await playMove(page, 'a7a6');
-  await expect(example.locator('.verdict.wrong')).toContainText('is not the move the text plays');
+  await expect(example).toHaveAttribute('data-expected', target.move);
+  await playUntilAccepted(page, example, target.move, async () => (await example.getAttribute('data-expected')) !== target.move);
+  await expect(other).toHaveCount(0);
+});
+
+test('a check interrupted by a reload goes on with the answers already given', async ({ page }) => {
+  await openApp(page, '#/learn/mate.in-one');
+  await page.getByTestId('start-check').click();
+  // Two positions missed before the interruption.
+  for (let i = 0; i < 2; i++) {
+    await failPuzzle(page);
+    await page.getByRole('button', { name: 'Show solution' }).click();
+    await page.getByTestId('next').click();
+  }
+  await expect(page.getByTestId('puzzle')).toHaveAttribute('data-phase', 'solving');
+  await page.reload(); // what iOS does to an app that sat in the background
+  await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
+  await page.getByTestId('start-check').click();
+  await expect(page.getByTestId('puzzle')).toContainText('2 already answered');
+  for (let i = 0; i < 3; i++) {
+    await solvePuzzle(page);
+    await page.getByTestId('next').click();
+  }
+  // Three more, not five fresh ones: the two misses still count.
+  const result = page.getByTestId('check-result');
+  await expect(result).toHaveAttribute('data-passed', 'false');
+  await expect(result).toContainText('3 of 5 solved first try');
+});
+
+test('a double tap on "Next position" does not act on the position that follows', async ({ page }) => {
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  await solvePuzzle(page);
+  const puzzle = page.getByTestId('puzzle');
+  const first = await puzzle.getAttribute('data-puzzle-id');
+  const next = page.getByTestId('next');
+  await expect(next).toBeEnabled();
+  const box = (await next.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  // Two taps on the same spot, 150 ms apart, then a third for good measure.
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(150);
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(120);
+  await page.mouse.click(x, y);
+  await expect(puzzle).not.toHaveAttribute('data-puzzle-id', first!);
+  const second = await puzzle.getAttribute('data-puzzle-id');
+  await page.waitForTimeout(900);
+  // Still the second position, untouched: no hint taken, nothing skipped or revealed.
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', second!);
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  await expect(puzzle).toHaveAttribute('data-outcome', '');
 });
 

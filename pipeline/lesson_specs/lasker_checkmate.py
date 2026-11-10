@@ -13,7 +13,7 @@ write({
     "sourceId": s.meta["id"],
     "title": "Special terms: checkmate on the move",
     "locator": "Part I, section “Special Terms” (Check and Checkmate), Diagram 6; Part II, section “How the Different Men Cooperate”, Diagram 23",
-    "revision": 1,
+    "revision": 2,
     "estMinutes": 5,
     "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
     "steps": [
@@ -28,7 +28,9 @@ write({
         {"type": "board", "fen": d23, "diagram": 23, "fromMoves": kings_gambit[:5], "orientation": "black"},
         {"type": "try", "fen": from_start(kings_gambit), "fromMoves": kings_gambit, "orientation": "black",
          "moves": ucis(from_start(kings_gambit), ["Qxe4#"]),
-         "before": [s.para(D23, end="in which Black wins a Rook by Q-h4+.")],
-         "after": [s.para(D23, begin="White cannot reply (4) K-e2", end="on account of Qxe4 mate.")]},
+         # The sentence is split before its last two words, so the lead-in reaches the position on
+         # the board (Q-h4+ and K-e2 played) and the mate is named only after it is found.
+         "before": [s.para(D23, end="White cannot reply (4) K-e2 on account of")],
+         "after": [s.para(D23, begin="Qxe4 mate.", end="Qxe4 mate.")]},
     ],
 })

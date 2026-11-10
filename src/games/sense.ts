@@ -20,7 +20,7 @@ import { makeUci } from 'chessops/util';
 import { applyUci, type Color, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import type { Attempt } from '../db/types';
 import { type Interval, wilson } from '../metrics/metrics';
-import { UNDECIDED } from './analyse';
+import { lineEnd, material, UNDECIDED } from './analyse';
 import type { GameRecord } from './types';
 
 export type SenseKind = 'safe-or-not' | 'chance-or-not';
@@ -29,8 +29,6 @@ const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const LOSES = 2;
 /** An own move counts as a safe control only if it lost at most this much expected score. */
 export const SAFE_LOSS = 3;
-/** An alternative answer is accepted when the engine puts it within this many points of the reference. */
-export const ACCEPT_WITHIN = 10;
 /** A chance must be clearly better than the next move to be asked as a chance. */
 export const CHANCE_GAP = 10;
 
@@ -84,7 +82,8 @@ function firstUciOfLine(fen: string, line: string): string | null {
  *
  *   unsafe  : the move allowed an avoidable mate or an avoidable loss of at least two points
  *             of material in a short line (analysis v3 `target`), with the reply on record;
- *   safe    : the line after the move loses less than two points of material, no quick mate,
+ *   safe    : the line after the move loses no material at all (a pawn given up is neither
+ *             asked as unsafe nor passed off as safe), no quick mate,
  *             the position was undecided (so the score means something) and the move cost at
  *             most SAFE_LOSS points of expected score.
  *
@@ -113,7 +112,7 @@ export function safetyItems(games: GameRecord[], opts: { minControlPly?: number 
         const replyUci = firstUciOfLine(afterFen, e.refutation);
         if (!replyUci) continue;
         out.push({ ...base, truth: true, proposedSan: e.playedSan, afterFen, replyUci, replyLine: e.refutation, playedWp: e.playedWp, loss: e.loss, label: e.target === 'mate' ? 'allows-mate' : 'loses-material' });
-      } else if (!f.mated && !f.unsure && f.played > -LOSES && f.wp >= UNDECIDED.lo && f.wp <= UNDECIDED.hi && loss <= SAFE_LOSS && ply >= minPly) {
+      } else if (!f.mated && !f.unsure && f.played >= 0 && f.wp >= UNDECIDED.lo && f.wp <= UNDECIDED.hi && loss <= SAFE_LOSS && ply >= minPly) {
         out.push({ ...base, truth: false, proposedSan: sanOf(positionFromFen(fen), uci), loss });
       }
     }
@@ -124,7 +123,8 @@ export function safetyItems(games: GameRecord[], opts: { minControlPly?: number 
 /**
  *   a chance : the engine's best line mates or wins at least two points of material, and one
  *              move is clearly best (so the answer can be checked);
- *   nothing  : the best line wins less than two points of material and is not a mate.
+ *   nothing  : the best line wins no material at all and is not a mate (a pawn that can be
+ *              won is neither asked as a chance nor passed off as nothing).
  *
  * A position where several moves win about as much is not asked as a chance and is never
  * passed off as "nothing".
@@ -146,7 +146,7 @@ export function chanceItems(games: GameRecord[], opts: { minControlPly?: number 
       if (e?.opportunity) {
         const clear = e.opportunity === 'mate' || e.secondWp === null || e.bestWp - e.secondWp >= CHANCE_GAP;
         if (clear) out.push({ ...base, truth: true, best: e.best, bestSan: e.bestSan, bestLine: e.bestLine, bestWp: e.bestWp });
-      } else if (!f.mating && !f.unsure && f.best < LOSES && ply >= minPly) {
+      } else if (!f.mating && !f.unsure && f.best <= 0 && ply >= minPly) {
         out.push({ ...base, truth: false });
       }
     }
@@ -164,26 +164,57 @@ export interface SenseGrade {
   needsEngine?: boolean;
 }
 
+/** Whether a move other than the stored one was shown, on the board, to do what the item is about. */
+export type Verified = 'yes' | 'no' | 'unresolved';
+
 /**
- * @param engineOpponentWp expected score (0-100) for the OPPONENT after the learner's reply,
- *   from the in-app engine, when the reply differs from the stored one.
+ * Judges a move that differs from the stored one by the same board test that made the item:
+ * for an unsafe move, the learner's reply must mate or leave the mover at least two points
+ * of material down at the end of a settled line; for a chance, the learner's move must mate
+ * or end at least two points up. The expected score is not used: in a decided position it
+ * barely moves, and any quiet move would pass. `line` is the engine's best line from the
+ * position after the learner's move (expected score for the side then to move), or null.
  */
-export function gradeSafety(item: SenseItem, answer: 'safe' | 'unsafe', replyUci: string | null, engineOpponentWp?: number): SenseGrade {
+export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv: string[] } | null): Verified {
+  const safety = item.kind === 'safe-or-not';
+  const from = safety ? item.afterFen! : item.fen;
+  let after;
+  try {
+    after = applyUci(positionFromFen(from), uci);
+  } catch {
+    return 'no';
+  }
+  if (after.isCheckmate()) return 'yes';
+  if (!line || line.pv.length === 0) return 'unresolved';
+  // After a punishing reply the owner is to move and is being mated; after a chance the opponent is.
+  if (line.wp === 0) return 'yes';
+  const base = material(positionFromFen(item.fen), item.color);
+  const end = lineEnd(fenOf(after), line.pv, item.color);
+  if (!end.settled) return 'unresolved';
+  const swing = end.balance - base;
+  return (safety ? swing <= -LOSES : swing >= LOSES) ? 'yes' : 'no';
+}
+
+/** @param verified the outcome of `verifyReply` when the reply differs from the stored one; omitted when it has not been checked yet. */
+export function gradeSafety(item: SenseItem, answer: 'safe' | 'unsafe', replyUci: string | null, verified?: Verified): SenseGrade {
   if (!item.truth) return answer === 'safe' ? { response: 'correct-rejection', correct: true } : { response: 'false-alarm', correct: false };
   if (answer === 'safe') return { response: 'miss', correct: false };
   if (replyUci && replyUci === item.replyUci) return { response: 'hit', correct: true };
-  if (engineOpponentWp === undefined) return { response: 'unverified-reply', correct: false, needsEngine: true };
-  const reference = 100 - (item.playedWp ?? 0);
-  return engineOpponentWp >= reference - ACCEPT_WITHIN ? { response: 'hit', correct: true, alternative: true } : { response: 'wrong-reply', correct: false };
+  return gradeOther(verified);
 }
 
-/** @param engineWp expected score for the LEARNER after their move, when it differs from the stored best move. */
-export function gradeChance(item: SenseItem, answer: 'something' | 'nothing', moveUci: string | null, engineWp?: number): SenseGrade {
+export function gradeChance(item: SenseItem, answer: 'something' | 'nothing', moveUci: string | null, verified?: Verified): SenseGrade {
   if (!item.truth) return answer === 'nothing' ? { response: 'correct-rejection', correct: true } : { response: 'false-alarm', correct: false };
   if (answer === 'nothing') return { response: 'miss', correct: false };
   if (moveUci && moveUci === item.best) return { response: 'hit', correct: true };
-  if (engineWp === undefined) return { response: 'unverified-reply', correct: false, needsEngine: true };
-  return engineWp >= (item.bestWp ?? 100) - ACCEPT_WITHIN ? { response: 'hit', correct: true, alternative: true } : { response: 'wrong-reply', correct: false };
+  return gradeOther(verified);
+}
+
+function gradeOther(verified: Verified | undefined): SenseGrade {
+  if (verified === undefined) return { response: 'unverified-reply', correct: false, needsEngine: true };
+  if (verified === 'yes') return { response: 'hit', correct: true, alternative: true };
+  if (verified === 'no') return { response: 'wrong-reply', correct: false };
+  return { response: 'unverified-reply', correct: false };
 }
 
 function hash(s: string): number {
@@ -201,9 +232,19 @@ export function pickSense(items: SenseItem[], kind: SenseKind, seen: Set<string>
   const order = (xs: SenseItem[]) => xs.slice().sort((a, b) => hash(`${seed}|${a.id}`) - hash(`${seed}|${b.id}`) || (a.id < b.id ? -1 : 1));
   const yes = order(pool.filter((i) => i.truth));
   const no = order(pool.filter((i) => !i.truth));
-  const wantYes = Math.min(yes.length, Math.ceil(n / 2));
-  const chosen = [...yes.slice(0, wantYes), ...no.slice(0, n - wantYes)];
-  return order(chosen);
+  // With nothing left that has something in it, nothing is asked: a stream of controls only
+  // would make "safe" / "nothing" always right.
+  if (yes.length === 0) return [];
+  // Interleaved, starting with a real item or a control by a coin toss on the seed. (Sorting the
+  // chosen ones together by hash put the control first almost every time: it is the smallest
+  // hash of a much larger pool. Callers that take the first item then asked nine controls in ten.)
+  const yesFirst = hash(`${seed}|first`) % 2 === 0;
+  const out: SenseItem[] = [];
+  for (let k = 0; out.length < n && (k < yes.length || k < no.length); k++) {
+    const pair = yesFirst ? [yes[k], no[k]] : [no[k], yes[k]];
+    for (const item of pair) if (item && out.length < n) out.push(item);
+  }
+  return out;
 }
 
 /** Attempt themes for a graded item: [kind, what was true, what the learner did]. */

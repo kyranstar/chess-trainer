@@ -4,7 +4,7 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "Special terms: checkmate on the move",
   "locator": "Part I, section “Special Terms” (Check and Checkmate), Diagram 6; Part II, section “How the Different Men Cooperate”, Diagram 23",
-  "revision": 1,
+  "revision": 2,
   "estMinutes": 5,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
@@ -69,10 +69,10 @@
         "h4e4"
       ],
       "before": [
-        "After the opening moves (1) P-e4, P-e5; (2) P-f4, B-C5; (3) Pxe5?? the position of Diagram 23 is reached, in which Black wins a Rook by Q-h4+."
+        "After the opening moves (1) P-e4, P-e5; (2) P-f4, B-C5; (3) Pxe5?? the position of Diagram 23 is reached, in which Black wins a Rook by Q-h4+. White cannot reply (4) K-e2 on account of"
       ],
       "after": [
-        "White cannot reply (4) K-e2 on account of Qxe4 mate."
+        "Qxe4 mate."
       ]
     }
   ],

@@ -2,9 +2,9 @@
   "id": "lasker-mating-positions",
   "conceptId": "mate.patterns",
   "sourceId": "lasker-chess-and-checkers-1918",
-  "title": "Typical mating positions: rook and bishop, the queen given up on h7, the throttled mate",
+  "title": "Typical mating positions: rook and bishop, and the throttled mate",
   "locator": "Part II, sections “How the Different Men Cooperate” and “Sacrificing”, Diagrams 29, 33 and 42",
-  "revision": 1,
+  "revision": 2,
   "estMinutes": 7,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4. It writes +/- for checkmate.",
   "steps": [
@@ -47,9 +47,11 @@
         "h3h8"
       ],
       "before": [
-        "In Diagram 33, White on the move can play for a similar mate as the one explained in the discussion of Diagram 29 by placing his Rook on g3. The best protection against Rxg7 which Black has at his disposal is P-f6. But if he does not know the mating position illustrated in Diagram 29 he is liable to play P-g6, and then White forces the mate by sacrificing his Queen on h7."
+        "In Diagram 33, White on the move can play for a similar mate as the one explained in the discussion of Diagram 29 by placing his Rook on g3. The best protection against Rxg7 which Black has at his disposal is P-f6. But if he does not know the mating position illustrated in Diagram 29 he is liable to play P-g6,"
       ],
       "after": [
+        "and then White forces the mate by sacrificing his Queen on h7.",
+        "(1) R-g3          P-g6 (2) Qxh7+         Kxh7 (3) R-h3+         K-g8 (4) R-h8+",
         "Black could have prolonged the agony one move by interposing his Queen on h4 on the third move."
       ]
     },
@@ -64,6 +66,12 @@
       "fen": "2q1r2k/pp4pp/5b2/3R2N1/2Q5/6P1/PP5P/6K1 w - - 0 1",
       "diagram": 42,
       "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "White on the move can force the mate by (1) R-d8, a very surprising sacrifice indeed, for not only can Black take the Rook with either Queen or Rook but he can also take White's Queen. In the latter case, however, he would be mated in two moves by (2) Rxe8+, Q-g8; (3) Kt-f7. This is one example of the \"throttled mate\" by the Knight."
+      ]
     },
     {
       "type": "try",
@@ -85,7 +93,7 @@
         "h6f7"
       ],
       "before": [
-        "White on the move can force the mate by (1) R-d8, a very surprising sacrifice indeed, for not only can Black take the Rook with either Queen or Rook but he can also take White's Queen. In the latter case, however, he would be mated in two moves by (2) Rxe8+, Q-g8; (3) Kt-f7. This is one example of the \"throttled mate\" by the Knight. Another one, which is really the typical one, occurs if Black takes the Rook instead of the Queen."
+        "Another one, which is really the typical one, occurs if Black takes the Rook instead of the Queen."
       ],
       "after": [
         "The mating process then is: (2) Kt-f7+, K-g8; (3) Kt-h6 double check, K-h8; (4) Q-g8+, Rxg8; (5) Kt-f7+/-. White could not have played Q-g8+ right on the second move because then Black would have taken the Queen with the King, while he could not do so with White's Knight on h6."

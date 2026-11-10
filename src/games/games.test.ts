@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { convertChessComGame } from './chesscom';
+import { analyseGame } from './analyse';
+import type { PvLine } from '../engine/uci';
+import { applyUci, fenOf, positionFromFen } from '../chess/rules';
 import { deleteDb, openDb, type TrainerDB } from '../db/db';
 import fixture from './fixtures/my-games.fixture.json';
 import { importGames, parseGamesFile } from './fixtures/load';
@@ -237,6 +241,37 @@ describe('after the validity audit', () => {
     expect(c.normal).toEqual({ decisions: 1, errors: 0 }); // first move: full clock
     expect(c.low).toEqual({ decisions: 1, errors: 1 }); // second: begun with 5% left, undecided, a major error
     // third: begun with 4% left but the game was already won (97): not compared
+  });
+});
+
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+describe('castling is spelled two ways', () => {
+  it('a chance that was taken by castling is not counted as missed', async () => {
+    // The game as Chess.com gives it; White castles on move 5 with mate to follow (scripted engine below).
+    const pgn = '[Event "Live Chess"]\n[White "fixture_learner"]\n[Black "someone"]\n[Result "1-0"]\n[TimeControl "600"]\n[EndDate "2026.11.01"]\n[Link "https://www.chess.com/game/live/900000098"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 d6 5. O-O Nf6 1-0';
+    const { game } = await convertChessComGame({ url: 'https://www.chess.com/game/live/900000098', pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', white: { username: 'fixture_learner', rating: 500 }, black: { username: 'someone', rating: 500 } }, 'fixture_learner');
+    expect(game!.moves[8]).toBe('e1h1'); // the rules library spells castling as king-takes-rook
+    let pos = positionFromFen(START);
+    const fens: string[] = [];
+    for (const u of game!.moves) { fens.push(fenOf(pos)); pos = applyUci(pos, u); }
+    // A scripted engine: at move 5 castling is clearly best (as the engine spells it, e1g1); elsewhere the game move is best.
+    const engine = {
+      analyse: async (fen: string): Promise<PvLine[]> => {
+        const ply = fens.indexOf(fen);
+        if (ply === 8) return [{ move: 'e1g1', score: { mate: 4 }, pv: ['e1g1'] }, { move: 'b1c3', score: { cp: 0 }, pv: ['b1c3'] }];
+        const move = ply >= 0 ? game!.moves[ply]! : 'a7a6';
+        return [{ move, score: { cp: 20 }, pv: [move] }, { move, score: { cp: 10 }, pv: [move] }];
+      },
+    };
+    const analysis = (await analyseGame(game!, engine))!;
+    const e = analysis.events.find((x) => x.ply === 8)!;
+    expect(e.opportunity).toBe('mate');
+    expect(e.missed).toBe(false); // the analysis itself knows the move was found (it compares positions)
+    const record: GameRecord = { ...game!, importedAt: 0, updatedAt: 0, analysis, analysisKey: 'k', measure: analysis, measureKey: 'k' };
+    const m = missedOpportunities([record]);
+    expect(m.clear.available).toBe(1);
+    expect(m.clear.missed).toBe(0);
   });
 });
 

@@ -4,8 +4,8 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "More attackers than defenders, and what the men are worth",
   "locator": "Part II, sections “Relative Value of the Men” and “How the Different Men Cooperate”, Diagrams 24–25",
-  "revision": 1,
-  "estMinutes": 9,
+  "revision": 2,
+  "estMinutes": 7,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
     {
@@ -39,18 +39,43 @@
       ],
       "orientation": "white",
       "moves": [
-        "d1h5",
-        "h7h6",
-        "g5f7"
+        "d1h5"
       ],
       "before": [
         "Of the two ways indicated only the first one is feasible. For if Black castles he gives White an opportunity to institute an attack on the weak Pawn h7 with Knight and Queen against which Black has no satisfactory defense. Play would develop as follows:"
       ],
       "after": [
-        "This is the only defense against the threat Qxh7 mate. But White's Queen's move involved a double threat. It brought up a third attack on the Pawn f7, and the latter now falls, forcing Black to give up some more material.",
+        "(1) Kt-g5          o-o (2) Q-h5           P-h6"
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbq1rk1/ppppnpp1/7p/2b3NQ/2BpP3/8/PPP2PPP/RNB1K2R w KQ - 0 3",
+      "diagram": 25,
+      "diagramFen": "rnbqk2r/ppppnppp/8/2b5/2BpP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+      "afterDiagramMoves": [
+        "Ng5",
+        "O-O",
+        "Qh5",
+        "h6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "g5f7"
+      ],
+      "before": [
+        "This is the only defense against the threat Qxh7 mate. But White's Queen's move involved a double threat. It brought up a third attack on the Pawn f7, and the latter now falls, forcing Black to give up some more material."
+      ],
+      "after": [
         "(3) Ktxf7          Rxf7",
         "Black has to sacrifice the exchange. If he moved the Queen, which is attacked by the Knight, he would expose his King to a deadly double check, viz.: (4) Ktxh6++, K-h8 or h7; (5) Kt-f7+ (discovered), K-g8; (6) Q-h8 mate. After giving up his Rook for the Knight on the third move Black has a lost game, for as explained in the previous chapter White can simply exchange all pieces and force the win in the ending with his superior material."
       ]
+    },
+    {
+      "type": "board",
+      "fen": "r1b1k2r/ppppbppp/8/1Bq5/8/2P2Q2/PPP2PPP/R1B1R1K1 w kq - 0 1",
+      "diagram": 24,
+      "orientation": "white"
     },
     {
       "type": "try",

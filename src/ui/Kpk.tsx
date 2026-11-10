@@ -5,6 +5,7 @@ import { recordAttempt } from '../db/db';
 import type { Attempt } from '../db/types';
 import { distanceKpk, evaluateMove, fastestWin, HOLD_MOVES, keepingMoves, KPK_DRILLS, KPK_VERSION, type KpkOutcome, learnerColor, opponentReply, outcomeAfter, WIN_MOVE_CAP } from '../endgames/kpk';
 import { Board } from './Board';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 export type KpkGoal = 'win' | 'hold';
 export const kpkId = (goal: KpkGoal, fen: string) => `kpk:${goal}:${fen}`;
@@ -29,6 +30,8 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
   const [resetKey, setResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [end, setEnd] = useState<{ ok: boolean; text: string; detail?: string } | null>(null);
+  useScreenChange(`${start}|${goal}|${!!end}`);
+  const armed = useArmed();
   const myMoves = useRef(0);
   const first = useRef<string | null>(null);
   const played = useRef<string[]>([]);
@@ -108,8 +111,8 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
         )}
       </div>
       <div className="actions">
-        {!end && allowShow && <button onClick={show} disabled={busy}>Show a move that keeps it</button>}
-        {end && <button className="primary" data-testid="kpk-next" onClick={onDone}>Continue</button>}
+        {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show a move that keeps it</button>}
+        {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>
   );

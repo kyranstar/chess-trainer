@@ -14,6 +14,7 @@ import { PlayBlock, ReflectBlock } from './PlayDay';
 import { SenseDrill, senseItemsFrom } from './Sense';
 import { pickSense, type SenseItem } from '../games/sense';
 import { CheckRunner, conceptPicker, PuzzleStream, ReviewRunner } from './runners';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 const BLOCK_NAME: Record<BlockKind, string> = { review: 'Review', learn: 'Learn', apply: 'Practice', test: 'Test', play: 'Play', reflect: 'Reflect' };
 const mins = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -23,7 +24,7 @@ function blockSubject(b: SessionBlock): string {
   if (b.kind === 'review') return 'Positions you missed before';
   if (b.kind === 'learn') return c ? c.title : 'No new concept today';
   if (b.kind === 'apply') return c ? `${c.title}, and your own games` : 'Your own games';
-  if (b.kind === 'play') return 'One rapid game, 10+5';
+  if (b.kind === 'play') return 'One rapid game';
   if (b.kind === 'reflect') return 'Result and turning point';
   return 'Mixed unseen positions';
 }
@@ -88,7 +89,7 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
         <dt>Time</dt>
         <dd>{Math.round(total / 60)} of {session.budgetMin} minutes</dd>
         <dt>New concept</dt>
-        <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? 'studied; its check comes on a later day' : 'started'}` : (learn?.notice ?? 'None today')}</dd>
+        <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? (concept.assessable ? 'studied; its check comes on a later day' : 'studied') : 'started'}` : (learn?.notice ?? 'None today')}</dd>
         <dt>Unseen positions</dt>
         <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None attempted' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
         <dt>Reviews</dt>
@@ -160,17 +161,10 @@ export function Today({ learner }: { learner: Learner }) {
         <h1>Today</h1>
         <p className="lede" data-testid="suggestion" data-kind={suggestion.kind}>{suggestion.reason}</p>
         <div className="actions">
-          {suggestion.kind === 'study' ? (
-            <>
-              <button className="primary big" data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start {length}-minute session</button>
-              <button data-testid="start-play" onClick={() => void start('play')}>Make today a play day instead</button>
-            </>
-          ) : (
-            <>
-              <button className="primary big" data-testid="start-play" onClick={() => void start('play')}>Start play day: one rapid game</button>
-              <button data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Study for {length} minutes instead</button>
-            </>
-          )}
+          {/* Fixed places: the suggestion can change a moment after launch (a game fetched from
+              Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
+          <button className={suggestion.kind === 'study' ? 'primary big' : ''} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>{suggestion.kind === 'study' ? `Start ${length}-minute session` : `Study for ${length} minutes instead`}</button>
+          <button className={suggestion.kind === 'play' ? 'primary big' : ''} data-testid="start-play" onClick={() => void start('play')}>{suggestion.kind === 'play' ? 'Start play day: one rapid game' : 'Make today a play day instead'}</button>
         </div>
         <div className="length-picker" role="group" aria-label="Session length">
           {SESSION_LENGTHS.map((m) => (
@@ -262,6 +256,11 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const [testPhase, setTestPhase] = useState<'check' | 'mixed'>('check');
   const lastTestConcept = useRef<string | null>(null);
   const checkConcept = useRef<Concept | null>(null);
+  const checkDecidedFor = useRef<string | null>(null);
+  useScreenChange(`${session?.id ?? ''}|${idx}`);
+  const armed = useArmed();
+  // Set while a block is being closed because its time is up: nothing new is put on screen in between.
+  const [leavingIdx, setLeavingIdx] = useState<number | null>(null);
   const games = useGames();
   const [testIndex, setTestIndex] = useState(0);
   const senseShown = useRef(new Set<string>());
@@ -295,18 +294,32 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const checkedThisSession = !!checkTarget && learner.events.some(
     (e) => e.conceptId === checkTarget.id && (e.type === 'check-passed' || e.type === 'check-failed') && e.ts >= session.createdAt,
   );
-  if (block.kind === 'test' && testPhase === 'check' && !checkConcept.current && checkTarget && !checkedThisSession) checkConcept.current = checkTarget;
+  // Decided once, on entering the test block, and kept, including the answer "no check today".
+  // The clock ticks every minute and a check can fall due at any of them (a pass turning 21
+  // days old, six hours since a lesson, midnight); deciding again on each tick replaced the
+  // position on screen with a check.
+  if (block.kind === 'test' && checkDecidedFor.current !== session.id && learner.ready) {
+    checkDecidedFor.current = session.id;
+    checkConcept.current = checkTarget && !checkedThisSession ? checkTarget : null;
+  }
   const activeCheck = block.kind === 'test' && testPhase === 'check' ? checkConcept.current : null;
   const learnStatus = block.kind === 'learn' && concept ? learner.statuses.find((s) => s.concept.id === concept.id) : null;
   // Practice and test blocks: questions from the learner's own games alternate with puzzles.
   // In practice the answer is followed by the engine's line; in the test nothing is announced.
   const nextTestItem = () => {
-    if (timeUp) return void finish();
+    // Always move on first, also when the block's time is up: otherwise the question just
+    // answered would still be the current one when the next block starts, and be asked again.
     senseShown.current.add(senseTurn?.id ?? '');
     setTestIndex((n) => n + 1);
+    if (timeUp) {
+      // Without this the next item would be on screen for an instant before the block changes.
+      setLeavingIdx(idx);
+      void finish();
+    }
   };
+  const leaving = leavingIdx === idx;
   const senseTurn: SenseItem | null = (() => {
-    if ((block.kind !== 'test' && block.kind !== 'apply') || activeCheck || !games) return null;
+    if ((block.kind !== 'test' && block.kind !== 'apply') || activeCheck || !games || leaving) return null;
     // With no concept to practise, every turn of the practice block comes from the learner's games.
     if (testIndex % 2 === 1 && !(block.kind === 'apply' && !concept)) return null;
     const seen = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId), ...senseShown.current]);
@@ -338,18 +351,19 @@ export function SessionRun({ learner }: { learner: Learner }) {
           {block.notice && <p className="note">{block.notice}</p>}
           {learnStatus && (learnStatus.stage === 'taught' || learnStatus.stage === 'demonstrated') && (
             <div className="return-card" data-testid="learn-complete" ref={(el) => { if (el && !learnShown.current) { learnShown.current = true; el.scrollIntoView({ block: 'start' }); } }}>
-              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson recorded as studied.'}</strong> Next: new positions on this concept. Its check comes on a later day, not today.</p>
-              <div className="actions"><button className="primary" data-testid="learn-continue" onClick={() => void finish()}>Continue to practice</button></div>
+              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson recorded as studied.'}</strong> Next: practice.{learnStatus.assessable && learnStatus.stage === 'taught' ? ' Its check comes on a later day, not today.' : ''}</p>
+              <div className="actions"><button className="primary" data-testid="learn-continue" disabled={!armed} onClick={() => void finish()}>Continue to practice</button></div>
             </div>
           )}
           <ConceptStudy concept={concept} learner={learner} sessionId={session.id} embedded />
         </>
       )}
 
+      {leaving && <p className="muted" data-testid="leaving-block">Moving on</p>}
       {block.kind === 'apply' && senseTurn && (
         <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" heading="Practice: from your own games" onRecorded={onAttempt} onDone={nextTestItem} />
       )}
-      {block.kind === 'apply' && !senseTurn && concept && pool && (
+      {block.kind === 'apply' && !leaving && !senseTurn && concept && pool && (
         <PuzzleStream
           key={`apply-${concept.id}-${testIndex}`}
           limit={1}
@@ -359,7 +373,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
           onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
         />
       )}
-      {block.kind === 'apply' && !senseTurn && !concept && (
+      {block.kind === 'apply' && !leaving && !senseTurn && !concept && (
         <div className="empty" data-testid="practice-empty">
           <p>{games && games.length > 0 ? 'No unseen questions from your games are left for now. More appear as new games are fetched and analysed.' : block.reason}</p>
           <div className="actions"><button className="primary" onClick={() => void finish()}>Continue</button></div>
@@ -369,7 +383,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       {block.kind === 'test' && pool && activeCheck && (
         <CheckRunner key={`check-${activeCheck.id}`} concept={activeCheck} learner={learner} sessionId={session.id} onDone={() => { checkConcept.current = null; setTestPhase('mixed'); }} />
       )}
-      {block.kind === 'test' && pool && !activeCheck && (
+      {block.kind === 'test' && pool && !activeCheck && !leaving && (
         senseTurn ? (
           <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="test" heading="From your own games, nothing announced" onRecorded={onAttempt} onDone={nextTestItem} />
         ) : (
@@ -396,11 +410,11 @@ export function SessionRun({ learner }: { learner: Learner }) {
         {confirmEnd ? (
           <div className="actions" data-testid="end-confirm">
             <p className="muted">{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? It cannot be reopened.'}</p>
-            <button data-testid="end-confirm-yes" onClick={() => { setConfirmEnd(false); void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'); }}>End session</button>
+            <button data-testid="end-confirm-yes" disabled={!armed} onClick={() => { setConfirmEnd(false); void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'); }}>End session</button>
             <button className="primary" data-testid="end-confirm-no" onClick={() => setConfirmEnd(false)}>Keep going</button>
           </div>
         ) : (
-          <button className="quiet" data-testid="end-block" onClick={() => (idx === session.blocks.length - 1 ? setConfirmEnd(true) : void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'))}>
+          <button className="quiet" data-testid="end-block" disabled={!armed} onClick={() => (idx === session.blocks.length - 1 ? setConfirmEnd(true) : void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'))}>
             {idx === session.blocks.length - 1 ? 'End session' : `End ${BLOCK_NAME[block.kind].toLowerCase()} and move on`}
           </button>
         )}

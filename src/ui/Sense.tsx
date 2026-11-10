@@ -1,20 +1,29 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { href } from '../app/router';
 import { type Learner, useDb, useFocusMode } from '../app/store';
 import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
-import { evaluateForSideToMove } from '../engine/interactive';
-import { chanceItems, gradeChance, gradeSafety, pickSense, safetyItems, type SenseGrade, type SenseItem, type SenseKind, senseThemes } from '../games/sense';
+import { bestLineFor } from '../engine/interactive';
+import { chanceItems, gradeChance, gradeSafety, pickSense, safetyItems, type SenseGrade, type SenseItem, type SenseKind, senseThemes, verifyReply } from '../games/sense';
 import type { GameRecord } from '../games/types';
 import { Board } from './Board';
 import { useGames } from './Games';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
 export function senseItemsFrom(games: GameRecord[]): SenseItem[] {
   const late = [...safetyItems(games, { minControlPly: 12 }), ...chanceItems(games, { minControlPly: 12 })];
   return late.filter((i) => !i.truth).length >= 20 ? late : [...safetyItems(games), ...chanceItems(games)];
 }
+
+/** A question by its id, from every question the games can supply (a review item may predate the "move 7 onwards" rule). */
+export function senseItemById(games: GameRecord[], id: string): SenseItem | undefined {
+  return [...safetyItems(games), ...chanceItems(games)].find((x) => x.id === id);
+}
+
+/** A question on screen for less than this was not really shown (a screen passing through). */
+const MIN_SHOWN_MS = 1000;
 
 type Phase = 'ask' | 'play' | 'checking' | 'done';
 
@@ -42,8 +51,27 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
   const [playedSan, setPlayedSan] = useState<string | null>(null);
   const started = useRef(Date.now());
   const me = item.color === 'white' ? 'White' : 'Black';
+  useScreenChange(`${item.id}|${phase}`);
+  const armed = useArmed();
+
+  // A question that was shown has been seen: if the learner leaves before answering, record
+  // it as skipped so it is never counted or asked as a first-time question later.
+  const answered = useRef(false);
+  useEffect(() => {
+    return () => {
+      if (answered.current || Date.now() - started.current < MIN_SHOWN_MS) return;
+      answered.current = true;
+      void recordAttempt(db, {
+        sessionId, context, exerciseId: item.id, exerciseKind: 'sense', contentVersion: 'sense-v1', conceptId: 'safety.threat-scan',
+        themes: [item.kind, item.kind === 'safe-or-not' ? (item.truth ? 'unsafe' : 'safe') : item.truth ? 'chance' : 'none', 'left'], rating: null, ts: Date.now(),
+        elapsedMs: Date.now() - started.current, firstMove: null, played: [], mistakes: 0, hints: 0, outcome: 'skipped', acceptedAlternative: false,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   async function finish(g: SenseGrade, move: string | null) {
+    answered.current = true;
     setGrade(g);
     setPhase('done');
     // Show the reference line's first move on the board when there was something to see.
@@ -86,12 +114,14 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     setLastMove(uci);
     let g = safety ? gradeSafety(item, 'unsafe', uci) : gradeChance(item, 'something', uci);
     if (g.needsEngine) {
-      setPhase('checking');
-      const wp = await evaluateForSideToMove(afterFen);
-      if (wp !== null) {
-        // After the opponent's reply it is the learner to move; after the learner's move it is the opponent.
-        g = safety ? gradeSafety(item, 'unsafe', uci, 100 - wp) : gradeChance(item, 'something', uci, 100 - wp);
+      // A different move from the stored one: judged by what it does on the board (mate, or
+      // material at the end of the engine's line), never by the score alone. A mate needs no engine.
+      let verified = verifyReply(item, uci, null);
+      if (verified === 'unresolved') {
+        setPhase('checking');
+        verified = verifyReply(item, uci, await bestLineFor(afterFen));
       }
+      g = safety ? gradeSafety(item, 'unsafe', uci, verified) : gradeChance(item, 'something', uci, verified);
     }
     await finish(g, uci);
   }
@@ -111,24 +141,24 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
         {grade && (
           <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
             <strong>{RESULT_TITLE[grade.response]}</strong>
-            {item.truth && safety && <p>After {item.proposedSan} the engine’s reply is {item.replyLine}. In the game this move cost about {Math.round(item.loss ?? 0)} points of expected score.{grade.alternative ? ` Your reply ${playedSan} does the job too, by the engine’s check.` : ''}</p>}
-            {item.truth && !safety && <p>The engine’s line is {item.bestLine} (about {Math.round(item.bestWp ?? 0)}% expected score).{grade.alternative ? ` Your move ${playedSan} is within a few points of it.` : ''}</p>}
-            {!item.truth && safety && <p>The engine found no reply to {item.proposedSan} that mates or wins material in a short line. That is all “safe” means here.</p>}
-            {!item.truth && !safety && <p>The engine’s best line here neither mates nor wins material in a short line.</p>}
+            {item.truth && safety && <p>After {item.proposedSan} the engine’s reply is {item.replyLine}. In the game this move cost about {Math.round(item.loss ?? 0)} points of expected score.{grade.alternative ? ` Your reply ${playedSan} also wins material or mates, by the engine’s check.` : ''}</p>}
+            {item.truth && !safety && <p>The engine’s line is {item.bestLine} (about {Math.round(item.bestWp ?? 0)}% expected score).{grade.alternative ? ` Your move ${playedSan} also mates or wins material, by the engine’s check.` : ''}</p>}
+            {!item.truth && safety && <p>The engine found no reply to {item.proposedSan} that mates or wins any material in a short line. That is all “safe” means here.</p>}
+            {!item.truth && !safety && <p>The engine’s best line here neither mates nor wins any material in a short line.</p>}
           </div>
         )}
       </div>
       <div className="actions">
         {phase === 'ask' && (
           <>
-            <button className="primary" data-testid="sense-no" onClick={() => answer(false)}>{safety ? 'Safe to play' : 'Nothing special'}</button>
-            <button className="primary" data-testid="sense-yes" onClick={() => answer(true)}>{safety ? 'It loses something' : 'There is something'}</button>
+            <button className="primary" data-testid="sense-no" disabled={!armed} onClick={() => answer(false)}>{safety ? 'Safe to play' : 'Nothing special'}</button>
+            <button className="primary" data-testid="sense-yes" disabled={!armed} onClick={() => answer(true)}>{safety ? 'It loses something' : 'There is something'}</button>
           </>
         )}
         {phase === 'done' && (
           <>
-            <button className="primary" data-testid="sense-next" onClick={onDone}>Continue</button>
-            <a className="button" href={href(`progress/game-event/${item.gameId}/${item.ply}`)}>See it in the game</a>
+            <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Continue</button>
+            {item.truth && <a className="button" href={href(`progress/game-event/${item.gameId}/${item.ply}`)}>See it in the game</a>}
           </>
         )}
       </div>

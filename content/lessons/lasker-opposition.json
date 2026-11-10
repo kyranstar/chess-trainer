@@ -4,8 +4,8 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "King and pawn against king: the opposition",
   "locator": "Part II, section “Relative Value of the Men”, Diagrams 14–15",
-  "revision": 1,
-  "estMinutes": 9,
+  "revision": 2,
+  "estMinutes": 10,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
     {
@@ -29,6 +29,19 @@
       "after": [
         "White is a Pawn ahead and it will be his object to Queen it. The beginner, in his haste to advance the Pawn, will probably play P-e5 at once and lose the Pawn, as Black can answer Q-d4 check with simultaneous attack on the Pawn. The correct way to play for White is (1) Q-d1+, K-a3 or b4; (2) Qxa4, Kxa4. Now that the Queens are exchanged White need not any longer worry about any interference with his plans to queen the Pawn except maneuvers of the black King, which might still lead to the capture or the blockade of the Pawn."
       ]
+    },
+    {
+      "type": "board",
+      "fen": "8/8/8/8/k3P3/8/8/6K1 w - - 0 3",
+      "diagram": 14,
+      "diagramFen": "8/8/8/8/q3P3/1k6/8/2Q3K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Qd1+",
+        "Ka3",
+        "Qxa4+",
+        "Kxa4"
+      ],
+      "orientation": "white"
     },
     {
       "type": "text",

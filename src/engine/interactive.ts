@@ -16,7 +16,14 @@ export function bestLineFor(fen: string, nodes = 40_000, timeoutMs = 8_000): Pro
         engine.analyse(fen, nodes, 1),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
       ]);
-      return lines && lines[0] ? { wp: winPercent(lines[0].score), pv: lines[0].pv } : null;
+      if (!lines) {
+        // The search is still running inside the engine; its answer would be taken for the
+        // answer to the next position. Start afresh next time.
+        engine.terminate();
+        engine = null;
+        return null;
+      }
+      return lines[0] ? { wp: winPercent(lines[0].score), pv: lines[0].pv } : null;
     } catch {
       return null;
     }

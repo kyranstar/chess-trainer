@@ -4,7 +4,7 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "How the different men cooperate: the double attack",
   "locator": "Part II, section “How the Different Men Cooperate”, Diagrams 20–23",
-  "revision": 1,
+  "revision": 2,
   "estMinutes": 8,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
@@ -29,6 +29,12 @@
       ]
     },
     {
+      "type": "board",
+      "fen": "rnb1kb1r/ppp2ppp/5q2/4p3/4P3/2N5/PPP2PPP/R2QKBNR w KQkq - 0 1",
+      "diagram": 21,
+      "orientation": "white"
+    },
+    {
       "type": "try",
       "fen": "rnb1kb1r/ppp2ppp/2q5/3Np3/4P3/8/PPP2PPP/R2QKBNR w KQkq - 2 2",
       "diagram": 21,
@@ -43,9 +49,11 @@
         "c6b5",
         "d5c7"
       ],
-      "before": [],
+      "before": [
+        "Quite frequently a similar attack with the Knight is likely to win the Queen if the opponent is not familiar with situations of that kind. If in the position of Diagram 21 White plays (1) Kt-d5, Black must protect the Pawn c7 by Q-d8 or Q-d6, but not by Q-c6;"
+      ],
       "after": [
-        "Quite frequently a similar attack with the Knight is likely to win the Queen if the opponent is not familiar with situations of that kind. If in the position of Diagram 21 White plays (1) Kt-d5, Black must protect the Pawn c7 by Q-d8 or Q-d6, but not by Q-c6; for in the latter case White would continue with (2) B-b5, Qxb5; (3) Ktxc7+ and (4) Ktxb5."
+        "for in the latter case White would continue with (2) B-b5, Qxb5; (3) Ktxc7+ and (4) Ktxb5."
       ]
     },
     {
@@ -97,7 +105,7 @@
     {
       "type": "text",
       "paragraphs": [
-        "Next to the Knight the Queen is most frequently in a position to carry out a double attack. Two typical examples are shown in the following diagrams."
+        "Next to the Knight the Queen is most frequently in a position to carry out a double attack."
       ]
     },
     {

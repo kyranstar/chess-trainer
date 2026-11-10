@@ -10,7 +10,7 @@ export function PlayBlock({ onFinished }: { onFinished: () => void }) {
       <h1>Play one rapid game</h1>
       <p className="definition">10 minutes plus 5 seconds a move, one game, full attention. Close other tabs first.</p>
       <ul className="plain-list">
-        <li>Play on your own account as usual; nothing is connected to this app.</li>
+        <li>Play on your own account as usual. The app fetches the game from Chess.com by itself the next time it is open with a connection.</li>
         <li>Finish the game, whatever the position.</li>
         <li>Come back here straight afterwards and write down what happened.</li>
       </ul>
@@ -55,7 +55,7 @@ export function ReflectBlock({ sessionId, onSaved }: { sessionId: string | null;
   return (
     <form className="concept" data-testid="reflect-block" onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <h1>Reflect on the game</h1>
-      <p className="muted">Your own words, written now. Later, when games can be imported and analysed, these notes sit next to the engine’s evidence.</p>
+      <p className="muted">Your own words, written now, before any engine has looked. The game itself is fetched and analysed later and appears under Progress.</p>
       {choice('Result', d.result, [['win', 'Won'], ['draw', 'Drew'], ['loss', 'Lost']], (v) => set('result', v), 'result')}
       {choice('You played', d.color, [['white', 'White'], ['black', 'Black']], (v) => set('color', v), 'color')}
       <label className="field">

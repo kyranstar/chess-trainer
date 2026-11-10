@@ -7,76 +7,36 @@
   "lessons": [
     {
       "lesson": "capablanca-control-of-centre",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 3,
-          "fen": "r1bqk1nr/pppnbppp/3p4/4p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 3 5",
-          "move": "d4e5",
-          "san": "dxe5",
-          "engineBest": "d4e5",
-          "bestWinPct": 73.5,
-          "moveWinPct": 74.4,
-          "alternatives": []
-        },
-        {
-          "step": 3,
-          "fen": "r1bqk1nr/ppp1bppp/3p4/4n3/2B1P3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
-          "move": "f3e5",
-          "san": "Nxe5",
-          "engineBest": "f3e5",
-          "bestWinPct": 76.4,
-          "moveWinPct": 76.3,
-          "alternatives": []
-        },
-        {
-          "step": 3,
-          "fen": "r1bqk1nr/ppp1bppp/8/4p3/2B1P3/8/PPP2PPP/RNBQK2R w KQkq - 0 7",
-          "move": "d1h5",
-          "san": "Qh5",
-          "engineBest": "d1h5",
-          "bestWinPct": 77.1,
-          "moveWinPct": 74.1,
-          "alternatives": []
-        },
-        {
-          "step": 4,
-          "fen": "r1bqk1nr/pppnbppp/8/4p3/2B1P3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
-          "move": "d1d5",
-          "san": "Qd5",
-          "engineBest": "d1d5",
-          "bestWinPct": 93.4,
-          "moveWinPct": 93.2,
-          "alternatives": []
-        },
-        {
-          "step": 7,
           "fen": "rn1qkbnr/ppp2ppp/8/4p3/4P1b1/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
           "move": "d1d8",
           "san": "Qxd8+",
           "engineBest": "d1d8",
-          "bestWinPct": 76.7,
-          "moveWinPct": 75.7,
+          "bestWinPct": 77.2,
+          "moveWinPct": 76.1,
           "alternatives": []
         },
         {
-          "step": 7,
+          "step": 3,
           "fen": "rn1k1bnr/ppp2ppp/8/4p3/4P1b1/5N2/PPP2PPP/RNB1KB1R w KQ - 0 6",
           "move": "f3e5",
           "san": "Nxe5",
           "engineBest": "f3e5",
-          "bestWinPct": 75.1,
-          "moveWinPct": 75.2,
+          "bestWinPct": 75.2,
+          "moveWinPct": 75.4,
           "alternatives": []
         },
         {
-          "step": 8,
+          "step": 6,
           "fen": "rn1qkb1r/ppp2ppp/5n2/4p3/2B1P3/5Q2/PPP2PPP/RNB1K2R w KQkq - 2 7",
           "move": "f3b3",
           "san": "Qb3",
           "engineBest": "f3b3",
-          "bestWinPct": 74.7,
-          "moveWinPct": 75.7,
+          "bestWinPct": 74.6,
+          "moveWinPct": 76.2,
           "alternatives": []
         }
       ]
@@ -161,7 +121,7 @@
     },
     {
       "lesson": "lasker-checkmate",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 2,
@@ -197,7 +157,7 @@
     },
     {
       "lesson": "lasker-counting",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 4,
@@ -210,7 +170,7 @@
           "alternatives": []
         },
         {
-          "step": 4,
+          "step": 5,
           "fen": "rnbq1rk1/ppppnpp1/7p/2b3NQ/2BpP3/8/PPP2PPP/RNB1K2R w KQ - 0 3",
           "move": "g5f7",
           "san": "Nxf7",
@@ -220,7 +180,7 @@
           "alternatives": []
         },
         {
-          "step": 5,
+          "step": 7,
           "fen": "r1b2rk1/ppppbppp/8/2q5/8/2PB1Q2/PPP2PPP/R1B1R1K1 w - - 2 2",
           "move": "f3e4",
           "san": "Qe4",
@@ -239,7 +199,7 @@
     },
     {
       "lesson": "lasker-double-attack",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 2,
@@ -252,7 +212,7 @@
           "alternatives": []
         },
         {
-          "step": 3,
+          "step": 4,
           "fen": "rnb1kb1r/ppp2ppp/2q5/3Np3/4P3/8/PPP2PPP/R2QKBNR w KQkq - 2 2",
           "move": "f1b5",
           "san": "Bb5",
@@ -262,7 +222,7 @@
           "alternatives": []
         },
         {
-          "step": 3,
+          "step": 4,
           "fen": "rnb1kb1r/ppp2ppp/8/1q1Np3/4P3/8/PPP2PPP/R2QK1NR w KQkq - 0 3",
           "move": "d5c7",
           "san": "Nxc7+",
@@ -272,7 +232,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5",
           "move": "e5c6",
           "san": "Nc6+",
@@ -282,7 +242,7 @@
           "alternatives": []
         },
         {
-          "step": 8,
+          "step": 9,
           "fen": "rnbqk1nr/pppp1ppp/8/2b1P3/4P3/8/PPPP2PP/RNBQKBNR b KQkq - 0 1",
           "move": "d8h4",
           "san": "Qh4+",
@@ -292,7 +252,7 @@
           "alternatives": []
         },
         {
-          "step": 8,
+          "step": 9,
           "fen": "rnb1k1nr/pppp1ppp/8/2b1P3/4P2q/6P1/PPPP3P/RNBQKBNR b KQkq - 0 2",
           "move": "h4e4",
           "san": "Qxe4+",
@@ -305,40 +265,8 @@
     },
     {
       "lesson": "lasker-exchange-when-ahead",
-      "revision": 1,
-      "tries": [
-        {
-          "step": 2,
-          "fen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
-          "move": "e2e5",
-          "san": "Re5",
-          "engineBest": "e2e5",
-          "bestWinPct": 91.5,
-          "moveWinPct": 90.9,
-          "alternatives": [
-            {
-              "uci": "e2e1",
-              "san": "Re1",
-              "winPct": 90.4
-            },
-            {
-              "uci": "e2e6",
-              "san": "Re6",
-              "winPct": 90.2
-            },
-            {
-              "uci": "e2e7",
-              "san": "Re7",
-              "winPct": 90.6
-            },
-            {
-              "uci": "e2e8",
-              "san": "Re8",
-              "winPct": 90.5
-            }
-          ]
-        }
-      ]
+      "revision": 2,
+      "tries": []
     },
     {
       "lesson": "lasker-mate-in-two",
@@ -394,7 +322,7 @@
     },
     {
       "lesson": "lasker-mating-positions",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 1,
@@ -437,7 +365,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "2qr3k/pp4pp/5b2/6N1/2Q5/6P1/PP5P/6K1 w - - 0 2",
           "move": "g5f7",
           "san": "Nf7+",
@@ -447,7 +375,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "2qr2k1/pp3Npp/5b2/8/2Q5/6P1/PP5P/6K1 w - - 2 3",
           "move": "f7h6",
           "san": "Nh6+",
@@ -457,7 +385,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "2qr3k/pp4pp/5b1N/8/2Q5/6P1/PP5P/6K1 w - - 4 4",
           "move": "c4g8",
           "san": "Qg8+",
@@ -473,7 +401,7 @@
           ]
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "2q3rk/pp4pp/5b1N/8/8/6P1/PP5P/6K1 w - - 0 5",
           "move": "h6f7",
           "san": "Nf7#",
@@ -486,10 +414,32 @@
     },
     {
       "lesson": "lasker-opening-development",
+      "revision": 2,
+      "tries": [
+        {
+          "step": 4,
+          "fen": "rnbqkbnr/pppp1ppp/8/8/3QP3/8/PPP2PPP/RNB1KBNR b KQkq - 0 3",
+          "move": "b8c6",
+          "san": "Nc6",
+          "engineBest": "b8c6",
+          "bestWinPct": 52.3,
+          "moveWinPct": 51.8,
+          "alternatives": [
+            {
+              "uci": "g8f6",
+              "san": "Nf6",
+              "winPct": 51.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-opening-principles",
       "revision": 1,
       "tries": [
         {
-          "step": 2,
+          "step": 3,
           "fen": "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2",
           "move": "d8h4",
           "san": "Qh4#",
@@ -497,79 +447,42 @@
           "bestWinPct": 100.0,
           "moveWinPct": 100.0,
           "alternatives": []
-        },
-        {
-          "step": 5,
-          "fen": "rnbqkbnr/pppp1ppp/8/8/3QP3/8/PPP2PPP/RNB1KBNR b KQkq - 0 3",
-          "move": "b8c6",
-          "san": "Nc6",
-          "engineBest": "b8c6",
-          "bestWinPct": 52.4,
-          "moveWinPct": 52.2,
-          "alternatives": [
-            {
-              "uci": "g8f6",
-              "san": "Nf6",
-              "winPct": 51.5
-            }
-          ]
         }
       ]
     },
     {
       "lesson": "lasker-opening-threats",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
-          "step": 1,
-          "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
-          "move": "b8c6",
-          "san": "Nc6",
-          "engineBest": "b8c6",
-          "bestWinPct": 47.2,
-          "moveWinPct": 47.9,
-          "alternatives": [
-            {
-              "uci": "d7d6",
-              "san": "d6",
-              "winPct": 44.8
-            },
-            {
-              "uci": "g8f6",
-              "san": "Nf6",
-              "winPct": 45.8
-            }
-          ]
-        },
-        {
-          "step": 2,
+          "step": 5,
           "fen": "r1bqkb1r/ppp2ppp/2p2n2/4N3/4P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5",
           "move": "d8d4",
           "san": "Qd4",
           "engineBest": "d8d4",
-          "bestWinPct": 55.3,
-          "moveWinPct": 56.0,
+          "bestWinPct": 56.0,
+          "moveWinPct": 55.8,
           "alternatives": [
             {
               "uci": "f6e4",
               "san": "Nxe4",
-              "winPct": 51.5
+              "winPct": 51.4
             }
           ]
         },
         {
-          "step": 3,
+          "step": 7,
           "fen": "rnbqk1nr/pppp1ppp/8/2b1p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
           "move": "d8e7",
           "san": "Qe7",
           "engineBest": "d8e7",
-          "bestWinPct": 51.4,
-          "moveWinPct": 51.5,
+          "bestWinPct": 51.8,
+          "moveWinPct": 51.7,
           "alternatives": [
             {
               "uci": "d8f6",
               "san": "Qf6",
-              "winPct": 49.8
+              "winPct": 50.0
             }
           ]
         }
@@ -577,7 +490,7 @@
     },
     {
       "lesson": "lasker-opposition",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 2,
@@ -606,7 +519,7 @@
           ]
         },
         {
-          "step": 4,
+          "step": 5,
           "fen": "8/4k3/8/5K2/4P3/8/8/8 w - - 0 1",
           "move": "f5e5",
           "san": "Ke5",
@@ -616,7 +529,7 @@
           "alternatives": []
         },
         {
-          "step": 5,
+          "step": 6,
           "fen": "8/3k4/8/4K3/4P3/8/8/8 w - - 2 2",
           "move": "e5f6",
           "san": "Kf6",
@@ -637,7 +550,7 @@
           ]
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "8/4k3/4P3/4K3/8/8/8/8 b - - 2 3",
           "move": "e7e8",
           "san": "Ke8",
@@ -647,7 +560,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "4k3/8/4PK2/8/8/8/8/8 b - - 4 4",
           "move": "e8f8",
           "san": "Kf8",
@@ -657,7 +570,7 @@
           "alternatives": []
         },
         {
-          "step": 6,
+          "step": 7,
           "fen": "5k2/4P3/5K2/8/8/8/8/8 b - - 0 5",
           "move": "f8e8",
           "san": "Ke8",
@@ -670,194 +583,12 @@
     },
     {
       "lesson": "lasker-passed-pawn",
-      "revision": 1,
-      "tries": [
-        {
-          "step": 4,
-          "fen": "8/8/6p1/2k2p2/8/1P3P2/2K3P1/8 w - - 0 1",
-          "move": "c2d3",
-          "san": "Kd3",
-          "engineBest": "f3f4",
-          "bestWinPct": 90.5,
-          "moveWinPct": 90.5,
-          "alternatives": [
-            {
-              "uci": "c2c3",
-              "san": "Kc3",
-              "winPct": 90.8
-            },
-            {
-              "uci": "c2d2",
-              "san": "Kd2",
-              "winPct": 90.6
-            },
-            {
-              "uci": "f3f4",
-              "san": "f4",
-              "winPct": 91.2
-            },
-            {
-              "uci": "g2g3",
-              "san": "g3",
-              "winPct": 91.0
-            }
-          ]
-        },
-        {
-          "step": 4,
-          "fen": "8/8/6p1/3k1p2/8/1P1K1P2/6P1/8 w - - 2 2",
-          "move": "d3e3",
-          "san": "Ke3",
-          "engineBest": "f3f4",
-          "bestWinPct": 91.5,
-          "moveWinPct": 91.7,
-          "alternatives": [
-            {
-              "uci": "b3b4",
-              "san": "b4",
-              "winPct": 91.5
-            },
-            {
-              "uci": "d3c3",
-              "san": "Kc3",
-              "winPct": 91.8
-            },
-            {
-              "uci": "f3f4",
-              "san": "f4",
-              "winPct": 91.9
-            },
-            {
-              "uci": "g2g3",
-              "san": "g3",
-              "winPct": 92.2
-            }
-          ]
-        },
-        {
-          "step": 4,
-          "fen": "8/8/6p1/4kp2/8/1P2KP2/6P1/8 w - - 4 3",
-          "move": "b3b4",
-          "san": "b4",
-          "engineBest": "f3f4",
-          "bestWinPct": 92.2,
-          "moveWinPct": 92.3,
-          "alternatives": [
-            {
-              "uci": "e3d3",
-              "san": "Kd3",
-              "winPct": 92.0
-            },
-            {
-              "uci": "f3f4",
-              "san": "f4+",
-              "winPct": 92.6
-            },
-            {
-              "uci": "g2g3",
-              "san": "g3",
-              "winPct": 92.0
-            },
-            {
-              "uci": "g2g4",
-              "san": "g4",
-              "winPct": 91.7
-            }
-          ]
-        },
-        {
-          "step": 5,
-          "fen": "8/8/1Pk5/5pp1/8/4KP2/6P1/8 w - - 1 6",
-          "move": "e3d4",
-          "san": "Kd4",
-          "engineBest": "e3d4",
-          "bestWinPct": 92.5,
-          "moveWinPct": 92.6,
-          "alternatives": [
-            {
-              "uci": "b6b7",
-              "san": "b7",
-              "winPct": 93.2
-            },
-            {
-              "uci": "e3d3",
-              "san": "Kd3",
-              "winPct": 94.1
-            },
-            {
-              "uci": "f3f4",
-              "san": "f4",
-              "winPct": 93.2
-            },
-            {
-              "uci": "g2g4",
-              "san": "g4",
-              "winPct": 92.9
-            }
-          ]
-        },
-        {
-          "step": 5,
-          "fen": "8/8/1k6/5pp1/3K4/5P2/6P1/8 w - - 0 7",
-          "move": "d4e5",
-          "san": "Ke5",
-          "engineBest": "d4e5",
-          "bestWinPct": 96.9,
-          "moveWinPct": 97.0,
-          "alternatives": [
-            {
-              "uci": "d4d5",
-              "san": "Kd5",
-              "winPct": 98.2
-            },
-            {
-              "uci": "f3f4",
-              "san": "f4",
-              "winPct": 92.8
-            },
-            {
-              "uci": "g2g3",
-              "san": "g3",
-              "winPct": 94.1
-            }
-          ]
-        },
-        {
-          "step": 5,
-          "fen": "8/8/1k6/4K1p1/5p2/5P2/6P1/8 w - - 0 8",
-          "move": "e5f5",
-          "san": "Kf5",
-          "engineBest": "e5f5",
-          "bestWinPct": 97.6,
-          "moveWinPct": 99.1,
-          "alternatives": [
-            {
-              "uci": "e5d5",
-              "san": "Kd5",
-              "winPct": 98.5
-            },
-            {
-              "uci": "e5e4",
-              "san": "Ke4",
-              "winPct": 99.1
-            },
-            {
-              "uci": "e5e6",
-              "san": "Ke6",
-              "winPct": 99.5
-            },
-            {
-              "uci": "e5f6",
-              "san": "Kf6",
-              "winPct": 99.1
-            }
-          ]
-        }
-      ]
+      "revision": 2,
+      "tries": []
     },
     {
       "lesson": "lasker-pin",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
           "step": 2,
@@ -880,7 +611,7 @@
           "alternatives": []
         },
         {
-          "step": 9,
+          "step": 11,
           "fen": "r4rk1/pppbqppp/2n2n2/4p1B1/3b4/1BN2N1P/PPPQ1PP1/R3R1K1 w - - 0 2",
           "move": "f3d4",
           "san": "Nxd4",
@@ -896,7 +627,7 @@
           ]
         },
         {
-          "step": 9,
+          "step": 11,
           "fen": "r4rk1/pppbqppp/5n2/4p1B1/3n4/1BN4P/PPPQ1PP1/R3R1K1 w - - 0 3",
           "move": "d2d4",
           "san": "Qxd4",
@@ -906,7 +637,7 @@
           "alternatives": []
         },
         {
-          "step": 9,
+          "step": 11,
           "fen": "r4rk1/pppbqppp/5n2/6B1/3p4/1BN4P/PPP2PP1/R3R1K1 w - - 0 4",
           "move": "e1e7",
           "san": "Rxe7",
@@ -916,7 +647,7 @@
           "alternatives": []
         },
         {
-          "step": 9,
+          "step": 12,
           "fen": "r4rk1/pppbRppp/5n2/6B1/8/1Bp4P/PPP2PP1/R5K1 w - - 0 5",
           "move": "g5f6",
           "san": "Bxf6",
@@ -926,7 +657,7 @@
           "alternatives": []
         },
         {
-          "step": 9,
+          "step": 12,
           "fen": "r4rk1/pppbRp1p/5p2/8/8/1Bp4P/PPP2PP1/R5K1 w - - 0 6",
           "move": "e7d7",
           "san": "Rxd7",
@@ -939,10 +670,10 @@
     },
     {
       "lesson": "lasker-queen-mate",
-      "revision": 1,
+      "revision": 2,
       "tries": [
         {
-          "step": 4,
+          "step": 7,
           "fen": "8/3Q4/k7/8/2K5/8/8/8 w - - 10 6",
           "move": "c4c5",
           "san": "Kc5",

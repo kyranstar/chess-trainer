@@ -187,8 +187,12 @@ describe('which session is "the" session right now', () => {
   it('yesterday\'s abandoned or finished session is not today\'s', () => {
     const abandoned = sess('old', at(2026, 10, 9, 18, 0), { updatedAt: at(2026, 10, 9, 18, 20) });
     expect(currentSession([abandoned], at(2026, 10, 10, 8, 0))).toBeNull();
+    // Finished just after midnight: its summary is still shown for a while, then it is yesterday's.
     const finishedLate = sess('done', at(2026, 10, 9, 23, 40), { updatedAt: at(2026, 10, 10, 0, 5), status: 'done' });
-    expect(currentSession([finishedLate], at(2026, 10, 10, 0, 6))).toBeNull();
+    expect(currentSession([finishedLate], at(2026, 10, 10, 0, 6))?.id).toBe('done');
+    expect(currentSession([finishedLate], at(2026, 10, 10, 8, 0))).toBeNull();
+    const finishedInTheEvening = sess('eve', at(2026, 10, 9, 21, 0), { updatedAt: at(2026, 10, 9, 21, 30), status: 'done' });
+    expect(currentSession([finishedInTheEvening], at(2026, 10, 10, 0, 6))).toBeNull();
   });
 
   it('an unfinished session wins over another session of the same day, whatever the row order', () => {

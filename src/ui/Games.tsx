@@ -14,6 +14,7 @@ import type { Attempt } from '../db/types';
 import type { GameRecord, TimeClass } from '../games/types';
 import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 export function useGames(): GameRecord[] | undefined {
   const db = useDb();
@@ -220,7 +221,11 @@ export function GameEventView({ gameId, ply }: { gameId: string; ply: number }) 
         {event.refutation && (<><dt>After your move</dt><dd>{event.refutation}</dd></>)}
         <dt>What is established</dt>
         <dd>
-          {event.majorError ? `Expected score fell by ${Math.round(event.loss)} points: ${LABEL_TEXT[event.errorLabel ?? 'unclassified']}.` : 'Not a major error.'}
+          {event.majorError
+            ? `Expected score fell by ${Math.round(event.loss)} points: ${LABEL_TEXT[event.errorLabel ?? 'unclassified']}.`
+            : event.target
+              ? `The move ${event.target === 'mate' ? 'allowed a short mate' : 'lost material in a short line'} that the best move avoided. The expected score moved by only ${Math.round(event.loss)} points because the game was already largely decided, so it is not counted as a major error, but it is counted as an early blunder.`
+              : 'Not a major error.'}
           {event.opportunity ? ` The best line ${event.opportunity === 'mate' ? 'forces mate' : 'wins material'}${event.missed ? '; it was missed' : '; you found it'}.` : ''}
         </dd>
         <dt>Not established</dt><dd>Why the move was played. The app does not guess.</dd>
@@ -238,6 +243,8 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
   useFocusMode();
   const { game, event } = drill;
   const [result, setResult] = useState<{ ok: boolean; playedSan: string | null; shown: boolean } | null>(null);
+  useScreenChange(`${drill.id}|${!!result}`);
+  const armed = useArmed();
   const [fen, setFen] = useState(event.fen);
   const [resetKey, setResetKey] = useState(0);
   const started = useRef(Date.now());
@@ -273,8 +280,8 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
         )}
       </div>
       <div className="actions">
-        {!result && <button onClick={() => void record(null, true)}>Show the move</button>}
-        {result && <button className="primary" data-testid="own-next" onClick={onDone}>Continue</button>}
+        {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
+        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>
   );
@@ -287,7 +294,8 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
   const due = useDueReviews(learner.reviews, now);
   const queue = useRef<DrillPosition[] | null>(null);
   const [i, setI] = useState(0);
-  if (queue.current === null && games && learner.ready) {
+  // Fixed once it has something in it; while it is empty (games still being analysed) it may fill.
+  if ((queue.current === null || (queue.current.length === 0 && i === 0)) && games && learner.ready) {
     const queued = new Set(learner.reviews.map((r) => r.itemId));
     const dueIds = new Set(due.map((d) => d.itemId));
     queue.current = drillPositions(games).filter((d) => !queued.has(d.id) || dueIds.has(d.id));
@@ -363,7 +371,7 @@ export function GamesImport() {
         {sync.analysing ? ` Analysing games on this device: ${sync.analysing.done} of ${sync.analysing.total} done; it continues while the app is open.` : ''}
         {sync.engineError ? ` The in-app engine could not start (${sync.engineError}).` : ''}
       </p>
-      <p className="definition-small">Your device asks Chess.com’s public API directly for your own public games and ratings. Nothing is sent anywhere else, and analysis happens here with a small built-in engine.</p>
+      <p className="definition-small">Changing the username removes the games fetched for the previous one. Your device asks Chess.com’s public API directly for your own public games and ratings. Nothing is sent anywhere else, and analysis happens here with a small built-in engine.</p>
     </section>
   );
 }

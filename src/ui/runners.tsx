@@ -7,13 +7,14 @@ import { CHECK, gradeCheck, KPK_CHECK } from '../learn/curriculum';
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
-import { drillPositions } from '../games/metrics';
+import { type DrillPosition, drillPositions } from '../games/metrics';
+import type { SenseItem } from '../games/sense';
 import { drillId } from '../openings/repertoire';
 import { OwnGameDrill, useGames } from './Games';
 import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
-import { SenseDrill, senseItemsFrom } from './Sense';
+import { SenseDrill, senseItemById } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
 export type Picker = (exclude: Set<string>, index: number) => Puzzle | null;
@@ -151,6 +152,9 @@ function KpkCheckRunner({ concept, learner, sessionId, onDone }: { concept: Conc
   );
 }
 
+/** A check interrupted (by a reload) within this time is resumed with the answers already given. */
+const CHECK_RESUME_MS = 2 * 3_600_000;
+
 /** The independent check: a fixed-size set of unseen puzzles in a fixed rating band, no hints. */
 export function CheckRunner(props: { concept: Concept; learner: Learner; sessionId: string | null; onDone: (passed: boolean | null) => void }) {
   return props.concept.assessment.kind === 'kpk-playout' ? <KpkCheckRunner {...props} /> : <PuzzleCheckRunner {...props} />;
@@ -165,16 +169,46 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
   // Drawn once and kept: answering a position adds it to "seen", and drawing again would
   // change the set (or run out of positions) in the middle of the check.
   const drawn = useRef<Puzzle[] | null>(null);
+  // Answers already given in this check count. The page can be reloaded in the middle (iOS
+  // does it when the app has been in the background): starting again from nothing let a
+  // check with a miss in it be passed on five fresh positions.
+  const carried = useRef<Attempt[] | null>(null);
+  if (carried.current === null) {
+    const lastGraded = learner.events.filter((e) => e.conceptId === concept.id && (e.type === 'check-passed' || e.type === 'check-failed')).reduce((t, e) => Math.max(t, e.ts), 0);
+    const since = Math.max(lastGraded, Date.now() - CHECK_RESUME_MS);
+    carried.current = learner.attempts
+      .filter((a) => a.context === 'check' && a.conceptId === concept.id && a.exerciseKind === 'puzzle' && a.outcome !== 'skipped' && a.ts > since)
+      .sort((a, b) => a.ts - b.ts)
+      .slice(0, CHECK.size);
+    attempts.current = [...carried.current];
+  }
+  const remaining = CHECK.size - carried.current.length;
   if (pool && drawn.current === null) {
     drawn.current = selectPuzzles(pool.puzzles, {
       themes: conceptThemes(concept), openings: conceptOpenings(concept), band: CHECK.band, target: (CHECK.band.lo + CHECK.band.hi) / 2,
-      count: CHECK.size, exclude: learner.seen, seed: `check|${concept.id}|${priorChecks}`,
+      count: remaining, exclude: learner.seen, seed: `check|${concept.id}|${priorChecks}|${carried.current.length}`,
     });
   }
   const set = drawn.current;
+  const grade = () => {
+    const g = gradeCheck(attempts.current);
+    void recordLessonEvent(db, {
+      conceptId: concept.id, lessonId: null, url: null, type: g.passed ? 'check-passed' : 'check-failed', ts: Date.now(),
+      detail: { correct: g.correct, total: g.total, attemptUuids: attempts.current.map((a) => a.uuid), rubric: CHECK.rubric },
+    }).then(() => setResult(g));
+  };
+  // All five were answered before the reload and only the grading was lost.
+  const gradedOnce = useRef(false);
+  useEffect(() => {
+    if (remaining === 0 && !gradedOnce.current) {
+      gradedOnce.current = true;
+      grade();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remaining]);
 
   if (!pool || !set) return <p className="muted">Loading positions</p>;
-  if (set.length < CHECK.size) {
+  if (set.length < remaining) {
     return (
       <div className="empty" data-testid="check-unavailable">
         <h2>Check not available</h2>
@@ -199,21 +233,15 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
   return (
     <PuzzleStream
       pick={(_ex, i) => set[i] ?? null}
-      limit={CHECK.size}
+      limit={remaining}
       context="check"
       conceptId={concept.id}
       sessionId={sessionId}
       allowHints={false}
       seen={new Set()}
-      heading={`Check: ${CHECK.size} unseen positions, no hints`}
+      heading={carried.current.length > 0 ? `Check: ${CHECK.size} unseen positions, no hints (${carried.current.length} already answered)` : `Check: ${CHECK.size} unseen positions, no hints`}
       onAttempt={(a) => attempts.current.push(a)}
-      onFinished={() => {
-        const g = gradeCheck(attempts.current);
-        void recordLessonEvent(db, {
-          conceptId: concept.id, lessonId: null, url: null, type: g.passed ? 'check-passed' : 'check-failed', ts: Date.now(),
-          detail: { correct: g.correct, total: g.total, attemptUuids: attempts.current.map((a) => a.uuid), rubric: CHECK.rubric },
-        }).then(() => setResult(g));
-      }}
+      onFinished={grade}
     />
   );
 }
@@ -229,6 +257,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
   const games = useGames();
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
   const queue = useRef(due.map((d) => d.itemId));
+  const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition } | null>(null);
   const [i, setI] = useState(0);
   if (!pool) return <p className="muted">Loading positions</p>;
 
@@ -255,7 +284,11 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
     );
   }
   if (itemId.startsWith('sense:')) {
-    const item = games ? senseItemsFrom(games).find((x) => x.id === itemId) : undefined;
+    if (!games) return <p className="muted">Loading your games</p>;
+    // Looked up once per queue position and kept: the games table changes while games are
+    // analysed, and a question on screen must not turn into "no longer available" mid-answer.
+    if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
+    const item = held.current.sense;
     if (!item) return <RetiredItem onNext={advance} />;
     return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={`Review, ${left} due`} onDone={advance} />;
   }
@@ -264,7 +297,9 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
     return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('game:')) {
-    const drill = games ? drillPositions(games).find((d) => d.id === itemId) : undefined;
+    if (!games) return <p className="muted">Loading your games</p>;
+    if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
+    const drill = held.current.drill;
     if (!drill) return <RetiredItem onNext={advance} />;
     return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
   }

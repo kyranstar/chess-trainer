@@ -1,0 +1,58 @@
+{
+  "id": "lasker-opening-principles",
+  "conceptId": "opening.principles",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "General principles of chess strategy: development",
+  "locator": "Part III, “General Principles of Chess Strategy”",
+  "revision": 1,
+  "estMinutes": 5,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "At the beginning of the game the Knights are the only pieces which are able to move, and consequently the other pieces are worthless until openings have been created for them by Pawn moves. Now, the first thing the beginner should try to keep in mind is that only such Pawn moves can be good as open lines for their fellow pieces or obstruct lines of opposing men. The reason is this:",
+        "In any hand to hand fight evidently that player will get the better of it who has more pieces ready for action on the battlefield. When examining the typical positions discussed in the previous chapter the fact will strike the observant reader that the winning player always has a decided superiority of forces at his disposal where the actual fight is going on, so that in some cases he can even sacrifice a great amount of them and still have enough left for the final onslaught against the King. The same holds good in combinations where lesser objects than the King are fought for; the player who has more pieces ready to take part in the struggle will emerge victorious; the player who attacks with less pieces than the opponent has on the spot for defense, cannot hope to succeed."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "The important point, therefore, is to place the pieces so that they will be in readiness for concentration on whatever part of the board they are needed.",
+        "Moreover, it will be important to place the pieces on such favorable squares in the shortest possible time--meaning with the smallest number of moves--as wasting moves on maneuvers which do not further the mobilization of the troops will give the opponent an opportunity to gather a superior force somewhere on the board and make an attack with the best chance in the world to succeed before reinforcements can be brought up."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2",
+      "fromMoves": [
+        "f3",
+        "e5",
+        "g4"
+      ],
+      "orientation": "black",
+      "moves": [
+        "d8h4"
+      ],
+      "before": [
+        "Even a Chess master once said, that generalities are of no use in Chess and that it is necessary to figure out every move in all variations to which it may lead to make sure that the move is good. As an example he offered the following opening: (1) P-f3, P-e5; (2) P-g4."
+      ],
+      "after": [
+        "Now, he asks, should Black omit to give the checkmate with Q-h4 because it is against the general principles to bring out the Queen at an early stage of the game?",
+        "The shallowness of this argument is obvious. The reason for the general rule that the Queen should not come out too soon is that she is liable to be attacked by the minor pieces of the opponent so that she has to move again and again and time is lost which could be used for the development of other pieces. Of course, if the opponent does not develop his pieces, the Queen may often come out without danger and she may do a lot of harm before she can be driven away."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "As was stated before, the point of greatest importance in the opening is to develop the pieces without loss of time, that is, to place them on squares where they have as much mobility as possible without making any move which retards this development. There are different ways in which the development may be retarded, and which consequently must be avoided. For instance, no Pawn move should be made which is not absolutely necessary to open a line for a piece; or, no piece should move twice as long as there are pieces which have not yet moved at all; or, no piece should be developed to a square from which the opponent can drive it away at the same time furthering his own development; or, the right of castling should not be foregone by moving the King or by any other way, as castling develops a Rook and places the King in safety with one move while more moves are required to the same end if castling is not possible, and so on.",
+        "The beginner who makes this great principle of development quite clear to himself has made the most difficult step on the way to mastership. The grasp of the far reaching influence of the mobility of the pieces in the opening upon the further development of the whole game is really what distinguishes the master from the average player."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

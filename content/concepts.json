@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "revision": 5,
+ "revision": 6,
  "concepts": [
   {
    "id": "safety.hanging-pieces",
@@ -189,9 +189,10 @@
    "descriptionTheme": null,
    "themes": [],
    "localLessons": [
+    "lasker-opening-principles",
     "lasker-opening-development",
-    "capablanca-control-of-centre",
-    "capablanca-opening-strategy"
+    "capablanca-opening-strategy",
+    "capablanca-control-of-centre"
    ],
    "links": [
     {
@@ -210,7 +211,7 @@
     "reason": "Principles are assessed through opening decisions in the repertoire trainer (M3)."
    },
    "stepsMethod": "Step 2",
-   "revision": 2
+   "revision": 3
   },
   {
    "id": "tactics.double-attack",
@@ -992,57 +993,10 @@
    "revision": 1
   },
   {
-   "id": "endgame.passed-pawn",
-   "title": "Passed pawns and the rule of the square",
-   "area": "Pawn endgames",
-   "order": 23,
-   "week": null,
-   "prereqs": [],
-   "descriptionTheme": null,
-   "themes": [
-    "pawnEndgame",
-    "advancedPawn"
-   ],
-   "localLessons": [
-    "lasker-passed-pawn"
-   ],
-   "links": [
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Understanding Endgames: Rule of the Square",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/understanding-endgames/rule-of-the-square",
-     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Understanding Endgames: Passed Pawns",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/understanding-endgames/passed-pawns",
-     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    }
-   ],
-   "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "pawnEndgame",
-     "advancedPawn"
-    ]
-   },
-   "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 2
-  },
-  {
    "id": "endgame.opposition",
    "title": "King and pawn endings: the opposition",
    "area": "Pawn endgames",
-   "order": 24,
+   "order": 23,
    "week": null,
    "prereqs": [],
    "descriptionTheme": null,
@@ -1086,6 +1040,53 @@
    },
    "stepsMethod": "Step 2 plus-Step 3",
    "revision": 3
+  },
+  {
+   "id": "endgame.passed-pawn",
+   "title": "Passed pawns and the rule of the square",
+   "area": "Pawn endgames",
+   "order": 24,
+   "week": null,
+   "prereqs": [],
+   "descriptionTheme": null,
+   "themes": [
+    "pawnEndgame",
+    "advancedPawn"
+   ],
+   "localLessons": [
+    "lasker-passed-pawn"
+   ],
+   "links": [
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Understanding Endgames: Rule of the Square",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/understanding-endgames/rule-of-the-square",
+     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Understanding Endgames: Passed Pawns",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/understanding-endgames/passed-pawns",
+     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    }
+   ],
+   "assessment": {
+    "kind": "unseen-puzzles",
+    "themes": [
+     "pawnEndgame",
+     "advancedPawn"
+    ]
+   },
+   "stepsMethod": "Step 2 plus-Step 3",
+   "revision": 2
   },
   {
    "id": "endgame.rook-basics",

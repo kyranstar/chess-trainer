@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
-import { lessonAlternatives, SOURCE_BY_ID } from '../content';
+import { applyUci, fenOf, isCheckmate, positionFromFen, sameMove, sanOf } from '../chess/rules';
+import { LESSON_MARGIN, lessonTryEvidence, SOURCE_BY_ID } from '../content';
+import { bestLineFor } from '../engine/interactive';
 import type { Lesson, LessonStep } from '../content/types';
 import { getMeta, recordAttempt, recordLessonEvent, setMeta } from '../db/db';
 import { useDb, useFocusMode } from '../app/store';
 import { Board } from './Board';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
@@ -23,17 +25,26 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   const [wrong, setWrong] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [finished, setFinished] = useState(false);
-  /** The learner played a move the engine check rates as good as the text's: said so, never counted as a mistake. */
-  const [equal, setEqual] = useState<{ played: string; text: string } | null>(null);
-  const usedEqual = useRef(false);
+  /**
+   * The learner played a move that is not the text's but that the engine check does not fault
+   * (or that could not be checked). It is said so and never counted as a mistake; the text's
+   * move is still asked for, because the text may prefer it for reasons of its own.
+   */
+  const [other, setOther] = useState<{ san: string; kind: 'sound' | 'unchecked' } | null>(null);
+  const [checking, setChecking] = useState(false);
+  /** Where the learner is; lets a late engine answer be dropped if they have moved on. */
+  const here = useRef('');
+  here.current = `${lesson.id}:${stepIndex}:${ply}`;
   const first = useRef<string | null>(null);
   const started = useRef(Date.now());
   const recorded = useRef(false);
   const solver = step.orientation;
+  useScreenChange(`${lesson.id}|${stepIndex}|${finished}`);
+  const armed = useArmed();
 
   useEffect(() => {
-    setPly(0); setFen(step.fen); setLastMove(null); setMistakes(0); setRevealed(false); setWrong(null); setFinished(false); setEqual(null);
-    first.current = null; usedEqual.current = false; started.current = Date.now(); recorded.current = false;
+    setPly(0); setFen(step.fen); setLastMove(null); setMistakes(0); setRevealed(false); setWrong(null); setFinished(false); setOther(null); setChecking(false);
+    first.current = null; started.current = Date.now(); recorded.current = false;
     // Keyed on what the example is, not on the object passed in: a parent that builds a new
     // `step` object on every render must not reset the board in the middle of the answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,30 +58,47 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       sessionId, context, exerciseId: `lesson:${lesson.id}:${stepIndex + 1}`, exerciseKind: 'lesson-try',
       contentVersion: `${lesson.id}@${lesson.revision}`, conceptId: lesson.conceptId, themes: [], rating: null, ts: Date.now(),
       elapsedMs: Date.now() - started.current, firstMove: first.current, played: step.moves.slice(0, ply + 1), mistakes: m, hints: shown ? 1 : 0,
-      outcome: shown ? 'assisted' : m > 0 ? 'fail' : 'success', acceptedAlternative: usedEqual.current,
+      outcome: shown ? 'assisted' : m > 0 ? 'fail' : 'success', acceptedAlternative: false,
     });
   }
 
-  function onMove(uci: string) {
-    if (finished) return;
+  /** Whether a move that is not the text's is nonetheless not faulted by the engine. */
+  async function judgeOther(pos: ReturnType<typeof positionFromFen>, uci: string): Promise<'sound' | 'unchecked' | 'wrong'> {
+    const ev = lessonTryEvidence(lesson.id, stepIndex + 1, fen);
+    if (ev?.alternatives.some((a) => sameMove(pos, uci, a.uci))) return 'sound';
+    const after = applyUci(pos, uci);
+    if (isCheckmate(after)) return 'sound';
+    if (!ev) return 'unchecked';
+    // Not among the moves checked when the lesson was built: ask the engine on the device,
+    // with the same margin. If it cannot answer, nothing is held against the learner.
+    setChecking(true);
+    const reply = await bestLineFor(fenOf(after));
+    setChecking(false);
+    if (!reply) return 'unchecked';
+    return 100 - reply.wp >= ev.bestWinPct - LESSON_MARGIN ? 'sound' : 'wrong';
+  }
+
+  async function onMove(uci: string) {
+    if (finished || checking) return;
     const pos = positionFromFen(fen);
     const expected = step.moves[ply]!;
     first.current ??= uci;
     if (!sameMove(pos, uci, expected)) {
-      const asGood = lessonAlternatives(lesson.id, stepIndex + 1, fen).some((a) => sameMove(pos, uci, a.uci));
-      if (!asGood) {
+      const asked = here.current;
+      const verdict = await judgeOther(pos, uci);
+      if (asked !== here.current) return;
+      setResetKey((k) => k + 1);
+      if (verdict === 'wrong') {
+        setOther(null);
         setWrong(sanOf(pos, uci));
         setMistakes((m) => m + 1);
-        setResetKey((k) => k + 1);
-        return;
+      } else {
+        setWrong(null);
+        setOther({ san: sanOf(pos, uci), kind: verdict });
       }
-      // As good as the text's move by the engine check: no mistake. The lesson follows the
-      // text, so the text's move is put on the board and the example goes on from there.
-      usedEqual.current = true;
-      setEqual({ played: sanOf(pos, uci), text: sanOf(pos, expected) });
-    } else {
-      setEqual(null);
+      return;
     }
+    setOther(null);
     setWrong(null);
     let next = applyUci(pos, expected);
     setLastMove(expected);
@@ -105,17 +133,23 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   return (
     <div className="lesson-try" data-testid="lesson-try" data-expected={finished ? '' : step.moves[ply]} data-finished={finished}>
       {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-      <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Play the move the text goes on to explain.`}</p>
-      <Board fen={fen} orientation={solver} movable={finished ? null : solver} lastMove={lastMove} onMove={onMove} resetKey={resetKey} />
+      <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Play the move the text plays here.`}</p>
+      <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
         {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown.</p></div>}
-        {equal && <div className="verdict neutral" data-testid="lesson-equal"><strong>{equal.played} is as good here by the engine’s check.</strong><p>The text plays {equal.text}, so that move is on the board and the lesson goes on from it. Nothing is recorded as missed.</p></div>}
+        {checking && <p className="muted">Checking your move with the engine</p>}
+        {other && !finished && (
+          <div className="verdict neutral" data-testid="lesson-other" data-kind={other.kind}>
+            <strong>{other.kind === 'sound' ? `The engine’s check does not fault ${other.san} here.` : `${other.san} could not be checked on this device.`}</strong>
+            <p>The text plays a different move. Try again, or have it shown. Nothing is recorded as missed.</p>
+          </div>
+        )}
       </div>
-      {!finished && <div className="actions"><button onClick={reveal}>Show the move</button></div>}
+      {!finished && <div className="actions"><button disabled={!armed} onClick={reveal}>Show the move</button></div>}
       {finished && (
         <>
           {step.after.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-          <div className="actions"><button className="primary" data-testid="lesson-next" onClick={onDone}>Continue</button></div>
+          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!armed} onClick={onDone}>Continue</button></div>
         </>
       )}
     </div>
@@ -142,6 +176,8 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
   }, [db, key, lesson, total]);
 
   const step = useMemo(() => (index === null ? null : lesson.steps[index]), [index, lesson]);
+  useScreenChange(`${lesson.id}|${index}`);
+  const stepArmed = useArmed();
   if (index === null || !step) return <p className="muted">Loading lesson</p>;
 
   async function advance() {
@@ -168,12 +204,12 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
           <>
             <h2>{lesson.title}</h2>
             <p className="attribution">
-              From <cite>{source.title}</cite> by {source.author} ({lesson.locator}). The text is unaltered.{' '}
+              From <cite>{source.title}</cite> by {source.author} ({lesson.locator}). The words are the book’s own; passages are excerpts and may be shortened or rearranged.{' '}
               <a href={source.url} target="_blank" rel="noreferrer">Source</a>
             </p>
             {lesson.notationNote && <p className="note">{lesson.notationNote}</p>}
             {lesson.review.ownerReview === 'pending' && (
-              <p className="note">This excerpt was selected when the app was built and checked mechanically (text matches the book; moves are legal and agree with Stockfish). You have not reviewed it yet.</p>
+              <p className="note">This excerpt was selected when the app was built and checked mechanically (every paragraph matches the book; positions match its diagrams or moves; the moves you are asked to find were checked with Stockfish). You have not reviewed it yet.</p>
             )}
           </>
         ) : (
@@ -184,14 +220,14 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
       {step.type === 'text' && (
         <>
           {step.paragraphs.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-          <div className="actions"><button className="primary" data-testid="lesson-next" onClick={() => void advance()}>Continue</button></div>
+          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}
       {step.type === 'board' && (
         <>
-          <p className="prompt">{step.diagram ? `Diagram ${step.diagram} from the book.` : 'Position from the text.'} {positionFromFen(step.fen).turn === 'white' ? 'White' : 'Black'} to move.</p>
+          <p className="prompt">{step.diagram && !step.afterDiagramMoves?.length ? `Diagram ${step.diagram} from the book.` : 'Position from the text.'} {positionFromFen(step.fen).turn === 'white' ? 'White' : 'Black'} to move.</p>
           <Board fen={step.fen} orientation={step.orientation} movable={null} />
-          <div className="actions"><button className="primary" data-testid="lesson-next" onClick={() => void advance()}>Continue</button></div>
+          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}
       {step.type === 'try' && <LessonTry lesson={lesson} stepIndex={index} step={step} sessionId={sessionId} context="lesson" onDone={() => void advance()} />}

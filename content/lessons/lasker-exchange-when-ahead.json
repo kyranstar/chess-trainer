@@ -4,8 +4,8 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "A pawn ahead: forcing the exchange of pieces",
   "locator": "Part II, section “Relative Value of the Men”, Diagram 17",
-  "revision": 1,
-  "estMinutes": 4,
+  "revision": 2,
+  "estMinutes": 3,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
     {
@@ -15,16 +15,62 @@
       ]
     },
     {
-      "type": "try",
+      "type": "board",
       "fen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
       "diagram": 17,
-      "orientation": "white",
-      "moves": [
-        "e2e5"
-      ],
-      "after": [
-        "White on the move will play R-e5, offering the exchange of Rooks. If Black tried to avoid the exchange by playing R-b6, White would capture the Pawn f5 with the Rook and after Black's King moves out of check he would take the Pawn g4 too. Therefore Black has to make the offered exchange of Rooks, and White then wins by advancing the c-Pawn which forces Black's King over to the Queen's wing and leaves the Pawns of the King's wing unprotected."
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "White on the move will play R-e5, offering the exchange of Rooks."
       ]
+    },
+    {
+      "type": "board",
+      "fen": "8/1p6/8/1r2Rp1k/1P3KpP/2P3P1/8/8 b - - 1 1",
+      "diagram": 17,
+      "diagramFen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Re5"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "If Black tried to avoid the exchange by playing R-b6, White would capture the Pawn f5 with the Rook and after Black's King moves out of check he would take the Pawn g4 too."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "8/1p6/1r6/5R1k/1P3KpP/2P3P1/8/8 b - - 0 2",
+      "diagram": 17,
+      "diagramFen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Re5",
+        "Rb6",
+        "Rxf5+"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Therefore Black has to make the offered exchange of Rooks, and White then wins by advancing the c-Pawn which forces Black's King over to the Queen's wing and leaves the Pawns of the King's wing unprotected."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "8/1p6/8/4Kp1k/1P4pP/2P3P1/8/8 b - - 0 2",
+      "diagram": 17,
+      "diagramFen": "8/1p6/8/1r3p1k/1P3KpP/2P3P1/4R3/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Re5",
+        "Rxe5",
+        "Kxe5"
+      ],
+      "orientation": "white"
     }
   ],
   "review": {

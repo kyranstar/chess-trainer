@@ -43,6 +43,7 @@ interface ApiGame {
   time_control?: string;
   time_class?: string;
   rated?: boolean;
+  end_time?: number;
   rules?: string;
   white?: { username?: string; rating?: number };
   black?: { username?: string; rating?: number };
@@ -93,6 +94,7 @@ export async function convertChessComGame(raw: unknown, username: string): Promi
   const outcome = result === '1/2-1/2' ? 'draw' : result === '1-0' ? (color === 'white' ? 'win' : 'loss') : result === '0-1' ? (color === 'black' ? 'win' : 'loss') : null;
   const tc = g.time_control ?? h.get('TimeControl') ?? '';
   const dash = (s: string | undefined) => (s ?? '').replace(/\./g, '-');
+  const ended = typeof g.end_time === 'number' && g.end_time > 0 ? new Date(g.end_time * 1000) : null;
   const url = g.url ?? h.get('Link') ?? '';
   const timeClass = CLASSES.includes(g.time_class as TimeClass) ? (g.time_class as TimeClass) : timeClassOf(tc);
   return {
@@ -101,8 +103,11 @@ export async function convertChessComGame(raw: unknown, username: string): Promi
       source: 'chess.com',
       url: url || null,
       date: dash(h.get('UTCDate') ?? h.get('Date')),
-      endDate: dash(h.get('EndDate') ?? h.get('UTCDate') ?? h.get('Date')),
-      endTime: h.get('EndTime') ?? h.get('UTCTime') ?? null,
+      // The day the game ended on the learner's own calendar. The PGN tags are in UTC: an
+      // evening game west of Greenwich would be dated tomorrow, and "you played yesterday"
+      // would be wrong the next morning.
+      endDate: ended ? localYmd(ended) : dash(h.get('EndDate') ?? h.get('UTCDate') ?? h.get('Date')),
+      endTime: ended ? localHms(ended) : (h.get('EndTime') ?? h.get('UTCTime') ?? null),
       timeControl: tc,
       timeClass,
       color,
@@ -137,17 +142,39 @@ export interface SyncReport {
   detail?: string;
 }
 
+const two = (n: number) => String(n).padStart(2, '0');
+const localYmd = (d: Date) => `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+const localHms = (d: Date) => `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+
 function ratingsFrom(stats: unknown, now: number): RatingSnapshot {
   const s = stats as Record<string, { last?: { rating?: number; date?: number } } | undefined>;
   const pick = (k: string) => (typeof s[k]?.last?.rating === 'number' ? { rating: s[k]!.last!.rating!, date: s[k]!.last!.date ?? 0 } : undefined);
   return { checkedAt: now, rapid: pick('chess_rapid'), blitz: pick('chess_blitz'), daily: pick('chess_daily'), bullet: pick('chess_bullet') };
 }
 
-/** One pass: ratings, then every month never read plus the newest month. Never throws. */
+/**
+ * One pass: ratings, then every month never read, plus every month from the one that was the
+ * newest at the last complete pass onward. That month was still running when it was read, so
+ * games finished in it afterwards would otherwise be lost for good once a newer month exists.
+ * Games fetched for a different username are removed first. Never throws.
+ */
 export async function syncChessCom(db: TrainerDB, fetcher: SyncFetch, username: string, now: number = Date.now()): Promise<SyncReport> {
   const report: SyncReport = { status: 'ok', added: 0, skipped: {}, monthsRead: 0, ratings: null, at: now };
   const base = `${CHESSCOM_API}/${encodeURIComponent(username.trim().toLowerCase())}`;
+  const who = username.trim().toLowerCase();
+  const owner = await getMeta<string>(db, 'chesscom.gamesOf');
+  if (owner !== undefined && owner !== who) {
+    // The handle was changed: the stored games are another player's and must not stay in any number.
+    await db.games.clear();
+    await setMeta(db, 'chesscom.etags', {});
+    await setMeta(db, 'chesscom.latestMonth', null);
+    await setMeta(db, 'chesscom.ratings', null);
+  }
+  await setMeta(db, 'chesscom.gamesOf', who);
   const etags = (await getMeta<Record<string, string>>(db, 'chesscom.etags')) ?? {};
+  const months0 = Object.keys(etags).sort();
+  // Before this rule existed the newest month was not recorded: fall back to the newest month read so far.
+  const previousLatest = (await getMeta<string | null>(db, 'chesscom.latestMonth')) ?? months0[months0.length - 1] ?? null;
   const fail = (status: number): SyncReport['status'] | null => (status === 429 ? 'rate-limited' : status === 404 ? 'not-found' : status >= 400 ? 'error' : null);
   try {
     const stats = await fetcher(`${base}/stats`, null);
@@ -161,12 +188,19 @@ export async function syncChessCom(db: TrainerDB, fetcher: SyncFetch, username: 
     if (badList) return finish(db, { ...report, status: badList, detail: `archives: HTTP ${list.status}` });
     const months = [...((list.json as { archives?: string[] })?.archives ?? [])].sort();
     const latest = months[months.length - 1];
+    let failed: { status: SyncReport['status']; detail: string } | null = null;
     for (const url of months) {
-      if (url !== latest && etags[url]) continue; // a past month, already read: it cannot change
+      // A month already read is final only if it had ended by the time of the last complete pass.
+      if (etags[url] && url !== latest && !(previousLatest !== null && url >= previousLatest)) continue;
       const res = await fetcher(url, etags[url] ?? null);
       if (res.status === 304) continue;
       const badMonth = fail(res.status);
-      if (badMonth) return finish(db, { ...report, status: badMonth, detail: `${url.slice(-7)}: HTTP ${res.status}` });
+      if (badMonth === 'rate-limited') return finish(db, { ...report, status: badMonth, detail: `${url.slice(-7)}: HTTP ${res.status}` });
+      if (badMonth) {
+        // One month that cannot be read does not stop the others; it is tried again next time.
+        failed ??= { status: badMonth, detail: `${url.slice(-7)}: HTTP ${res.status}` };
+        continue;
+      }
       report.monthsRead++;
       for (const raw of (res.json as { games?: unknown[] })?.games ?? []) {
         const { game, skipped } = await convertChessComGame(raw, username);
@@ -188,9 +222,12 @@ export async function syncChessCom(db: TrainerDB, fetcher: SyncFetch, username: 
       etags[url] = res.etag ?? 'read';
       await setMeta(db, 'chesscom.etags', etags);
     }
+    if (failed) return finish(db, { ...report, ...failed });
+    await setMeta(db, 'chesscom.latestMonth', latest ?? null);
     return finish(db, report);
-  } catch {
-    return finish(db, { ...report, status: 'offline' });
+  } catch (e) {
+    // A failed network request is a TypeError; anything else is a fault of ours and is said so.
+    return finish(db, e instanceof TypeError ? { ...report, status: 'offline' } : { ...report, status: 'error', detail: (e as Error).message });
   }
 }
 

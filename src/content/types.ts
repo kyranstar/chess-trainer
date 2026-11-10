@@ -48,6 +48,8 @@ interface PositionStep {
   fen: string;
   orientation: 'white' | 'black';
   diagram?: number;
+  /** The position is the diagram plus these moves from the text, not the diagram itself. */
+  afterDiagramMoves?: string[];
   fromMoves?: string[];
 }
 export type LessonStep =

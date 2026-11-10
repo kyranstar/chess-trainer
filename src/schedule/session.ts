@@ -83,7 +83,7 @@ export function planSession(input: PlanInput): SessionRecord {
 
   // Learn
   const { pick, deferred } = nextToLearn(statuses, { online });
-  const deferredNote = deferred ? `“${deferred.concept.title}” is next, but its lessons need a connection. It stays first in line for when you are online.` : null;
+  const deferredNote = deferred ? `“${deferred.concept.title}” comes earlier in the order, but it only has linked lessons, which need a connection. Open it from Learn when you have one; lessons stored on the phone come first here.` : null;
   let learn: SessionBlock;
   if (pick) {
     const why = pick.concept.prereqs.length ? 'its prerequisites are demonstrated' : 'it has no prerequisites';
@@ -215,7 +215,8 @@ export const ACROSS_MIDNIGHT_MS = 3 * 3_600_000;
  *  1. an unfinished session of today, or one from yesterday that was still being used within
  *     the last three hours (most recently used first);
  *  2. otherwise the most recent session of today (its summary);
- *  3. otherwise none: a new day.
+ *  3. otherwise yesterday's session if it was finished after midnight, within the last three hours (its summary);
+ *  4. otherwise none: a new day.
  */
 export function currentSession(sessions: SessionRecord[], now: number): SessionRecord | null {
   const today = localDate(now);
@@ -224,7 +225,12 @@ export function currentSession(sessions: SessionRecord[], now: number): SessionR
     .filter((s) => s.status === 'active' && (s.date === today || (s.date === yesterday && now - s.updatedAt <= ACROSS_MIDNIGHT_MS)))
     .sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt);
   if (running[0]) return running[0];
-  return sessions.filter((s) => s.date === today).sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+  const ofToday = sessions.filter((s) => s.date === today).sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (ofToday) return ofToday;
+  // A session started yesterday and finished a moment ago (after midnight): its summary is
+  // shown rather than "no session is running".
+  const midnight = new Date(now).setHours(0, 0, 0, 0);
+  return sessions.filter((s) => s.date === yesterday && s.status === 'done' && s.updatedAt >= midnight && now - s.updatedAt <= ACROSS_MIDNIGHT_MS).sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
 }
 
 export const PLAY_DAYS_PER_WEEK = 2;

@@ -4,8 +4,8 @@
   "sourceId": "lasker-chess-and-checkers-1918",
   "title": "Winning with an extra passed pawn",
   "locator": "Part II, section “Relative Value of the Men”, Diagram 16",
-  "revision": 1,
-  "estMinutes": 7,
+  "revision": 2,
+  "estMinutes": 5,
   "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
   "steps": [
     {
@@ -24,26 +24,33 @@
     {
       "type": "text",
       "paragraphs": [
-        "White's King, however, is free to go wherever he likes without any immediate danger. There is consequently nothing to hinder him attacking and capturing the black Pawns, for if Black's King tries to stop White's advance, White's passed Pawn marches on and compels the opposing King to catch him, thereby giving the way free to his own King."
+        "White's King, however, is free to go wherever he likes without any immediate danger. There is consequently nothing to hinder him attacking and capturing the black Pawns, for if Black's King tries to stop White's advance, White's passed Pawn marches on and compels the opposing King to catch him, thereby giving the way free to his own King. According to this scheme play could proceed like this: (1) K-d3, K-d5; (2) K-e3, K-e5; (3) P-b4, P-g5;"
       ]
     },
     {
-      "type": "try",
-      "fen": "8/8/6p1/2k2p2/8/1P3P2/2K3P1/8 w - - 0 1",
+      "type": "board",
+      "fen": "8/8/8/4kpp1/1P6/4KP2/6P1/8 w - - 0 4",
       "diagram": 16,
-      "orientation": "white",
-      "moves": [
-        "c2d3",
-        "c5d5",
-        "d3e3",
-        "d5e5",
-        "b3b4"
+      "diagramFen": "8/8/6p1/2k2p2/8/1P3P2/2K3P1/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Kd3",
+        "Kd5",
+        "Ke3",
+        "Ke5",
+        "b4",
+        "g5"
       ],
-      "after": []
+      "orientation": "white"
     },
     {
-      "type": "try",
-      "fen": "8/8/1Pk5/5pp1/8/4KP2/6P1/8 w - - 1 6",
+      "type": "text",
+      "paragraphs": [
+        "(4) P-b5, K-d5; (5) P-b6, K-c6; (6) K-d4, Kxb6;"
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "8/8/1k6/5pp1/3K4/5P2/6P1/8 w - - 0 7",
       "diagram": 16,
       "diagramFen": "8/8/6p1/2k2p2/8/1P3P2/2K3P1/8 w - - 0 1",
       "afterDiagramMoves": [
@@ -56,19 +63,48 @@
         "b5",
         "Kd5",
         "b6",
-        "Kc6"
+        "Kc6",
+        "Kd4",
+        "Kxb6"
       ],
-      "orientation": "white",
-      "moves": [
-        "e3d4",
-        "c6b6",
-        "d4e5",
-        "f5f4",
-        "e5f5"
-      ],
-      "after": [
-        "According to this scheme play could proceed like this: (1) K-d3, K-d5; (2) K-e3, K-e5; (3) P-b4, P-g5; (4) P-b5, K-d5; (5) P-b6, K-c6; (6) K-d4, Kxb6; (7) K-e5, P-f4; (8) K-f5, K-c6; (9) Kxg5, K-d6; (10) Kxf4, K-e6; (11) K-g5, K-f7. Now White would win even without the Pawn g2 by playing (12) K-f5 and so on as explained on Diagram 15."
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "(7) K-e5, P-f4; (8) K-f5, K-c6; (9) Kxg5, K-d6; (10) Kxf4, K-e6; (11) K-g5, K-f7. Now White would win even without the Pawn g2 by playing (12) K-f5 and so on as explained on Diagram 15."
       ]
+    },
+    {
+      "type": "board",
+      "fen": "8/5k2/8/6K1/8/5P2/6P1/8 w - - 3 12",
+      "diagram": 16,
+      "diagramFen": "8/8/6p1/2k2p2/8/1P3P2/2K3P1/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Kd3",
+        "Kd5",
+        "Ke3",
+        "Ke5",
+        "b4",
+        "g5",
+        "b5",
+        "Kd5",
+        "b6",
+        "Kc6",
+        "Kd4",
+        "Kxb6",
+        "Ke5",
+        "f4",
+        "Kf5",
+        "Kc6",
+        "Kxg5",
+        "Kd6",
+        "Kxf4",
+        "Ke6",
+        "Kg5",
+        "Kf7"
+      ],
+      "orientation": "white"
     }
   ],
   "review": {

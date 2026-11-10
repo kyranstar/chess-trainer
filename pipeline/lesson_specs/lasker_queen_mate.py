@@ -8,16 +8,17 @@ LINE = "(1)Q-f5, K-c6; (2)Q-e5, K-d7;"
 
 # Only the Queen's mate is here. The text's Rook example starts from "Diagram 9 with a Rook on h3
 # instead of the Queen", a position that is neither a printed diagram nor reached by moves, so the
-# validator cannot tie it to the book. The first moves of the drive are quoted, not asked: any
-# of several Queen moves wins there, and only (6) K-c5 is singled out by the text.
+# validator cannot tie it to the book. The first moves of the drive are quoted and shown on the
+# board in two stages, not asked: any of several Queen moves wins there, and only (6) K-c5 is
+# singled out by the text.
 write({
     "id": "lasker-queen-mate",
     "conceptId": "mate.basic-pieces",
     "sourceId": s.meta["id"],
     "title": "Fundamental endings: mating the lone king with king and queen",
     "locator": "Part II, section “Fundamental Endings”, Diagram 9",
-    "revision": 1,
-    "estMinutes": 6,
+    "revision": 2,
+    "estMinutes": 5,
     "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
     "steps": [
         {"type": "text", "paragraphs": [
@@ -29,10 +30,14 @@ write({
             s.para("How will White proceed in order to drive the King"),
             s.para("A direct onslaught with the Queen on e6 or d7"),
             s.para("The correct way of maneuvering for White will be to confine"),
+            s.para(LINE, end="(2)Q-e5, K-d7;"),
         ]},
+        {"type": "board", "fen": after(d9, drive[:4]), "diagram": 9, "diagramFen": d9, "afterDiagramMoves": drive[:4], "orientation": "white"},
+        {"type": "text", "paragraphs": [s.para(LINE, begin="(3) K-c4, K-c6;", end="(4) Q-e7, K-b6;")]},
+        {"type": "board", "fen": after(d9, drive[:8]), "diagram": 9, "diagramFen": d9, "afterDiagramMoves": drive[:8], "orientation": "white"},
         {"type": "try", "fen": cornered, "diagram": 9, "diagramFen": d9, "afterDiagramMoves": drive, "orientation": "white",
          "moves": ucis(cornered, ["Kc5"]),
-         "before": [s.para(LINE, end="White's Queen attacking all of them.")],
+         "before": [s.para(LINE, begin="(5) Q-d7, K-a6.", end="White's Queen attacking all of them.")],
          "after": [s.para(LINE, begin="The correct move is (6) K-c5.")]},
     ],
 })

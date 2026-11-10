@@ -5,6 +5,7 @@
  */
 import { type Confidence, type Interval, PROVISIONAL_N, wilson } from '../metrics/metrics';
 import type { GameEvent, GameRecord, TimeClass } from './types';
+import { positionFromFen, sameMove } from '../chess/rules';
 
 export interface GameFilter {
   timeClass?: TimeClass;
@@ -105,6 +106,19 @@ export function majorErrors(games: GameRecord[], f: GameFilter = {}): MajorError
   };
 }
 
+/**
+ * Whether the move played is the engine's first choice. The two can be spelled differently
+ * for castling (king to g1, or king onto the rook), so they are compared as moves.
+ */
+function tookBest(e: GameEvent): boolean {
+  if (e.played === e.best) return true;
+  try {
+    return sameMove(positionFromFen(e.fen), e.played, e.best);
+  } catch {
+    return false;
+  }
+}
+
 export interface Missed {
   available: number;
   missed: number;
@@ -143,7 +157,7 @@ export function missedOpportunities(games: GameRecord[], f: GameFilter = {}): Mi
   const events = eventsOf(done, (e) => e.missed);
   const open = eventsOf(done, (e) => e.opportunity !== null && e.bestWp < UNDECIDED_BELOW);
   // Not already won: a "miss" here is simply not playing the engine's first choice.
-  const openMissed = open.filter((r) => r.event.played !== r.event.best);
+  const openMissed = open.filter((r) => !tookBest(r.event));
   // Clear chances, with consecutive moves of one game on which the chance stayed available merged into one.
   let clearN = 0;
   let clearMissed = 0;
@@ -152,9 +166,9 @@ export function missedOpportunities(games: GameRecord[], f: GameFilter = {}): Mi
     let i = 0;
     while (i < evs.length) {
       let j = i;
-      while (j + 1 < evs.length && evs[j + 1]!.ply === evs[j]!.ply + 2 && evs[j]!.played !== evs[j]!.best) j++;
+      while (j + 1 < evs.length && evs[j + 1]!.ply === evs[j]!.ply + 2 && !tookBest(evs[j]!)) j++;
       clearN++;
-      if (evs[j]!.played !== evs[j]!.best) clearMissed++;
+      if (!tookBest(evs[j]!)) clearMissed++;
       i = j + 1;
     }
   }

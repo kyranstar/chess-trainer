@@ -79,8 +79,8 @@ describe('curated content', () => {
         });
       });
     }
-    expect(tries).toBeGreaterThanOrEqual(50);
-    expect(withEquals).toBeGreaterThanOrEqual(10);
+    expect(tries).toBeGreaterThanOrEqual(40);
+    expect(withEquals).toBeGreaterThanOrEqual(8);
     // A known case: after 1.e4 e5 2.Nf3 the text plays 2...Nc6, and 2...Nf6 is as good.
     const dev = LESSONS.find((l) => l.id === 'lasker-opening-development')!;
     const idx = dev.steps.findIndex((s) => s.type === 'try' && s.moves[0] === 'b8c6');

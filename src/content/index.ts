@@ -16,19 +16,33 @@ export const SOURCE_BY_ID = new Map(SOURCES.map((s) => [s.id, s]));
 export const THEMES = themesJson.themes as Record<string, { name: string; description: string }>;
 
 const boardKey = (fen: string) => fen.split(' ').slice(0, 3).join(' ');
-const ALTERNATIVES = new Map<string, { uci: string; san: string }[]>();
-for (const l of (lessonEvidence as { lessons: { lesson: string; tries: { step: number; fen: string; alternatives?: { uci: string; san: string }[] }[] }[] }).lessons) {
-  for (const t of l.tries) ALTERNATIVES.set(`${l.lesson}|${t.step}|${boardKey(t.fen)}`, t.alternatives ?? []);
+export interface TryEvidence {
+  /** Expected score (0-100) of the engine's best move in the position, from the build-time check. */
+  bestWinPct: number;
+  /** Other moves that passed the same engine test as the text's move (within five points of the best). */
+  alternatives: { uci: string; san: string }[];
+}
+const EVIDENCE = new Map<string, TryEvidence>();
+for (const l of (lessonEvidence as { lessons: { lesson: string; tries: { step: number; fen: string; bestWinPct: number; alternatives?: { uci: string; san: string }[] }[] }[] }).lessons) {
+  for (const t of l.tries) EVIDENCE.set(`${l.lesson}|${t.step}|${boardKey(t.fen)}`, { bestWinPct: t.bestWinPct, alternatives: t.alternatives ?? [] });
+}
+
+/** Engine evidence for one asked move of a lesson example. `step` is the 1-based step number. */
+export function lessonTryEvidence(lessonId: string, step: number, fen: string): TryEvidence | null {
+  return EVIDENCE.get(`${lessonId}|${step}|${boardKey(fen)}`) ?? null;
 }
 
 /**
- * Moves the engine check found as good as the text's move in a lesson example (same test the
- * text's move had to pass). The lesson asks for the text's move, but one of these is not a
- * mistake and is never recorded as one. `step` is the 1-based step number.
+ * Moves the build-time engine check did not fault in a lesson example. The lesson still asks
+ * for the text's move (the text may have its own reasons for preferring it), but playing one
+ * of these is never recorded as a mistake.
  */
 export function lessonAlternatives(lessonId: string, step: number, fen: string): { uci: string; san: string }[] {
-  return ALTERNATIVES.get(`${lessonId}|${step}|${boardKey(fen)}`) ?? [];
+  return lessonTryEvidence(lessonId, step, fen)?.alternatives ?? [];
 }
+
+/** A move within this many expected-score points of the best is not faulted (the same margin the text's own move had to meet). */
+export const LESSON_MARGIN = 5;
 
 /** Providers that are linked, never mirrored. */
 export const LINK_PROVIDERS: Record<string, { name: string; note: string }> = {

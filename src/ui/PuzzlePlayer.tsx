@@ -9,6 +9,7 @@ import { useDb, useFocusMode } from '../app/store';
 import { Board } from './Board';
 import { bestLineFor } from '../engine/interactive';
 import { lineSan } from '../games/analyse';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -41,6 +42,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const [busy, setBusy] = useState(false);
   /** The engine's answer to the learner's wrong move: evidence about this position, shown on request. */
   const [reply, setReply] = useState<{ after: string; state: 'loading' | 'none' | 'shown'; line?: string; wp?: number } | null>(null);
+  useScreenChange(`${puzzle.id}|${phase}|${wrongSan ?? ''}`);
+  const armed = useArmed();
   const startedAt = useRef(0);
   const decided = useRef(false);
 
@@ -236,15 +239,15 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
       <div className="actions">
         {phase === 'solving' && (
           <>
-            {wrongSan && <button className="primary" onClick={() => setWrongSan(null)}>Try again</button>}
+            {wrongSan && <button className="primary" disabled={!armed} onClick={() => setWrongSan(null)}>Try again</button>}
             {wrongSan && reply && reply.state !== 'shown' && <button data-testid="show-reply" disabled={reply.state === 'loading'} onClick={() => void showReply()}>{reply.state === 'loading' ? 'Asking the engine' : `What happens after ${wrongSan}?`}</button>}
-            {allowHints && !wrongSan && <button onClick={hint} disabled={busy || marks.length > 0}>Show which piece</button>}
-            {(wrongSan || outcome) && <button onClick={reveal} disabled={busy}>Show solution</button>}
+            {allowHints && !wrongSan && <button onClick={hint} disabled={!armed || busy || marks.length > 0}>Show which piece</button>}
+            {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show solution</button>}
             {/* A check is a fixed set of positions: skipping one would shrink it. */}
-            {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={busy} onClick={() => void skip()}>Skip</button>}
+            {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={!armed || busy} onClick={() => void skip()}>Skip</button>}
           </>
         )}
-        {done && <button className="primary" data-testid="next" onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}
+        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}
       </div>
     </section>
   );

@@ -3,6 +3,7 @@ from trainer_pipeline.lesson_builder import Source, after, ucis, write
 s = Source("lasker-chess-and-checkers-1918")
 d14 = s.diagram(14, "w")
 d15 = s.diagram(15, "w")
+exchanged = ["Qd1+", "Ka3", "Qxa4+", "Kxa4"]
 after_ke5 = after(d15, ["Ke5", "Kd7"])
 drawn = after(d15, ["e5", "Kf7", "e6+", "Ke7", "Ke5"])
 
@@ -12,8 +13,8 @@ write({
     "sourceId": s.meta["id"],
     "title": "King and pawn against king: the opposition",
     "locator": "Part II, section “Relative Value of the Men”, Diagrams 14–15",
-    "revision": 1,
-    "estMinutes": 9,
+    "revision": 2,
+    "estMinutes": 10,
     "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
     "steps": [
         {"type": "text", "paragraphs": [
@@ -23,6 +24,7 @@ write({
         ]},
         {"type": "try", "fen": d14, "diagram": 14, "orientation": "white", "moves": ucis(d14, ["Qd1+", "Ka3", "Qxa4+"]),
          "after": [s.para("White is a Pawn ahead and it will be his object to Queen it.")]},
+        {"type": "board", "fen": after(d14, exchanged), "diagram": 14, "diagramFen": d14, "afterDiagramMoves": exchanged, "orientation": "white"},
         {"type": "text", "paragraphs": [
             s.para("A rash advance of the Pawn would again be the wrong thing."),
             s.para("Now, White needs three moves to bring his King up"),

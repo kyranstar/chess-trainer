@@ -119,19 +119,22 @@ export function gradeCheck(attempts: Attempt[]): { complete: boolean; passed: bo
 }
 
 /**
- * The next concept for the protected new-learning block: first in curriculum order that is
- * not yet taught, has its prerequisites met and has a lesson. Offline, link-only concepts
- * are passed over and the first one is reported as `deferred` so the UI can say so.
+ * The next concept for the protected new-learning block: the first in curriculum order that
+ * is not yet taught, has its prerequisites met and has a lesson stored on the device.
+ *
+ * A concept that only has linked lessons is passed over, online or not, and reported as
+ * `deferred` so the screen can say it is waiting: the learner studies mostly with no
+ * connection, and a linked lesson that is never opened would otherwise hold up every
+ * on-device lesson behind it. A linked concept is picked only when online and no on-device
+ * lesson is ready.
  */
 export function nextToLearn(statuses: ConceptStatus[], opts: { online: boolean }): { pick: ConceptStatus | null; deferred: ConceptStatus | null } {
-  let deferred: ConceptStatus | null = null;
-  for (const s of statuses) {
-    if (s.stage === 'taught' || s.stage === 'demonstrated') continue;
-    if (!s.prereqsMet || !s.hasAnyLesson) continue;
-    if (s.offlineLesson || opts.online) return { pick: s, deferred };
-    deferred ??= s;
-  }
-  return { pick: null, deferred };
+  const ready = statuses.filter((s) => s.stage !== 'taught' && s.stage !== 'demonstrated' && s.prereqsMet && s.hasAnyLesson);
+  const onDevice = ready.find((s) => s.offlineLesson) ?? null;
+  const linked = ready.find((s) => !s.offlineLesson) ?? null;
+  if (onDevice) return { pick: onDevice, deferred: linked && linked.concept.order < onDevice.concept.order ? linked : null };
+  if (linked && opts.online) return { pick: linked, deferred: null };
+  return { pick: null, deferred: linked };
 }
 
 const sameLocalDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
