@@ -19,7 +19,7 @@ Status: **M0 done. M1–M4 built; M5 started (exact king-and-pawn endings). Veri
 
 ## What does not exist yet (do not describe as done)
 
-- **The app is not published and not on the phone.** `scripts/deploy-pages.sh <github-owner>` creates a public, deploy-only GitHub Pages repository (built files and a source snapshot; never `data/`). The permission system refused to let the agent create a public repository, so the owner must run it or allow it. After that: open the address in Safari on the iPhone, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device.
+- **The app is not published and not on the phone.** `scripts/deploy-pages.sh <github-owner>` publishes the built files to the `gh-pages` branch of the project's GitHub repository (never `data/`). The permission system refused to let the agent create a public repository, so the owner must run it or allow it. After that: open the address in Safari on the iPhone, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device.
 - **On the physical iPhone nothing has been tested**: Home Screen install, touch on the board, backup to Files. The simulator run used real Mobile Safari but opened pages by URL only (no taps).
 - Exact endgames cover king and pawn against king only: no basic mates, rook endings or conversion play-outs yet, and no calculation training beyond three-move puzzles (rest of M5). No training-to-game transfer metric. No Lichess-study import. No sync (M6).
 - 5 of 29 concepts have an offline human-written lesson; 2 have no lesson at all; 7 have no independent check. "The opposition" is checked by exact endgame play-outs; every other checked concept uses tagged puzzles.
@@ -97,6 +97,6 @@ uv run python -m trainer_pipeline.fetch_chesscom --player YOUR_USERNAME
 uv run python -m trainer_pipeline.games --player YOUR_USERNAME ../data/my-games/*.pgn
 # and import data/analysis/my-games.json in the app under Progress -> Your data
 
-# publish (creates or updates a public deploy-only GitHub Pages repository)
+# publish the built app to the gh-pages branch (GitHub Pages)
 cd .. && scripts/deploy-pages.sh YOUR_GITHUB_LOGIN        # DRY_RUN=1 builds the bundle only
 ```
