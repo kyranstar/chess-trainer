@@ -1,6 +1,6 @@
 # Chess Trainer
 
-A personal, offline-first chess coach for one learner (iPhone + Mac). It teaches concepts
+A personal, offline-first chess coach for one learner on an iPhone. It teaches concepts
 from human-written sources, practises them on unseen positions, schedules review, and
 reports only what the recorded attempts support.
 
@@ -15,7 +15,7 @@ in `CLAUDE.md`, `AGENTS.md` and `docs/`.
 | `public/engine/` | Vendored Stockfish 19 lite single-threaded WebAssembly build (GPL-3.0; see `PROVENANCE.md` there) |
 | `content/` | Source registry, concept map, CC0 theme definitions, local lessons, engine evidence |
 | `public/packs/` | Built offline packs: engine-verified puzzles and the opening frequency book (both from CC0 Lichess data) |
-| `pipeline/` | Mac-side Python: puzzle pack, lesson specs and validator, opening statistics and evidence, own-game analysis |
+| `pipeline/` | Build-time Python: puzzle pack, lesson specs and validator, opening statistics and evidence, exact endgame table |
 | `e2e/` | Playwright tests against the production build |
 | `docs/` | Contract, decisions, content inventory, audits, state |
 | `data/` | Raw downloads and work files (git-ignored) |
@@ -39,7 +39,6 @@ uv run pytest                                        # puzzle semantics, lesson 
 uv run python -m trainer_pipeline.fetch_sources      # download + checksum public-domain texts
 uv run python -m trainer_pipeline.lessons            # validate lessons, write engine evidence
 uv run python -m trainer_pipeline.build_puzzle_pack  # needs data/raw/lichess_db_puzzle.csv.zst (~30 min)
-uv run python -m trainer_pipeline.games --player YOUR_USERNAME ../data/my-games/*.pgn   # analyse your own games
 ```
 
 The full command list, including the opening-book build, is in `docs/STATE.md`.
@@ -49,7 +48,7 @@ The full command list, including the opening-book build, is in `docs/STATE.md`.
 Serve `dist/` over HTTPS (any static host), open it in Safari, Share → Add to Home Screen,
 and open it once while online so the practice pack installs. After that it runs with no
 network. Progress lives only in that Home Screen app's storage: use Progress → Download
-backup to keep a copy and to move history between devices.
+backup to keep a copy.
 
 With a Chess.com username set (Progress → Your games), the app reads that player's public
 ratings and games from Chess.com's public API whenever it is opened and analyses new games

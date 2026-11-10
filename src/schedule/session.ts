@@ -1,21 +1,23 @@
 /**
  * Deterministic daily session planner (v1).
  *
- * A study day is four blocks in a fixed order: review 7, learn 9, apply 8, test 6 minutes
- * (scaled for other session lengths). Rules:
+ * A study day is four blocks in a fixed order: review 5, learn 8, practice 11, test 6
+ * minutes (scaled for other session lengths; v2, owner decision of 2026-11-10: the largest
+ * block is practice, which mixes new positions on the concept with questions from the
+ * learner's own games). Rules:
  *  - review is hard-capped at its budget no matter how large the backlog is;
  *  - the learn block is always reserved when a concept is ready, and is never replaced by
  *    review;
  *  - if the next concept only has online lessons and the device is offline, that is said
  *    plainly; an offline lesson is taught instead if one is ready, otherwise the minutes go
  *    to practice (never to substitute text);
- *  - unused minutes flow forward (review -> test, learn -> apply).
+ *  - unused minutes flow to practice (review -> apply, learn -> apply).
  */
 import type { BlockKind, SessionBlock, SessionRecord, StudyBlockKind } from '../db/types';
 import { awaitingCheck, type ConceptStatus, nextToLearn } from '../learn/curriculum';
 
-export const PLANNER_VERSION = 'planner-v1';
-export const BLOCK_MINUTES: Record<StudyBlockKind, number> = { review: 7, learn: 9, apply: 8, test: 6 };
+export const PLANNER_VERSION = 'planner-v2';
+export const BLOCK_MINUTES: Record<StudyBlockKind, number> = { review: 5, learn: 8, apply: 11, test: 6 };
 export const PLAY_MINUTES = { review: 5, play: 25, reflect: 5 };
 export const SESSION_LENGTHS = [10, 20, 30, 45, 60] as const;
 const ORDER: StudyBlockKind[] = ['review', 'learn', 'apply', 'test'];
@@ -74,9 +76,9 @@ export function planSession(input: PlanInput): SessionRecord {
   if (dueCount > 0) {
     review = block('review', { reason: `${dueCount} position${dueCount === 1 ? '' : 's'} you missed before ${dueCount === 1 ? 'is' : 'are'} due again. Capped at ${Math.round(b.review / 60)} minutes.` });
   } else {
-    b.test += b.review;
+    b.apply += b.review;
     b.review = 0;
-    review = block('review', { budgetSec: 0, status: 'skipped', reason: 'Nothing is due for review today; the time moves to the mixed test.' });
+    review = block('review', { budgetSec: 0, status: 'skipped', reason: 'Nothing is due for review today; the time moves to practice.' });
   }
 
   // Learn
@@ -110,7 +112,7 @@ export function planSession(input: PlanInput): SessionRecord {
     reason: !applyTarget
       ? 'No concept with practice positions is available yet.'
       : applyTarget === pick
-        ? 'New positions on the concept you just studied. Hints allowed; hinted solves are recorded as assisted.'
+        ? 'New positions on the concept you just studied, mixed with questions from your own games. Hints allowed on the puzzles; hinted solves are recorded as assisted.'
         : applyTarget.stage === 'taught'
           ? `“${applyTarget.concept.title}” was studied but not yet shown on unseen positions.`
           : `“${applyTarget.concept.title}” has the least evidence so far (${applyTarget.evidence.n} unseen positions).`,

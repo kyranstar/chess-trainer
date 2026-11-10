@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "revision": 3,
+ "revision": 4,
  "concepts": [
   {
    "id": "safety.hanging-pieces",
@@ -85,52 +85,10 @@
    "revision": 1
   },
   {
-   "id": "mate.in-one",
-   "title": "Checkmate in one",
-   "area": "Checkmates",
-   "order": 3,
-   "week": 1,
-   "prereqs": [],
-   "descriptionTheme": "mateIn1",
-   "themes": [
-    "mateIn1"
-   ],
-   "localLessons": [],
-   "links": [
-    {
-     "sourceId": "lichess-practice",
-     "title": "Checkmate Patterns I",
-     "url": "https://lichess.org/practice/checkmates/practicestnamcheckmatepatternsi/fE4k21MW",
-     "fallbackUrl": "https://lichess.org/study/fE4k21MW",
-     "studyId": "fE4k21MW",
-     "access": "free",
-     "verified": "listed on the fetched Practice index; page not opened individually"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Winning the Game: Assisted Checkmates",
-     "author": "Chess.com Team",
-     "level": "Beginner",
-     "url": "https://www.chess.com/lessons/winning-the-game/assisted-checkmates",
-     "fallbackUrl": "https://www.chess.com/lessons/winning-the-game",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    }
-   ],
-   "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "mateIn1"
-    ]
-   },
-   "stepsMethod": "Step 1-2",
-   "revision": 1
-  },
-  {
    "id": "safety.threat-scan",
    "title": "Seeing the opponent's threat",
    "area": "Board vision and safety",
-   "order": 4,
+   "order": 3,
    "week": 1,
    "prereqs": [
     "safety.hanging-pieces"
@@ -172,10 +130,81 @@
    "revision": 1
   },
   {
+   "id": "mate.in-one",
+   "title": "Checkmate in one",
+   "area": "Checkmates",
+   "order": 4,
+   "week": 1,
+   "prereqs": [],
+   "descriptionTheme": "mateIn1",
+   "themes": [
+    "mateIn1"
+   ],
+   "localLessons": [],
+   "links": [
+    {
+     "sourceId": "lichess-practice",
+     "title": "Checkmate Patterns I",
+     "url": "https://lichess.org/practice/checkmates/practicestnamcheckmatepatternsi/fE4k21MW",
+     "fallbackUrl": "https://lichess.org/study/fE4k21MW",
+     "studyId": "fE4k21MW",
+     "access": "free",
+     "verified": "listed on the fetched Practice index; page not opened individually"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Winning the Game: Assisted Checkmates",
+     "author": "Chess.com Team",
+     "level": "Beginner",
+     "url": "https://www.chess.com/lessons/winning-the-game/assisted-checkmates",
+     "fallbackUrl": "https://www.chess.com/lessons/winning-the-game",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    }
+   ],
+   "assessment": {
+    "kind": "unseen-puzzles",
+    "themes": [
+     "mateIn1"
+    ]
+   },
+   "stepsMethod": "Step 1-2",
+   "revision": 1
+  },
+  {
+   "id": "opening.principles",
+   "title": "Opening principles",
+   "area": "Opening principles",
+   "order": 5,
+   "week": 2,
+   "prereqs": [],
+   "descriptionTheme": null,
+   "themes": [],
+   "localLessons": [],
+   "links": [
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Opening Principles",
+     "author": "Chess.com Team",
+     "level": "Beginner",
+     "url": "https://www.chess.com/lessons/opening-principles",
+     "fallbackUrl": "https://www.chess.com/lessons/opening-principles",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "course page fetched"
+    }
+   ],
+   "assessment": {
+    "kind": "none-yet",
+    "reason": "Principles are assessed through opening decisions in the repertoire trainer (M3)."
+   },
+   "stepsMethod": "Step 2",
+   "revision": 1
+  },
+  {
    "id": "tactics.double-attack",
    "title": "Double attack and fork",
    "area": "Tactical motifs",
-   "order": 5,
+   "order": 6,
    "week": 2,
    "prereqs": [
     "safety.hanging-pieces"
@@ -221,7 +250,7 @@
    "id": "tactics.pin",
    "title": "The pin",
    "area": "Tactical motifs",
-   "order": 6,
+   "order": 7,
    "week": 2,
    "prereqs": [
     "safety.hanging-pieces"
@@ -274,36 +303,28 @@
    "revision": 2
   },
   {
-   "id": "tactics.skewer",
-   "title": "The skewer",
-   "area": "Tactical motifs",
-   "order": 7,
+   "id": "defense.basics",
+   "title": "Defending against threats",
+   "area": "Defense and conversion",
+   "order": 8,
    "week": 2,
    "prereqs": [
-    "tactics.pin"
+    "safety.threat-scan"
    ],
-   "descriptionTheme": "skewer",
+   "descriptionTheme": null,
    "themes": [
-    "skewer"
+    "defensiveMove",
+    "quietMove"
    ],
    "localLessons": [],
    "links": [
     {
-     "sourceId": "lichess-practice",
-     "title": "The Skewer",
-     "url": "https://lichess.org/practice/fundamental-tactics/practicestnamtheskewer/tuoBxVE5",
-     "fallbackUrl": "https://lichess.org/study/tuoBxVE5",
-     "studyId": "tuoBxVE5",
-     "access": "free",
-     "verified": "listed on the fetched Practice index; page not opened individually"
-    },
-    {
      "sourceId": "chesscom-lessons",
-     "title": "Capturing Pieces: Skewers",
+     "title": "Forcing Moves: Saving Draws",
      "author": "Chess.com Team",
-     "level": "Beginner",
-     "url": "https://www.chess.com/lessons/capturing-pieces/skewers",
-     "fallbackUrl": "https://www.chess.com/lessons/capturing-pieces",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/forcing-moves/saving-draws",
+     "fallbackUrl": "https://www.chess.com/lessons/forcing-moves",
      "access": "membership (free accounts: one lesson per day)",
      "verified": "lesson URL listed on the fetched course page; not opened"
     }
@@ -311,17 +332,18 @@
    "assessment": {
     "kind": "unseen-puzzles",
     "themes": [
-     "skewer"
+     "defensiveMove",
+     "quietMove"
     ]
    },
-   "stepsMethod": "Step 2-3",
+   "stepsMethod": "Step 3",
    "revision": 1
   },
   {
    "id": "mate.back-rank",
    "title": "Back-rank mate",
    "area": "Checkmates",
-   "order": 8,
+   "order": 9,
    "week": 2,
    "prereqs": [
     "mate.in-one"
@@ -362,83 +384,95 @@
    "revision": 1
   },
   {
-   "id": "opening.principles",
-   "title": "Opening principles",
-   "area": "Opening principles",
-   "order": 9,
-   "week": 2,
-   "prereqs": [],
-   "descriptionTheme": null,
-   "themes": [],
-   "localLessons": [],
-   "links": [
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Opening Principles",
-     "author": "Chess.com Team",
-     "level": "Beginner",
-     "url": "https://www.chess.com/lessons/opening-principles",
-     "fallbackUrl": "https://www.chess.com/lessons/opening-principles",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "course page fetched"
-    }
-   ],
-   "assessment": {
-    "kind": "none-yet",
-    "reason": "Principles are assessed through opening decisions in the repertoire trainer (M3)."
-   },
-   "stepsMethod": "Step 2",
-   "revision": 1
-  },
-  {
-   "id": "mate.in-two",
-   "title": "Checkmate in two",
-   "area": "Checkmates",
+   "id": "tactics.skewer",
+   "title": "The skewer",
+   "area": "Tactical motifs",
    "order": 10,
    "week": 3,
    "prereqs": [
-    "mate.in-one"
+    "tactics.pin"
    ],
-   "descriptionTheme": "mateIn2",
+   "descriptionTheme": "skewer",
    "themes": [
-    "mateIn2"
+    "skewer"
    ],
    "localLessons": [],
    "links": [
     {
-     "sourceId": "chesscom-lessons",
-     "title": "Finding Checkmate: Checkmate in 2 Moves",
-     "author": "Chess.com Team",
-     "level": "Beginner",
-     "url": "https://www.chess.com/lessons/finding-checkmate/checkmate-in-2-moves",
-     "fallbackUrl": "https://www.chess.com/lessons/finding-checkmate",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    },
-    {
      "sourceId": "lichess-practice",
-     "title": "Checkmate Patterns II",
-     "url": "https://lichess.org/practice/checkmates/practicestnamcheckmatepatternsii/8yadFPpU",
-     "fallbackUrl": "https://lichess.org/study/8yadFPpU",
-     "studyId": "8yadFPpU",
+     "title": "The Skewer",
+     "url": "https://lichess.org/practice/fundamental-tactics/practicestnamtheskewer/tuoBxVE5",
+     "fallbackUrl": "https://lichess.org/study/tuoBxVE5",
+     "studyId": "tuoBxVE5",
      "access": "free",
      "verified": "listed on the fetched Practice index; page not opened individually"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Capturing Pieces: Skewers",
+     "author": "Chess.com Team",
+     "level": "Beginner",
+     "url": "https://www.chess.com/lessons/capturing-pieces/skewers",
+     "fallbackUrl": "https://www.chess.com/lessons/capturing-pieces",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
     }
    ],
    "assessment": {
     "kind": "unseen-puzzles",
     "themes": [
-     "mateIn2"
+     "skewer"
     ]
    },
    "stepsMethod": "Step 2-3",
    "revision": 1
   },
   {
+   "id": "conversion.trade-when-ahead",
+   "title": "Converting extra material",
+   "area": "Defense and conversion",
+   "order": 11,
+   "week": 3,
+   "prereqs": [],
+   "descriptionTheme": null,
+   "themes": [],
+   "localLessons": [
+    "lasker-exchange-when-ahead"
+   ],
+   "links": [
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Understanding Endgames: Exchanging Down to a Win",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/understanding-endgames/exchanging-down-to-a-win",
+     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Reading the Board: When to Trade Pieces",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/reading-the-board/when-to-trade-pieces",
+     "fallbackUrl": "https://www.chess.com/lessons/reading-the-board",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    }
+   ],
+   "assessment": {
+    "kind": "none-yet",
+    "reason": "Needs conversion play-outs against engine defence (M5)."
+   },
+   "stepsMethod": "Step 3-4",
+   "revision": 2
+  },
+  {
    "id": "calc.forcing-moves",
    "title": "Forcing moves: checks, captures, threats",
    "area": "Candidate moves and calculation",
-   "order": 11,
+   "order": 12,
    "week": 3,
    "prereqs": [
     "tactics.double-attack",
@@ -481,10 +515,54 @@
    "revision": 1
   },
   {
+   "id": "mate.in-two",
+   "title": "Checkmate in two",
+   "area": "Checkmates",
+   "order": 13,
+   "week": 3,
+   "prereqs": [
+    "mate.in-one"
+   ],
+   "descriptionTheme": "mateIn2",
+   "themes": [
+    "mateIn2"
+   ],
+   "localLessons": [],
+   "links": [
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Finding Checkmate: Checkmate in 2 Moves",
+     "author": "Chess.com Team",
+     "level": "Beginner",
+     "url": "https://www.chess.com/lessons/finding-checkmate/checkmate-in-2-moves",
+     "fallbackUrl": "https://www.chess.com/lessons/finding-checkmate",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    },
+    {
+     "sourceId": "lichess-practice",
+     "title": "Checkmate Patterns II",
+     "url": "https://lichess.org/practice/checkmates/practicestnamcheckmatepatternsii/8yadFPpU",
+     "fallbackUrl": "https://lichess.org/study/8yadFPpU",
+     "studyId": "8yadFPpU",
+     "access": "free",
+     "verified": "listed on the fetched Practice index; page not opened individually"
+    }
+   ],
+   "assessment": {
+    "kind": "unseen-puzzles",
+    "themes": [
+     "mateIn2"
+    ]
+   },
+   "stepsMethod": "Step 2-3",
+   "revision": 1
+  },
+  {
    "id": "mate.basic-pieces",
    "title": "Mating with queen or rook against a lone king",
    "area": "Checkmates",
-   "order": 12,
+   "order": 14,
    "week": 3,
    "prereqs": [
     "mate.in-one"
@@ -529,102 +607,6 @@
    },
    "stepsMethod": "Step 2-3",
    "revision": 1
-  },
-  {
-   "id": "endgame.opposition",
-   "title": "King and pawn endings: the opposition",
-   "area": "Pawn endgames",
-   "order": 13,
-   "week": 3,
-   "prereqs": [],
-   "descriptionTheme": null,
-   "themes": [],
-   "localLessons": [
-    "lasker-opposition"
-   ],
-   "links": [
-    {
-     "sourceId": "lichess-practice",
-     "title": "Opposition",
-     "url": "https://lichess.org/practice/pawn-endgames/practicestnamopposition/A4ujYOer",
-     "fallbackUrl": "https://lichess.org/study/A4ujYOer",
-     "studyId": "A4ujYOer",
-     "access": "free",
-     "verified": "listed on the fetched Practice index; page not opened individually"
-    },
-    {
-     "sourceId": "lichess-practice",
-     "title": "Key Squares",
-     "url": "https://lichess.org/practice/pawn-endgames/practicestnamkeysquares/xebrDvFe",
-     "fallbackUrl": "https://lichess.org/study/xebrDvFe",
-     "studyId": "xebrDvFe",
-     "access": "free",
-     "verified": "listed on the fetched Practice index; page not opened individually"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Pawn Endings: Beginner to Expert: King and Pawn versus King: The Opposition",
-     "author": "Chess.com Team (IM Eric Tangborn, FM Thomas Wolski)",
-     "level": "Beginner",
-     "url": "https://www.chess.com/lessons/pawn-endings-beginner-to-expert/king-and-pawn-versus-king-the-opposition",
-     "fallbackUrl": "https://www.chess.com/lessons/pawn-endings-beginner-to-expert",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    }
-   ],
-   "assessment": {
-    "kind": "kpk-playout",
-    "note": "King and pawn against king played out against perfect play; every move is judged by the exact table of the ending."
-   },
-   "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 3
-  },
-  {
-   "id": "endgame.passed-pawn",
-   "title": "Passed pawns and the rule of the square",
-   "area": "Pawn endgames",
-   "order": 14,
-   "week": 3,
-   "prereqs": [],
-   "descriptionTheme": null,
-   "themes": [
-    "pawnEndgame",
-    "advancedPawn"
-   ],
-   "localLessons": [
-    "lasker-passed-pawn"
-   ],
-   "links": [
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Understanding Endgames: Rule of the Square",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/understanding-endgames/rule-of-the-square",
-     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Understanding Endgames: Passed Pawns",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/understanding-endgames/passed-pawns",
-     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    }
-   ],
-   "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "pawnEndgame",
-     "advancedPawn"
-    ]
-   },
-   "stepsMethod": "Step 2 plus-Step 3",
-   "revision": 2
   },
   {
    "id": "tactics.discovered-attack",
@@ -726,51 +708,10 @@
    "revision": 1
   },
   {
-   "id": "conversion.trade-when-ahead",
-   "title": "Converting extra material",
-   "area": "Defense and conversion",
-   "order": 17,
-   "week": 4,
-   "prereqs": [],
-   "descriptionTheme": null,
-   "themes": [],
-   "localLessons": [
-    "lasker-exchange-when-ahead"
-   ],
-   "links": [
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Understanding Endgames: Exchanging Down to a Win",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/understanding-endgames/exchanging-down-to-a-win",
-     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Reading the Board: When to Trade Pieces",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/reading-the-board/when-to-trade-pieces",
-     "fallbackUrl": "https://www.chess.com/lessons/reading-the-board",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
-    }
-   ],
-   "assessment": {
-    "kind": "none-yet",
-    "reason": "Needs conversion play-outs against engine defence (M5)."
-   },
-   "stepsMethod": "Step 3-4",
-   "revision": 2
-  },
-  {
    "id": "opening.italian",
    "title": "The Italian Game as White",
    "area": "Repertoire",
-   "order": 18,
+   "order": 17,
    "week": 4,
    "prereqs": [
     "opening.principles"
@@ -818,54 +759,11 @@
    "revision": 1
   },
   {
-   "id": "opening.caro-kann-white",
-   "title": "Meeting the Caro-Kann as White",
-   "area": "Repertoire",
-   "order": 19,
-   "week": 4,
-   "prereqs": [
-    "opening.principles"
-   ],
-   "descriptionTheme": null,
-   "themes": [],
-   "localLessons": [],
-   "links": [
-    {
-     "sourceId": "chessreps",
-     "title": "Counter the Caro-Kann",
-     "author": "CM Azel Chua",
-     "url": "https://www.chessreps.com/opening/counter-the-caro-kann-qrhk82i",
-     "access": "first line free; remaining 30 lines need membership",
-     "verified": "course page fetched"
-    },
-    {
-     "sourceId": "chesscom-lessons",
-     "title": "Learn The Caro-Kann Defense",
-     "author": "Chess.com Coach",
-     "level": "Mastery",
-     "url": "https://www.chess.com/lessons/learn-the-caro-kann-defense",
-     "fallbackUrl": "https://www.chess.com/lessons/learn-the-caro-kann-defense",
-     "access": "membership (free accounts: one lesson per day)",
-     "verified": "course page fetched",
-     "note": "Covers both sides; not a White repertoire."
-    }
-   ],
-   "assessment": {
-    "kind": "opening-puzzles",
-    "openings": [
-     "Caro-Kann_Defense"
-    ],
-    "note": "Tactics arising from Caro-Kann positions; repertoire recall arrives with M3."
-   },
-   "stepsMethod": null,
-   "revision": 1
-  },
-  {
    "id": "tactics.deflection",
    "title": "Deflection and attraction",
    "area": "Tactical motifs",
-   "order": 20,
-   "week": null,
+   "order": 18,
+   "week": 4,
    "prereqs": [
     "tactics.remove-defender"
    ],
@@ -926,35 +824,11 @@
    "revision": 1
   },
   {
-   "id": "tactics.trapped-piece",
-   "title": "Trapping a piece",
-   "area": "Tactical motifs",
-   "order": 21,
-   "week": null,
-   "prereqs": [
-    "safety.hanging-pieces"
-   ],
-   "descriptionTheme": "trappedPiece",
-   "themes": [
-    "trappedPiece"
-   ],
-   "localLessons": [],
-   "links": [],
-   "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "trappedPiece"
-    ]
-   },
-   "stepsMethod": "Step 3",
-   "revision": 1
-  },
-  {
    "id": "tactics.intermezzo",
    "title": "The in-between move",
    "area": "Tactical motifs",
-   "order": 22,
-   "week": null,
+   "order": 19,
+   "week": 4,
    "prereqs": [
     "calc.forcing-moves"
    ],
@@ -987,7 +861,7 @@
    "id": "mate.patterns",
    "title": "Checkmate patterns",
    "area": "Checkmates",
-   "order": 23,
+   "order": 20,
    "week": null,
    "prereqs": [
     "mate.in-two",
@@ -1043,7 +917,7 @@
    "id": "calc.candidate-moves",
    "title": "Candidate moves",
    "area": "Candidate moves and calculation",
-   "order": 24,
+   "order": 21,
    "week": null,
    "prereqs": [
     "calc.forcing-moves"
@@ -1074,6 +948,126 @@
    },
    "stepsMethod": "Step 3-4",
    "revision": 1
+  },
+  {
+   "id": "tactics.trapped-piece",
+   "title": "Trapping a piece",
+   "area": "Tactical motifs",
+   "order": 22,
+   "week": null,
+   "prereqs": [
+    "safety.hanging-pieces"
+   ],
+   "descriptionTheme": "trappedPiece",
+   "themes": [
+    "trappedPiece"
+   ],
+   "localLessons": [],
+   "links": [],
+   "assessment": {
+    "kind": "unseen-puzzles",
+    "themes": [
+     "trappedPiece"
+    ]
+   },
+   "stepsMethod": "Step 3",
+   "revision": 1
+  },
+  {
+   "id": "endgame.passed-pawn",
+   "title": "Passed pawns and the rule of the square",
+   "area": "Pawn endgames",
+   "order": 23,
+   "week": null,
+   "prereqs": [],
+   "descriptionTheme": null,
+   "themes": [
+    "pawnEndgame",
+    "advancedPawn"
+   ],
+   "localLessons": [
+    "lasker-passed-pawn"
+   ],
+   "links": [
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Understanding Endgames: Rule of the Square",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/understanding-endgames/rule-of-the-square",
+     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Understanding Endgames: Passed Pawns",
+     "author": "Chess.com Team",
+     "level": "Intermediate",
+     "url": "https://www.chess.com/lessons/understanding-endgames/passed-pawns",
+     "fallbackUrl": "https://www.chess.com/lessons/understanding-endgames",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    }
+   ],
+   "assessment": {
+    "kind": "unseen-puzzles",
+    "themes": [
+     "pawnEndgame",
+     "advancedPawn"
+    ]
+   },
+   "stepsMethod": "Step 2 plus-Step 3",
+   "revision": 2
+  },
+  {
+   "id": "endgame.opposition",
+   "title": "King and pawn endings: the opposition",
+   "area": "Pawn endgames",
+   "order": 24,
+   "week": null,
+   "prereqs": [],
+   "descriptionTheme": null,
+   "themes": [],
+   "localLessons": [
+    "lasker-opposition"
+   ],
+   "links": [
+    {
+     "sourceId": "lichess-practice",
+     "title": "Opposition",
+     "url": "https://lichess.org/practice/pawn-endgames/practicestnamopposition/A4ujYOer",
+     "fallbackUrl": "https://lichess.org/study/A4ujYOer",
+     "studyId": "A4ujYOer",
+     "access": "free",
+     "verified": "listed on the fetched Practice index; page not opened individually"
+    },
+    {
+     "sourceId": "lichess-practice",
+     "title": "Key Squares",
+     "url": "https://lichess.org/practice/pawn-endgames/practicestnamkeysquares/xebrDvFe",
+     "fallbackUrl": "https://lichess.org/study/xebrDvFe",
+     "studyId": "xebrDvFe",
+     "access": "free",
+     "verified": "listed on the fetched Practice index; page not opened individually"
+    },
+    {
+     "sourceId": "chesscom-lessons",
+     "title": "Pawn Endings: Beginner to Expert: King and Pawn versus King: The Opposition",
+     "author": "Chess.com Team (IM Eric Tangborn, FM Thomas Wolski)",
+     "level": "Beginner",
+     "url": "https://www.chess.com/lessons/pawn-endings-beginner-to-expert/king-and-pawn-versus-king-the-opposition",
+     "fallbackUrl": "https://www.chess.com/lessons/pawn-endings-beginner-to-expert",
+     "access": "membership (free accounts: one lesson per day)",
+     "verified": "lesson URL listed on the fetched course page; not opened"
+    }
+   ],
+   "assessment": {
+    "kind": "kpk-playout",
+    "note": "King and pawn against king played out against perfect play; every move is judged by the exact table of the ending."
+   },
+   "stepsMethod": "Step 2 plus-Step 3",
+   "revision": 3
   },
   {
    "id": "endgame.rook-basics",
@@ -1120,40 +1114,46 @@
    "revision": 1
   },
   {
-   "id": "defense.basics",
-   "title": "Defending against threats",
-   "area": "Defense and conversion",
+   "id": "opening.caro-kann-white",
+   "title": "Meeting the Caro-Kann as White",
+   "area": "Repertoire",
    "order": 26,
    "week": null,
    "prereqs": [
-    "safety.threat-scan"
+    "opening.principles"
    ],
    "descriptionTheme": null,
-   "themes": [
-    "defensiveMove",
-    "quietMove"
-   ],
+   "themes": [],
    "localLessons": [],
    "links": [
     {
+     "sourceId": "chessreps",
+     "title": "Counter the Caro-Kann",
+     "author": "CM Azel Chua",
+     "url": "https://www.chessreps.com/opening/counter-the-caro-kann-qrhk82i",
+     "access": "first line free; remaining 30 lines need membership",
+     "verified": "course page fetched"
+    },
+    {
      "sourceId": "chesscom-lessons",
-     "title": "Forcing Moves: Saving Draws",
-     "author": "Chess.com Team",
-     "level": "Intermediate",
-     "url": "https://www.chess.com/lessons/forcing-moves/saving-draws",
-     "fallbackUrl": "https://www.chess.com/lessons/forcing-moves",
+     "title": "Learn The Caro-Kann Defense",
+     "author": "Chess.com Coach",
+     "level": "Mastery",
+     "url": "https://www.chess.com/lessons/learn-the-caro-kann-defense",
+     "fallbackUrl": "https://www.chess.com/lessons/learn-the-caro-kann-defense",
      "access": "membership (free accounts: one lesson per day)",
-     "verified": "lesson URL listed on the fetched course page; not opened"
+     "verified": "course page fetched",
+     "note": "Covers both sides; not a White repertoire."
     }
    ],
    "assessment": {
-    "kind": "unseen-puzzles",
-    "themes": [
-     "defensiveMove",
-     "quietMove"
-    ]
+    "kind": "opening-puzzles",
+    "openings": [
+     "Caro-Kann_Defense"
+    ],
+    "note": "Tactics arising from Caro-Kann positions; repertoire recall arrives with M3."
    },
-   "stepsMethod": "Step 3",
+   "stepsMethod": null,
    "revision": 1
   },
   {

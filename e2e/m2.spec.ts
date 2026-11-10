@@ -69,13 +69,3 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   expect(backup.data.gameJournal).toHaveLength(1);
   expect(backup.data.gameJournal[0].turningPoint).toContain('knight on f6');
 });
-
-test('the 30-day projection lists play days and marks which lessons need a connection', async ({ page }) => {
-  await openApp(page, '#/learn');
-  await page.getByTestId('plan-30').locator('summary').click();
-  const rows = page.getByTestId('plan-30').locator('tbody tr');
-  await expect(rows).toHaveCount(30);
-  expect(await page.getByTestId('plan-30').locator('tr[data-kind=play]').count()).toBeGreaterThanOrEqual(8);
-  await expect(page.getByTestId('plan-30')).toContainText('on device');
-  await expect(page.getByTestId('plan-30')).toContainText('online');
-});

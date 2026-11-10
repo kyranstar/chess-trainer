@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CONCEPTS } from '../content';
 import type { Attempt } from '../db/types';
 import { conceptStatuses } from './curriculum';
-import { baselineConcepts, baselineProgress, DIAGNOSTIC, nextBaselineConcept, projectPlan } from './diagnostic';
+import { baselineConcepts, baselineProgress, DIAGNOSTIC, nextBaselineConcept } from './diagnostic';
 
 let k = 0;
 const att = (themes: string[], over: Partial<Attempt> = {}): Attempt => ({
@@ -57,41 +57,5 @@ describe('baseline diagnostic', () => {
     );
     expect(baselineProgress(statuses(all)).complete).toBe(true);
     expect(nextBaselineConcept(statuses(all), null)).toBeNull();
-  });
-});
-
-describe('30-day projection', () => {
-  const plan = projectPlan(statuses([]), { startDate: '2026-11-10', days: 30, playWeekdays: [3, 6] });
-
-  it('has 30 days with two play days in every full week', () => {
-    expect(plan).toHaveLength(30);
-    expect(plan[0]!.date).toBe('2026-11-10');
-    expect(plan.filter((d) => d.kind === 'play').length).toBeGreaterThanOrEqual(8);
-    for (const d of plan.filter((x) => x.kind === 'play')) expect([3, 6]).toContain(new Date(`${d.date}T12:00:00`).getDay());
-  });
-
-  it('introduces at most one new concept per study day, never before its prerequisites', () => {
-    const seen = new Set<string>();
-    for (const d of plan) {
-      if (d.kind !== 'study' || !d.concept) continue;
-      for (const p of d.concept.prereqs) expect(seen.has(p), `${d.concept.id} after ${p}`).toBe(true);
-      expect(seen.has(d.concept.id)).toBe(false);
-      seen.add(d.concept.id);
-    }
-    expect(seen.size).toBeGreaterThanOrEqual(15);
-  });
-
-  it('never schedules a concept that has no lesson, and says which lessons need a connection', () => {
-    for (const d of plan) {
-      if (!d.concept) continue;
-      expect(d.concept.localLessons.length + d.concept.links.length).toBeGreaterThan(0);
-      expect(d.lesson).toBe(d.concept.localLessons.length ? 'on-device' : 'online');
-    }
-  });
-
-  it('skips concepts already studied or demonstrated', () => {
-    const ev = (conceptId: string) => ({ uuid: conceptId, deviceId: 'd', ts: 1, tzOffsetMin: 0, conceptId, lessonId: null, url: null, type: 'check-passed' as const });
-    const later = projectPlan(conceptStatuses(CONCEPTS, [ev('safety.hanging-pieces')], []), { startDate: '2026-11-10', days: 30, playWeekdays: [3, 6] });
-    expect(later.some((d) => d.concept?.id === 'safety.hanging-pieces')).toBe(false);
   });
 });

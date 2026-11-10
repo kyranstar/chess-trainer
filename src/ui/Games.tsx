@@ -8,7 +8,6 @@ import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { runSyncRound, useSyncState } from '../app/useAutoSync';
 import { DEFAULT_USERNAME } from '../games/autosync';
 import type { RatingSnapshot } from '../games/chesscom';
-import { importGames } from '../games/import';
 import { clockPressure, CLOCK_MIN_DECISIONS, COMPARE_WINDOW, type DrillPosition, drillPositions, EARLY_MOVES, earlyBlunderGames, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries, UNDECIDED_BELOW } from '../games/metrics';
 import { senseStats } from '../games/sense';
 import type { Attempt } from '../db/types';
@@ -314,16 +313,14 @@ const SYNC_TEXT: Record<string, string> = {
   error: 'Chess.com returned an error; it will try again later',
 };
 
-/** Automatic import from Chess.com (and, tucked away, the manual file route). Shown under "Your data". */
+/** Automatic import from Chess.com. Shown under "Your data". */
 export function GamesImport() {
   const db = useDb();
   const games = useGames();
   const sync = useSyncState();
-  const input = useRef<HTMLInputElement>(null);
   const [username, setUsername] = useState('');
   const [saved, setSaved] = useState('');
   const [lastSync, setLastSync] = useState<{ at: number; status: string; added: number } | null>(null);
-  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     void getMeta<string>(db, 'chesscom.username').then((u) => {
@@ -341,16 +338,6 @@ export function GamesImport() {
     await setMeta(db, 'chesscom.username', name);
     setSaved(name);
     if (name) void runSyncRound(db, true);
-  }
-  async function load(file: File) {
-    try {
-      const r = await importGames(db, await file.text());
-      setMessage({ kind: 'ok', text: `Imported games for ${r.player}: ${r.added} new, ${r.updated} re-analysed, ${r.unchanged} unchanged; ${r.analysed} carry engine analysis${r.analysisKey ? ` (${r.analysisKey})` : ''}.` });
-    } catch (e) {
-      setMessage({ kind: 'error', text: `${(e as Error).message} Stored games were not changed.` });
-    } finally {
-      if (input.current) input.current.value = '';
-    }
   }
   const analysed = games?.filter((g) => g.analysis).length ?? 0;
   return (
@@ -377,19 +364,6 @@ export function GamesImport() {
         {sync.engineError ? ` The in-app engine could not start (${sync.engineError}).` : ''}
       </p>
       <p className="definition-small">Your device asks Chess.com’s public API directly for your own public games and ratings. Nothing is sent anywhere else, and analysis happens here with a small built-in engine.</p>
-      <details className="plan">
-        <summary>Deeper analysis from the Mac (optional)</summary>
-        <ol className="plain-list definition-small">
-          <li><code>cd pipeline && uv run python -m trainer_pipeline.fetch_chesscom --player YOUR_NAME</code></li>
-          <li><code>uv run python -m trainer_pipeline.games --player YOUR_NAME ../data/my-games/*.pgn</code></li>
-          <li>Import <code>data/analysis/my-games.json</code> here. It replaces the in-app analysis of the same games and is labelled with its own engine settings.</li>
-        </ol>
-        <div className="actions">
-          <button data-testid="games-button" onClick={() => input.current?.click()}>Import analysed games</button>
-        </div>
-      </details>
-      <input ref={input} data-testid="games-input" type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && void load(e.target.files[0])} />
-      {message && <p className={`note ${message.kind === 'error' ? 'is-error' : 'is-ok'}`} role="status" data-testid="games-message">{message.text}</p>}
     </section>
   );
 }
@@ -447,7 +421,7 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
         </dd>
       </dl>
       <p className="definition-small">
-        These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so a deeper analysis imported from the Mac never changes this number. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
+        These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so the numbers stay comparable over time. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
       </p>
       {early.withBlunder > 0 && <a href={href('progress/game-events', { kind: 'early', period: 'all' })} data-testid="view-early">View the {early.withBlunder} games’ positions</a>}
     </section>

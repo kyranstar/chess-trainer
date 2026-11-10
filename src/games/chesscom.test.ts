@@ -3,7 +3,7 @@ import { deleteDb, getMeta, openDb, type TrainerDB } from '../db/db';
 import { convertChessComGame, gameIdFromUrl, syncChessCom, type SyncFetch } from './chesscom';
 import archive from './fixtures/chesscom-archive.fixture.json';
 import pipelineFile from './fixtures/my-games.fixture.json';
-import { importGames } from './import';
+import { importGames } from './fixtures/load';
 
 const ME = 'fixture_learner';
 const API = 'https://api.chess.com/pub/player/fixture_learner';

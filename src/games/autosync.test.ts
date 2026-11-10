@@ -6,7 +6,7 @@ import { analysePending, needsMeasure, SYNC_EVERY_MS, syncIfDue } from './autosy
 import type { SyncFetch } from './chesscom';
 import archive from './fixtures/chesscom-archive.fixture.json';
 import pipelineFile from './fixtures/my-games.fixture.json';
-import { importGames } from './import';
+import { importGames } from './fixtures/load';
 
 const API = 'https://api.chess.com/pub/player/fixture_learner';
 const names: string[] = [];

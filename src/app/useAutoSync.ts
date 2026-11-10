@@ -42,7 +42,9 @@ async function syncPart(db: TrainerDB, force: boolean): Promise<void> {
     let forced = force;
     do {
       forceQueued = false;
-      if (navigator.onLine) {
+      // Offline nothing is asked in the background. A refresh the learner asked for is still
+      // attempted, so that the screen can say plainly that Chess.com could not be reached.
+      if (navigator.onLine || forced) {
         set({ syncing: true });
         const report = await syncIfDue(db, browserFetch, Date.now(), forced);
         set({ syncing: false, ...(report ? { last: report } : {}) });

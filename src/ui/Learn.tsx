@@ -5,8 +5,6 @@ import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, LINK_PROVIDERS, SOURCE_BY_ID, TH
 import type { Concept, LessonLink } from '../content/types';
 import { recordLessonEvent } from '../db/db';
 import { CHECK, type ConceptStatus, KPK_CHECK, needsRefresh } from '../learn/curriculum';
-import { projectPlan } from '../learn/diagnostic';
-import { localDate } from '../schedule/session';
 import { formatPct } from '../metrics/metrics';
 import { LessonPlayer } from './LessonPlayer';
 import { CheckRunner } from './runners';
@@ -51,21 +49,6 @@ export function LearnHome({ learner }: { learner: Learner }) {
       <p className="note">
         {counts.offline} concept{counts.offline === 1 ? ' has' : 's have'} a lesson stored on this device. The rest link to lessons on Lichess, Chess.com or Chessreps, which need a connection{online ? '' : ' (you are offline now)'}.
       </p>
-      <details className="plan" data-testid="plan-30">
-        <summary>Next 30 days, if each check is passed first time</summary>
-        <p className="definition-small">A projection, not a schedule: one new concept per study day in prerequisite order (each is checked on a later day), play days on Wednesdays and Saturdays. Concepts with no lesson anywhere are left out. Real days follow what you actually demonstrate.</p>
-        <table className="concept-table plan-table">
-          <tbody>
-            {projectPlan(learner.statuses, { startDate: localDate(Date.now()), days: 30, playWeekdays: [3, 6] }).map((d) => (
-              <tr key={d.date} data-kind={d.kind}>
-                <td>{new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                <td>{d.kind === 'play' ? 'Play day: one rapid game and reflection' : d.concept ? <a href={href(`learn/${d.concept.id}`)}>{d.concept.title}</a> : 'Review and practice (no new concept ready)'}</td>
-                <td>{d.lesson === 'on-device' ? 'on device' : d.lesson === 'online' ? 'online' : ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
       {areas.map((area) => (
         <section key={area} className="concept-group">
           <h2>{area}</h2>

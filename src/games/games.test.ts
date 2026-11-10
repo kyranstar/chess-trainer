@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { deleteDb, openDb, type TrainerDB } from '../db/db';
 import fixture from './fixtures/my-games.fixture.json';
-import { importGames, parseGamesFile } from './import';
+import { importGames, parseGamesFile } from './fixtures/load';
 import { withMeasure } from './fixtures/measure';
 import { clockPressure, drillPositions, earlyBlunderGames, gameCoverage, majorErrors, missedOpportunities, ratingSeries } from './metrics';
 import type { GameRecord, GamesFile } from './types';

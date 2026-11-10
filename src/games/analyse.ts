@@ -1,8 +1,7 @@
 /**
- * Analysis of one of the owner's games, on the device. A TypeScript port of
- * pipeline/trainer_pipeline/games.py (analysis v2) with the same rules and thresholds, so a
- * game means the same thing whichever engine looked at it; the engine name and node budget
- * are recorded with every analysis and never pooled silently with the Mac's.
+ * Analysis of one of the owner's games, on the device (analysis v3). The engine name and
+ * node budget are recorded with every analysis; records made with different settings are
+ * never pooled silently.
  */
 import { makeSanVariation } from 'chessops/san';
 import { parseUci } from 'chessops/util';

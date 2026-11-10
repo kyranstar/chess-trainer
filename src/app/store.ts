@@ -92,6 +92,24 @@ export function usePool(): { puzzles: Puzzle[]; byId: Map<string, Puzzle>; versi
   return useMemo(() => (ready ? { puzzles: ready.puzzles, byId: ready.byId, version: ready.key } : null), [ready]);
 }
 
+/**
+ * True once the app itself (screens, engine, opening book) is stored on the device: a
+ * service worker is active, which only happens after everything it caches has been fetched.
+ * Null while unknown, false where the browser has no service worker (then nothing is cached).
+ */
+export function useAppCached(): boolean | null {
+  const [cached, setCached] = useState<boolean | null>(() => ('serviceWorker' in navigator ? null : false));
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    let live = true;
+    void navigator.serviceWorker.ready.then(() => live && setCached(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return cached;
+}
+
 export function useOnline(): boolean {
   const [online, setOnline] = useState(() => navigator.onLine);
   useEffect(() => {

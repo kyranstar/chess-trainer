@@ -228,9 +228,6 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
   font: inherit; font-size: max(1rem, 16px); /* below 16px iOS zooms the page on focus */ color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; width: 100%;
 }
 .plain-list { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
-details.plan summary { cursor: pointer; font-weight: 600; min-height: 2.75rem; display: flex; align-items: center; }
-.plan-table td:nth-child(2) { white-space: normal; }
-.plan-table td:first-child { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Progress */
 .card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }

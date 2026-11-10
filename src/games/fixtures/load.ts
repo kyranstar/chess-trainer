@@ -1,14 +1,14 @@
 /**
- * Import of the analysed-games file written by the Mac pipeline. The file is chosen by the
- * learner from local storage; the app never contacts a chess site for games.
+ * Test support: loads a games file (the shape of `my-games.fixture.json`) into the database.
  *
- * Idempotent: a game is identified by `id` (hash of the site's game link). Re-importing an
- * unchanged file changes nothing; an analysis made with different engine settings replaces
- * the old one and is labelled with its own `analysisKey`; a file without analysis never
- * erases an analysis that is already stored.
+ * The app itself has no file import any more: games arrive only from Chess.com's public API
+ * and are analysed on the device (ADR-034). This loader remains so that metric and selection
+ * tests can start from hand-checked analysed games. It is idempotent by game id, and an
+ * analysis with different engine settings replaces the stored one while leaving the device's
+ * measurement record alone.
  */
-import type { TrainerDB } from '../db/db';
-import type { GameRecord, GamesFile, PipelineGame } from './types';
+import type { TrainerDB } from '../../db/db';
+import type { GameRecord, GamesFile, PipelineGame } from '../types';
 
 export const GAMES_FORMAT = 'chess-trainer-games';
 export const GAMES_SCHEMA = 1;

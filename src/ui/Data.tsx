@@ -95,7 +95,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
         <h2>Your data</h2>
         <p>
           Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. Nothing is uploaded. The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
-          {' '}Progress on your iPhone and your Mac is separate until you move a backup across.
+          {' '}Progress lives on this device only; a backup file is the way to keep a copy or to move it to another device.
         </p>
         <p className="definition-small" data-testid="last-backup">
           {lastBackup ? `Last backup made ${new Date(lastBackup).toLocaleString()}.` : 'No backup has been made from this device.'}

@@ -1,26 +1,34 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { openApp, playMove } from './helpers';
 
-const FIXTURE = 'src/games/fixtures/my-games.fixture.json';
+const archive = JSON.parse(readFileSync('src/games/fixtures/chesscom-archive.fixture.json', 'utf8'));
+const API = 'https://api.chess.com/pub/player/fixture_learner';
 
-test('own games: import the analysed file, see ratings and error metrics with their positions, drill a missed move', async ({ page }, testInfo) => {
+// Every request of the page must be answerable by the test (see autosync.spec.ts).
+test.use({ serviceWorkers: 'block' });
+
+test('own games: fetched and analysed on the device, ratings and error metrics with their positions, drill a missed move', async ({ page }) => {
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } }, chess_blitz: { last: { rating: 431, date: 1793900000 } }, chess_daily: { last: { rating: 772, date: 1793800000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: archive });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
   await openApp(page, '#/progress');
 
-  // Before any import the dashboard says so and shows only the ratings that were typed in.
+  // Before any game the dashboard says so and shows only the ratings that were typed in.
   await expect(page.getByTestId('card-ratings')).toContainText('No games are on this device yet');
   await expect(page.getByTestId('card-errors')).toHaveCount(0);
-
-  // A wrong file is rejected and nothing is stored.
-  const bad = testInfo.outputPath('bad.json');
-  writeFileSync(bad, JSON.stringify({ manifest: { format: 'chess-trainer-backup' }, games: [] }));
-  await page.getByTestId('games-input').setInputFiles(bad);
-  await expect(page.getByTestId('games-message')).toContainText('not an analysed-games file');
   await expect(page.getByTestId('games-count')).toHaveText('0 games on this device, 0 analysed.');
+  // There is no file import: games come only from the public API.
+  await expect(page.getByTestId('games-input')).toHaveCount(0);
 
-  await page.getByTestId('games-input').setInputFiles(FIXTURE);
-  await expect(page.getByTestId('games-message')).toContainText('6 new, 0 re-analysed, 0 unchanged');
-  await expect(page.getByTestId('games-message')).toContainText('game-analysis-v2/Stockfish 19/200000');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
 
   // Ratings are per time control and never blended.
   await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');
@@ -65,8 +73,9 @@ test('own games: import the analysed file, see ratings and error metrics with th
   await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
 
-  // Re-importing the same file changes nothing.
-  await page.getByTestId('games-input').setInputFiles(FIXTURE);
-  await expect(page.getByTestId('games-message')).toContainText('0 new, 0 re-analysed, 6 unchanged');
+  // Asking Chess.com again changes nothing.
+  await page.getByTestId('sync-now').click();
+  await expect(page.getByTestId('card-games-import')).toHaveAttribute('data-sync', 'ok');
+  await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.');
   await expect(errors).toContainText('3 in 27 decisions');
 });
