@@ -1,0 +1,84 @@
+{
+  "id": "lasker-checkmate",
+  "conceptId": "mate.in-one",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "Special terms: checkmate on the move",
+  "locator": "Part I, section “Special Terms” (Check and Checkmate), Diagram 6; Part II, section “How the Different Men Cooperate”, Diagram 23",
+  "revision": 1,
+  "estMinutes": 5,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "If a King is in Check and there is no move with which to get him out of it he is said to be \"checkmate\" and the game is ended. Diagram 6 shows an example in which either player can give checkmate on the move."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "3R1nkr/pbp2p2/1pqb2p1/8/5NN1/1B1Q3P/PPP3PK/8 w - - 0 1",
+      "diagram": 6,
+      "orientation": "white",
+      "moves": [
+        "d3g6"
+      ],
+      "after": [
+        "If it were White's move he would take the Pawn on g6 with his Queen. Now Black's King is in check as White's Queen threatens to take him on the next move. The King cannot move to either g7 or h7, for these two squares are also commanded by White's Queen.",
+        "Moreover, the latter cannot be taken by the Pawn on f7 as the black King would be in check by the Bishop on b3. The Pawn is \"pinned\" by the Bishop. Black's Knight cannot take White's Queen either as he is pinned by White's Rook. Finally, there is no piece available which may be interposed between White's Queen and Black's King; in other words: Black is checkmate, his game is lost."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "3R1nkr/pbp2p2/1pqb2p1/8/5NN1/1B1Q3P/PPP3PK/8 b - - 0 1",
+      "diagram": 6,
+      "orientation": "black",
+      "moves": [
+        "c6g2"
+      ],
+      "after": [
+        "If it were Black's move he would take the Pawn g2 with the Queen. Now White's King is in check as Black's Queen threatens to take him on the next move. He may not take the Queen as he would then be captured by the Bishop b7. Neither may the Knight f4 take the Queen as he is pinned by the Bishop d6. Moreover, the King may not escape to g1, h1 or g3, these three squares lying in the rangeof Black's Queen; and so there is no move on the board with which to get White's King out of check: He is checkmate, White loses the game."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "rnbqk1nr/pppp1ppp/8/2b1P3/4P3/8/PPPP2PP/RNBQKBNR b KQkq - 0 1",
+      "diagram": 23,
+      "fromMoves": [
+        "e4",
+        "e5",
+        "f4",
+        "Bc5",
+        "fxe5"
+      ],
+      "orientation": "black"
+    },
+    {
+      "type": "try",
+      "fen": "rnb1k1nr/pppp1ppp/8/2b1P3/4P2q/8/PPPPK1PP/RNBQ1BNR b kq - 2 4",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "f4",
+        "Bc5",
+        "fxe5",
+        "Qh4+",
+        "Ke2"
+      ],
+      "orientation": "black",
+      "moves": [
+        "h4e4"
+      ],
+      "before": [
+        "After the opening moves (1) P-e4, P-e5; (2) P-f4, B-C5; (3) Pxe5?? the position of Diagram 23 is reached, in which Black wins a Rook by Q-h4+."
+      ],
+      "after": [
+        "White cannot reply (4) K-e2 on account of Qxe4 mate."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

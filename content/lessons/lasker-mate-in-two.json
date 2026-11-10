@@ -1,0 +1,82 @@
+{
+  "id": "lasker-mate-in-two",
+  "conceptId": "mate.in-two",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "Mated in two moves: two positions",
+  "locator": "Part II, sections “How the Different Men Cooperate” and “Sacrificing”, Diagrams 27 and 42",
+  "revision": 1,
+  "estMinutes": 4,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "board",
+      "fen": "r1bq1r1k/ppppNppp/8/1n2R3/8/8/PPPP1PPP/R1BQ2K1 w - - 0 1",
+      "diagram": 27,
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Diagram 27 shows one of the positions in which the beginner is frequently caught.",
+        "White plays (1) Q-h5, and if Black makes an indifferent move he mates through (2) Qxh7+, Kxh7; (3) R-h5."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r1bq1r1k/ppp1Np1p/3p2pQ/1n2R3/8/8/PPPP1PPP/R1B3K1 w - - 0 3",
+      "diagram": 27,
+      "diagramFen": "r1bq1r1k/ppppNppp/8/1n2R3/8/8/PPPP1PPP/R1BQ2K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Qh5",
+        "g6",
+        "Qh6",
+        "d6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "e5h5",
+        "g6h5",
+        "h6f6"
+      ],
+      "before": [
+        "Black could try to defend himself with (1) ..., P-g6. White can then continue with (2) Q-h6 and again Black cannot make an indifferent move such as P-d6 for instance, as White would have another mate in two moves, namely"
+      ],
+      "after": [
+        "(3) R-h5 (threatening Qxh7), Pxh5; (4) Q-f6."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "2q1r2k/pp4pp/5b2/3R2N1/2Q5/6P1/PP5P/6K1 w - - 0 1",
+      "diagram": 42,
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "3Rr2k/pp4pp/5b2/6N1/2q5/6P1/PP5P/6K1 w - - 0 2",
+      "diagram": 42,
+      "diagramFen": "2q1r2k/pp4pp/5b2/3R2N1/2Q5/6P1/PP5P/6K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Rd8",
+        "Qxc4"
+      ],
+      "orientation": "white",
+      "moves": [
+        "d8e8",
+        "c4g8",
+        "g5f7"
+      ],
+      "before": [
+        "White on the move can force the mate by (1) R-d8, a very surprising sacrifice indeed, for not only can Black take the Rook with either Queen or Rook but he can also take White's Queen. In the latter case, however, he would be mated in two moves by"
+      ],
+      "after": [
+        "(2) Rxe8+, Q-g8; (3) Kt-f7."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "id": "capablanca-control-of-centre",
+  "conceptId": "opening.principles",
+  "sourceId": "capablanca-chess-fundamentals-1921",
+  "title": "Control of the centre",
+  "locator": "Part I, Chapter I, section 7 “Control of the Centre”, Examples 18–19",
+  "revision": 1,
+  "estMinutes": 9,
+  "notationNote": "This 1921 text uses descriptive notation. Files are named after the piece that starts on them and each side counts ranks from its own back rank, so P - K 4 is e4 for White and e5 for Black, Kt - Q 2 is Nd2 for White and Nd7 for Black, Q - R 5 is Qh5 and Q - Q Kt 3 is Qb3. Kt is the knight, x is a capture, O - O is castling. Underscores mark the book's italics.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "The four squares, K 4 and Q 4 on each side respectively, are the centre squares, and control of these squares is called control of the centre. _The control of the centre is of great importance._",
+        "1. P - K 4                P - K 4 2. Kt - K B 3             P - Q 3",
+        "A timid move. Black assumes a defensive attitude at once. On principle the move is wrong. In the openings, whenever possible, _pieces should be moved in preference to Pawns_.",
+        "3. P - Q 4",
+        "White takes the offensive immediately and strives to control the centre so as to have ample room to deploy his forces.",
+        "3. ........               Kt - Q 2",
+        "Black does not wish to relinquish the centre and also prefers the text move to Kt - Q B 3, which would be the more natural square for the Kt."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1bqkbnr/pppn1ppp/3p4/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 1 4",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Nd7"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "r1bqk1nr/pppnbppp/3p4/4p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 3 5",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Nd7",
+        "Bc4",
+        "Be7"
+      ],
+      "orientation": "white",
+      "moves": [
+        "d4e5",
+        "d7e5",
+        "f3e5",
+        "d6e5",
+        "d1h5"
+      ],
+      "before": [
+        "4. B - Q B 4              P - K R 3",
+        "Black is forced to pay the penalty of his previous move. Such a move on Black's part condemns by itself any form of opening that makes it necessary. White threatened Kt - Kt 5 and Black could not stop it with 4...B - K 2, because of"
+      ],
+      "after": [
+        "5 P x P, Kt x P (if 5...P x P, 6 Q - Q 5); 6 Kt x Kt, P x Kt; 7 Q - R 5, and White wins a Pawn and has besides a perfectly safe position."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r1bqk1nr/pppnbppp/8/4p3/2B1P3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Nd7",
+        "Bc4",
+        "Be7",
+        "dxe5",
+        "dxe5"
+      ],
+      "orientation": "white",
+      "moves": [
+        "d1d5"
+      ],
+      "after": [
+        "(if 5...P x P, 6 Q - Q 5)"
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "5. Kt - B 3               K Kt - B 3 6. B - K 3                B - K 2 7. Q - K 2",
+        "It should be noticed that White does not Castle yet. The reason is that he wants to deploy his forces first, and through the last move force Black to play P - Q B 3 to make room for the Queen as White threatens R - Q 1, to be followed by P x P. Black's other alternatives would finally force him to play P x P, thus abandoning the centre to White.",
+        "7. ........               P - B 3 8. R - Q 1                Q - B 2 9. O - O",
+        "With this last move White completes his development, while Black is evidently somewhat hampered."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1b1k2r/ppqnbpp1/2pp1n1p/4p3/2BPP3/2N1BN2/PPP1QPPP/3R1RK1 b kq - 3 9",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Nd7",
+        "Bc4",
+        "h6",
+        "Nc3",
+        "Ngf6",
+        "Be3",
+        "Be7",
+        "Qe2",
+        "c6",
+        "Rd1",
+        "Qc7",
+        "O-O"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "rn1qkbnr/ppp2ppp/8/4p3/4P1b1/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Bg4",
+        "dxe5",
+        "dxe5"
+      ],
+      "orientation": "white",
+      "moves": [
+        "d1d8",
+        "e8d8",
+        "f3e5"
+      ],
+      "before": [
+        "1. P - K 4                P - K 4 2. Kt - K B 3             P - Q 3 3. P - Q 4                B - Kt 5",
+        "A bad move, which violates one of the principles set down, according to which at least one Knight should be developed before the Bishops are brought out, and also because it exchanges a Bishop for a Knight, which in the opening is generally bad, unless there is some compensation.",
+        "4. P x P                  B x Kt",
+        "4...P x P loses a Pawn."
+      ],
+      "after": []
+    },
+    {
+      "type": "try",
+      "fen": "rn1qkb1r/ppp2ppp/5n2/4p3/2B1P3/5Q2/PPP2PPP/RNB1K2R w KQkq - 2 7",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "d6",
+        "d4",
+        "Bg4",
+        "dxe5",
+        "Bxf3",
+        "Qxf3",
+        "dxe5",
+        "Bc4",
+        "Nf6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "f3b3"
+      ],
+      "before": [
+        "5. Q x B                  P x P 6. B - Q B 4              Q - B 3",
+        "If Kt - B 3; Q - Q Kt 3 wins a Pawn."
+      ],
+      "after": [
+        "These examples will show the practical application of the principles previously enunciated. The student is warned against playing Pawns in preference to pieces at the beginning of the game, especially P - K R 3 and P - Q R 3, which are moves very commonly indulged in by beginners."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

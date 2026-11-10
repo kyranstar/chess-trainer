@@ -1,0 +1,116 @@
+{
+  "id": "capablanca-opening-strategy",
+  "conceptId": "opening.principles",
+  "sourceId": "capablanca-chess-fundamentals-1921",
+  "title": "General strategy of the opening",
+  "locator": "Part I, Chapter I, section 6 “General Strategy of the Opening”, Example 17",
+  "revision": 1,
+  "estMinutes": 6,
+  "notationNote": "This 1921 text uses descriptive notation. Files are named after the piece that starts on them and each side counts ranks from its own back rank, so P - K 4 is e4 for White and e5 for Black, Kt - K B 3 is Nf3 for White and Nf6 for Black, and B - Kt 5 is Bb5 or Bg5. Kt is the knight, x is a capture, O - O is castling. Underscores mark the book's italics.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "The main thing is to _develop the pieces quickly_. Get them into play as fast as you can.",
+        "From the outset two moves, 1 P - K 4  or 1 P - Q 4, open up lines for the Queen and a Bishop. Therefore, theoretically one of these two moves must be the best, as no other first move accomplishes so much."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "EXAMPLE 17.--Suppose we begin:",
+        "1. P - K 4                P - K 4 2. Kt - K B 3",
+        "This is both an attacking and a developing move. Black can now either reply with the identical move or play",
+        "2. ........               Kt - Q B 3",
+        "This developing move at the same time defends the King's Pawn.",
+        "3. Kt - B 3               Kt - B 3",
+        "These moves are of a purely developing nature."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "Nc3",
+        "Nf6"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "4. B - Kt 5",
+        "_It is generally advisable not to bring this Bishop out until one Knight is out_, preferably the King's Knight. The Bishop could also have been played to B 4, but it is advisable whenever possible to combine development and attack.",
+        "4. ........               B - Kt 5",
+        "Black replies in the same manner, threatening a possible exchange of Bishop for Knight with Kt x P to follow.",
+        "5. O - O",
+        "an indirect way of preventing 5...B x Kt, which more experience or study will show to be bad. At the same time _the Rook is brought into action in the centre, a very important point_.",
+        "5. ........               O - O",
+        "Black follows the same line of reasoning."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1bq1rk1/pppp1ppp/2n2n2/1B2p3/1b2P3/2N2N2/PPPP1PPP/R1BQ1RK1 w - - 8 6",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "Nc3",
+        "Nf6",
+        "Bb5",
+        "Bb4",
+        "O-O",
+        "O-O"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "6. P - Q 3                P - Q 3",
+        "These moves have a two-fold object, viz.: to protect the King's Pawn and to open the diagonal for the development of the Queen's Bishop.",
+        "7. B - Kt 5",
+        "A very powerful move, which brings us to the middle-game stage, as there is already in view a combination to win quickly by Kt - Q 5. This threat makes it impossible for Black to continue the same course."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "r1bq1rk1/ppp2ppp/2np1n2/1B2p1B1/1b2P3/2NP1N2/PPP2PPP/R2Q1RK1 b - - 1 7",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "Nc3",
+        "Nf6",
+        "Bb5",
+        "Bb4",
+        "O-O",
+        "O-O",
+        "d3",
+        "d6",
+        "Bg5"
+      ],
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Before proceeding further I wish to lay stress on the following point which the student should bear in mind.",
+        "_Before development has been completed no piece should be moved more than once, unless it is essential in order to obtain either material advantage or to secure freedom of action._",
+        "The beginner would do well to remember this, as well as what has already been stated: viz., _bring out the Knights before bringing out the Bishops_."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

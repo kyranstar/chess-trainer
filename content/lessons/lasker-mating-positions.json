@@ -1,0 +1,100 @@
+{
+  "id": "lasker-mating-positions",
+  "conceptId": "mate.patterns",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "Typical mating positions: rook and bishop, the queen given up on h7, the throttled mate",
+  "locator": "Part II, sections “How the Different Men Cooperate” and “Sacrificing”, Diagrams 29, 33 and 42",
+  "revision": 1,
+  "estMinutes": 7,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4. It writes +/- for checkmate.",
+  "steps": [
+    {
+      "type": "try",
+      "fen": "2r1r1k1/p4p2/1p2p1p1/q2p4/1n3P1B/1P2PR2/P3Q1PP/3R3K w - - 0 1",
+      "diagram": 29,
+      "orientation": "white",
+      "moves": [
+        "h4f6"
+      ],
+      "before": [
+        "An example for the cooperation of Rook and Bishop is shown in Diagram 29."
+      ],
+      "after": [
+        "White plays B-f6, and there is no way for Black to prevent the mate threatened through R-h3 followed by R-h8."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "2r3k1/ppr1qppp/2n1p3/3p3Q/5P2/1P2PR2/PBP3PP/R5K1 w - - 0 1",
+      "diagram": 33,
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "2r3k1/ppr1qp1p/2n1p1p1/3p3Q/5P2/1P2P1R1/PBP3PP/R5K1 w - - 0 2",
+      "diagram": 33,
+      "diagramFen": "2r3k1/ppr1qppp/2n1p3/3p3Q/5P2/1P2PR2/PBP3PP/R5K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Rg3",
+        "g6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "h5h7",
+        "g8h7",
+        "g3h3",
+        "h7g8",
+        "h3h8"
+      ],
+      "before": [
+        "In Diagram 33, White on the move can play for a similar mate as the one explained in the discussion of Diagram 29 by placing his Rook on g3. The best protection against Rxg7 which Black has at his disposal is P-f6. But if he does not know the mating position illustrated in Diagram 29 he is liable to play P-g6, and then White forces the mate by sacrificing his Queen on h7."
+      ],
+      "after": [
+        "Black could have prolonged the agony one move by interposing his Queen on h4 on the third move."
+      ]
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "A mating position which has not been discussed up to now but which occurs frequently enough in the actual game to warrant its special mention is one in which the King is deprived of all mobility by his own men who surround him and in which a hostile Knight can check the King. Diagram 42 offers an example."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "2q1r2k/pp4pp/5b2/3R2N1/2Q5/6P1/PP5P/6K1 w - - 0 1",
+      "diagram": 42,
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "2qr3k/pp4pp/5b2/6N1/2Q5/6P1/PP5P/6K1 w - - 0 2",
+      "diagram": 42,
+      "diagramFen": "2q1r2k/pp4pp/5b2/3R2N1/2Q5/6P1/PP5P/6K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Rd8",
+        "Rxd8"
+      ],
+      "orientation": "white",
+      "moves": [
+        "g5f7",
+        "h8g8",
+        "f7h6",
+        "g8h8",
+        "c4g8",
+        "d8g8",
+        "h6f7"
+      ],
+      "before": [
+        "White on the move can force the mate by (1) R-d8, a very surprising sacrifice indeed, for not only can Black take the Rook with either Queen or Rook but he can also take White's Queen. In the latter case, however, he would be mated in two moves by (2) Rxe8+, Q-g8; (3) Kt-f7. This is one example of the \"throttled mate\" by the Knight. Another one, which is really the typical one, occurs if Black takes the Rook instead of the Queen."
+      ],
+      "after": [
+        "The mating process then is: (2) Kt-f7+, K-g8; (3) Kt-h6 double check, K-h8; (4) Q-g8+, Rxg8; (5) Kt-f7+/-. White could not have played Q-g8+ right on the second move because then Black would have taken the Queen with the King, while he could not do so with White's Knight on h6."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

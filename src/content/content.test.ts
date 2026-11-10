@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyUci, fenOf, positionFromFen } from '../chess/rules';
-import { CONCEPT_BY_ID, CONCEPTS, LESSONS, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from './index';
+import { CONCEPT_BY_ID, CONCEPTS, lessonAlternatives, LESSONS, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from './index';
 
 describe('curated content', () => {
   it('has a concept catalogue with unique ids and resolvable prerequisites', () => {
@@ -57,4 +57,41 @@ describe('curated content', () => {
       }
     }
   });
+
+  it('every asked lesson move has engine evidence, and the moves recorded as its equals are other legal moves', () => {
+    let tries = 0;
+    let withEquals = 0;
+    for (const lesson of LESSONS) {
+      lesson.steps.forEach((step, i) => {
+        if (step.type !== 'try') return;
+        let pos = positionFromFen(step.fen);
+        step.moves.forEach((uci, ply) => {
+          if (ply % 2 === 0) {
+            tries++;
+            const alts = lessonAlternatives(lesson.id, i + 1, fenOf(pos));
+            if (alts.length) withEquals++;
+            for (const a of alts) {
+              expect(a.uci, `${lesson.id} step ${i + 1}`).not.toBe(uci);
+              expect(() => applyUci(pos, a.uci), `${lesson.id} step ${i + 1} ${a.uci}`).not.toThrow();
+            }
+          }
+          pos = applyUci(pos, uci);
+        });
+      });
+    }
+    expect(tries).toBeGreaterThanOrEqual(50);
+    expect(withEquals).toBeGreaterThanOrEqual(10);
+    // A known case: after 1.e4 e5 2.Nf3 the text plays 2...Nc6, and 2...Nf6 is as good.
+    const dev = LESSONS.find((l) => l.id === 'lasker-opening-development')!;
+    const idx = dev.steps.findIndex((s) => s.type === 'try' && s.moves[0] === 'b8c6');
+    const step = dev.steps[idx]!;
+    expect(step.type === 'try' && lessonAlternatives(dev.id, idx + 1, step.fen).map((a) => a.uci)).toContain('g8f6');
+  });
+
+  it('the first concepts of the curriculum can be studied with no connection', () => {
+    const early = CONCEPTS.slice(0, 7);
+    expect(early.filter((c) => c.localLessons.length === 0).map((c) => c.id)).toEqual([]);
+    expect(CONCEPTS.filter((c) => c.localLessons.length > 0).length).toBeGreaterThanOrEqual(13);
+  });
 });
+

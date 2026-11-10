@@ -23,11 +23,11 @@ test('after one online visit the app runs with no network: launch, practise, per
   await expect(page.getByTestId('offline-strip')).toBeVisible();
   await expect(page.getByTestId('pack-error')).toHaveCount(0);
 
-  // The plan is honest offline: the first concept is link-only, so it is deferred with a notice,
-  // and a concept whose lesson is stored on the device is taught instead.
-  await expect(page.getByTestId('notice-learn')).toContainText('need a connection');
+  // The first concept of the curriculum has a lesson stored on the device, so nothing has to
+  // be put off for lack of a connection.
   await expect(page.getByTestId('block-learn')).toHaveAttribute('data-status', 'pending');
-  await expect(page.getByTestId('block-learn')).toContainText('Converting extra material');
+  await expect(page.getByTestId('block-learn')).toContainText('Hanging pieces');
+  await expect(page.getByTestId('notice-learn')).toHaveCount(0);
 
   // Practice works and is stored.
   await page.goto('./#/practice/run?concept=tactics.double-attack');

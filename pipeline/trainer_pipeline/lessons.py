@@ -37,6 +37,9 @@ ENGINE_NODES = 400_000
 #: expected-score points of it (several moves can win; the author's must be one of them).
 MAX_LOSS_WP = 5.0
 
+#: How many of the engine's top moves are examined as possible equals of the text's move.
+ALT_CANDIDATES = 5
+
 _ASCII_PIECE = {"K": "k", "Q": "q", "R": "r", "B": "b", "Kt": "n", "P": "p"}
 
 
@@ -126,6 +129,45 @@ def check_position(step: dict, text: str, where: str) -> chess.Board:
     return board
 
 
+def sound_alternatives(board: chess.Board, move: chess.Move, engine: chess.engine.SimpleEngine, best_wp: float) -> list[dict]:
+    """Other moves that pass the same test as the text's move.
+
+    The learner is asked for the move the text plays. Where another move is just as good,
+    playing it is not a mistake and the app must not record one. If the text's move mates,
+    only another mate is its equal. Otherwise each of the engine's top candidates is searched
+    on its own, exactly as the text's move was, and kept if it is within MAX_LOSS_WP of the
+    best move."""
+    solver = board.turn
+    after = board.copy(stack=False)
+    after.push(move)
+    out: list[dict] = []
+    if after.is_checkmate():
+        for m in board.legal_moves:
+            if m == move:
+                continue
+            b = board.copy(stack=False)
+            b.push(m)
+            if b.is_checkmate():
+                out.append({"uci": m.uci(), "san": board.san(m), "winPct": 100.0})
+        return out
+    infos = engine.analyse(board, chess.engine.Limit(nodes=ENGINE_NODES), multipv=ALT_CANDIDATES)
+    for info in infos:
+        cand = info["pv"][0]
+        if cand == move:
+            continue
+        b = board.copy(stack=False)
+        b.push(cand)
+        if b.is_checkmate():
+            wp = 100.0
+        elif b.is_game_over():
+            wp = 50.0
+        else:
+            wp = win_percent(engine.analyse(b, chess.engine.Limit(nodes=ENGINE_NODES), multipv=1)[0]["score"], solver)
+        if best_wp - wp <= MAX_LOSS_WP:
+            out.append({"uci": cand.uci(), "san": board.san(cand), "winPct": round(wp, 1)})
+    return sorted(out, key=lambda a: a["uci"])
+
+
 def validate_lesson(lesson: dict, sources: dict[str, dict], engine: chess.engine.SimpleEngine | None) -> dict:
     lid = lesson["id"]
     source = sources.get(lesson["sourceId"])
@@ -136,6 +178,9 @@ def validate_lesson(lesson: dict, sources: dict[str, dict], engine: chess.engine
     text = source_text(source)
     haystack = squash(text)
     evidence: dict = {"lesson": lid, "revision": lesson["revision"], "tries": []}
+    if engine is not None:
+        # A cleared engine for every lesson, so its evidence does not depend on which lessons came before.
+        engine.protocol.send_line("ucinewgame")  # type: ignore[attr-defined]
 
     def check_paragraphs(paras: list[str], where: str):
         for i, para in enumerate(paras):
@@ -182,6 +227,7 @@ def validate_lesson(lesson: dict, sources: dict[str, dict], engine: chess.engine
                     evidence["tries"].append(ev)
                     if best_wp - played_wp > MAX_LOSS_WP:
                         raise LessonError(f"{where}: engine disagrees with the text's move {uci}: {ev}")
+                    ev["alternatives"] = sound_alternatives(board, move, engine, max(best_wp, played_wp))
                 board.push(move)
         else:
             raise LessonError(f"{where}: unknown step type")

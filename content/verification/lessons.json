@@ -6,6 +6,238 @@
   "maxLossWinPct": 5.0,
   "lessons": [
     {
+      "lesson": "capablanca-control-of-centre",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 3,
+          "fen": "r1bqk1nr/pppnbppp/3p4/4p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 3 5",
+          "move": "d4e5",
+          "san": "dxe5",
+          "engineBest": "d4e5",
+          "bestWinPct": 73.5,
+          "moveWinPct": 74.4,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "r1bqk1nr/ppp1bppp/3p4/4n3/2B1P3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
+          "move": "f3e5",
+          "san": "Nxe5",
+          "engineBest": "f3e5",
+          "bestWinPct": 76.4,
+          "moveWinPct": 76.3,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "r1bqk1nr/ppp1bppp/8/4p3/2B1P3/8/PPP2PPP/RNBQK2R w KQkq - 0 7",
+          "move": "d1h5",
+          "san": "Qh5",
+          "engineBest": "d1h5",
+          "bestWinPct": 77.1,
+          "moveWinPct": 74.1,
+          "alternatives": []
+        },
+        {
+          "step": 4,
+          "fen": "r1bqk1nr/pppnbppp/8/4p3/2B1P3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 6",
+          "move": "d1d5",
+          "san": "Qd5",
+          "engineBest": "d1d5",
+          "bestWinPct": 93.4,
+          "moveWinPct": 93.2,
+          "alternatives": []
+        },
+        {
+          "step": 7,
+          "fen": "rn1qkbnr/ppp2ppp/8/4p3/4P1b1/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+          "move": "d1d8",
+          "san": "Qxd8+",
+          "engineBest": "d1d8",
+          "bestWinPct": 76.7,
+          "moveWinPct": 75.7,
+          "alternatives": []
+        },
+        {
+          "step": 7,
+          "fen": "rn1k1bnr/ppp2ppp/8/4p3/4P1b1/5N2/PPP2PPP/RNB1KB1R w KQ - 0 6",
+          "move": "f3e5",
+          "san": "Nxe5",
+          "engineBest": "f3e5",
+          "bestWinPct": 75.1,
+          "moveWinPct": 75.2,
+          "alternatives": []
+        },
+        {
+          "step": 8,
+          "fen": "rn1qkb1r/ppp2ppp/5n2/4p3/2B1P3/5Q2/PPP2PPP/RNB1K2R w KQkq - 2 7",
+          "move": "f3b3",
+          "san": "Qb3",
+          "engineBest": "f3b3",
+          "bestWinPct": 74.7,
+          "moveWinPct": 75.7,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "capablanca-opening-strategy",
+      "revision": 1,
+      "tries": []
+    },
+    {
+      "lesson": "lasker-attack-and-defense",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 3,
+          "fen": "6k1/5pp1/3bRn1p/8/P7/2P4P/6P1/6K1 b - - 1 1",
+          "move": "f7e6",
+          "san": "fxe6",
+          "engineBest": "f7e6",
+          "bestWinPct": 94.0,
+          "moveWinPct": 93.8,
+          "alternatives": [
+            {
+              "uci": "d6c5",
+              "san": "Bc5+",
+              "winPct": 93.8
+            }
+          ]
+        },
+        {
+          "step": 4,
+          "fen": "6k1/5pp1/5n1p/2b5/P7/2P1R2P/6P1/6K1 b - - 2 2",
+          "move": "c5e3",
+          "san": "Bxe3+",
+          "engineBest": "c5e3",
+          "bestWinPct": 93.9,
+          "moveWinPct": 93.8,
+          "alternatives": [
+            {
+              "uci": "c5a7",
+              "san": "Ba7",
+              "winPct": 94.2
+            },
+            {
+              "uci": "f6d5",
+              "san": "Nd5",
+              "winPct": 94.6
+            },
+            {
+              "uci": "f6e4",
+              "san": "Ne4",
+              "winPct": 93.9
+            },
+            {
+              "uci": "g8f8",
+              "san": "Kf8",
+              "winPct": 94.2
+            }
+          ]
+        },
+        {
+          "step": 5,
+          "fen": "6k1/5pp1/5n1p/8/P7/2P4P/6Pb/4R1K1 w - - 1 2",
+          "move": "g1h2",
+          "san": "Kxh2",
+          "engineBest": "g1h2",
+          "bestWinPct": 95.0,
+          "moveWinPct": 95.6,
+          "alternatives": []
+        },
+        {
+          "step": 6,
+          "fen": "4R1k1/5pp1/3b1n1p/8/P7/2P4P/6P1/6K1 b - - 1 1",
+          "move": "f6e8",
+          "san": "Nxe8",
+          "engineBest": "f6e8",
+          "bestWinPct": 94.1,
+          "moveWinPct": 94.0,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-checkmate",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 2,
+          "fen": "3R1nkr/pbp2p2/1pqb2p1/8/5NN1/1B1Q3P/PPP3PK/8 w - - 0 1",
+          "move": "d3g6",
+          "san": "Qxg6#",
+          "engineBest": "d3g6",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "3R1nkr/pbp2p2/1pqb2p1/8/5NN1/1B1Q3P/PPP3PK/8 b - - 0 1",
+          "move": "c6g2",
+          "san": "Qxg2#",
+          "engineBest": "c6g2",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 5,
+          "fen": "rnb1k1nr/pppp1ppp/8/2b1P3/4P2q/8/PPPPK1PP/RNBQ1BNR b kq - 2 4",
+          "move": "h4e4",
+          "san": "Qxe4#",
+          "engineBest": "h4e4",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-counting",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 4,
+          "fen": "rnbq1rk1/ppppnppp/8/2b3N1/2BpP3/8/PPP2PPP/RNBQK2R w KQ - 2 2",
+          "move": "d1h5",
+          "san": "Qh5",
+          "engineBest": "d1h5",
+          "bestWinPct": 91.1,
+          "moveWinPct": 91.9,
+          "alternatives": []
+        },
+        {
+          "step": 4,
+          "fen": "rnbq1rk1/ppppnpp1/7p/2b3NQ/2BpP3/8/PPP2PPP/RNB1K2R w KQ - 0 3",
+          "move": "g5f7",
+          "san": "Nxf7",
+          "engineBest": "g5f7",
+          "bestWinPct": 91.6,
+          "moveWinPct": 91.5,
+          "alternatives": []
+        },
+        {
+          "step": 5,
+          "fen": "r1b2rk1/ppppbppp/8/2q5/8/2PB1Q2/PPP2PPP/R1B1R1K1 w - - 2 2",
+          "move": "f3e4",
+          "san": "Qe4",
+          "engineBest": "f3e4",
+          "bestWinPct": 93.8,
+          "moveWinPct": 93.8,
+          "alternatives": [
+            {
+              "uci": "b2b4",
+              "san": "b4",
+              "winPct": 93.9
+            }
+          ]
+        }
+      ]
+    },
+    {
       "lesson": "lasker-double-attack",
       "revision": 1,
       "tries": [
@@ -16,7 +248,8 @@
           "san": "Nd5",
           "engineBest": "c3d5",
           "bestWinPct": 93.7,
-          "moveWinPct": 93.7
+          "moveWinPct": 93.7,
+          "alternatives": []
         },
         {
           "step": 3,
@@ -24,8 +257,9 @@
           "move": "f1b5",
           "san": "Bb5",
           "engineBest": "f1b5",
-          "bestWinPct": 95.0,
-          "moveWinPct": 94.9
+          "bestWinPct": 95.6,
+          "moveWinPct": 94.7,
+          "alternatives": []
         },
         {
           "step": 3,
@@ -33,8 +267,9 @@
           "move": "d5c7",
           "san": "Nxc7+",
           "engineBest": "d5c7",
-          "bestWinPct": 97.1,
-          "moveWinPct": 97.2
+          "bestWinPct": 97.0,
+          "moveWinPct": 97.1,
+          "alternatives": []
         },
         {
           "step": 6,
@@ -42,8 +277,9 @@
           "move": "e5c6",
           "san": "Nc6+",
           "engineBest": "e5c6",
-          "bestWinPct": 95.4,
-          "moveWinPct": 95.5
+          "bestWinPct": 95.6,
+          "moveWinPct": 95.5,
+          "alternatives": []
         },
         {
           "step": 8,
@@ -51,8 +287,9 @@
           "move": "d8h4",
           "san": "Qh4+",
           "engineBest": "d8h4",
-          "bestWinPct": 85.4,
-          "moveWinPct": 85.4
+          "bestWinPct": 86.8,
+          "moveWinPct": 89.0,
+          "alternatives": []
         },
         {
           "step": 8,
@@ -60,8 +297,9 @@
           "move": "h4e4",
           "san": "Qxe4+",
           "engineBest": "h4e4",
-          "bestWinPct": 87.8,
-          "moveWinPct": 86.6
+          "bestWinPct": 90.2,
+          "moveWinPct": 89.8,
+          "alternatives": []
         }
       ]
     },
@@ -75,8 +313,265 @@
           "move": "e2e5",
           "san": "Re5",
           "engineBest": "e2e5",
-          "bestWinPct": 91.4,
-          "moveWinPct": 91.3
+          "bestWinPct": 91.5,
+          "moveWinPct": 90.9,
+          "alternatives": [
+            {
+              "uci": "e2e1",
+              "san": "Re1",
+              "winPct": 90.4
+            },
+            {
+              "uci": "e2e6",
+              "san": "Re6",
+              "winPct": 90.2
+            },
+            {
+              "uci": "e2e7",
+              "san": "Re7",
+              "winPct": 90.6
+            },
+            {
+              "uci": "e2e8",
+              "san": "Re8",
+              "winPct": 90.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-mate-in-two",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 3,
+          "fen": "r1bq1r1k/ppp1Np1p/3p2pQ/1n2R3/8/8/PPPP1PPP/R1B3K1 w - - 0 3",
+          "move": "e5h5",
+          "san": "Rh5",
+          "engineBest": "e5h5",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": [
+            {
+              "uci": "e5e4",
+              "san": "Re4",
+              "winPct": 95.7
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "fen": "r1bq1r1k/ppp1Np1p/3p3Q/1n5p/8/8/PPPP1PPP/R1B3K1 w - - 0 4",
+          "move": "h6f6",
+          "san": "Qf6#",
+          "engineBest": "h6f6",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 5,
+          "fen": "3Rr2k/pp4pp/5b2/6N1/2q5/6P1/PP5P/6K1 w - - 0 2",
+          "move": "d8e8",
+          "san": "Rxe8+",
+          "engineBest": "d8e8",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 5,
+          "fen": "4R1qk/pp4pp/5b2/6N1/8/6P1/PP5P/6K1 w - - 1 3",
+          "move": "g5f7",
+          "san": "Nf7#",
+          "engineBest": "g5f7",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-mating-positions",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 1,
+          "fen": "2r1r1k1/p4p2/1p2p1p1/q2p4/1n3P1B/1P2PR2/P3Q1PP/3R3K w - - 0 1",
+          "move": "h4f6",
+          "san": "Bf6",
+          "engineBest": "h4f6",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "2r3k1/ppr1qp1p/2n1p1p1/3p3Q/5P2/1P2P1R1/PBP3PP/R5K1 w - - 0 2",
+          "move": "h5h7",
+          "san": "Qxh7+",
+          "engineBest": "h5h7",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "2r5/ppr1qp1k/2n1p1p1/3p4/5P2/1P2P1R1/PBP3PP/R5K1 w - - 0 3",
+          "move": "g3h3",
+          "san": "Rh3+",
+          "engineBest": "g3h3",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 3,
+          "fen": "2r3k1/ppr1qp2/2n1p1p1/3p4/5P2/1P2P2R/PBP3PP/R5K1 w - - 2 4",
+          "move": "h3h8",
+          "san": "Rh8#",
+          "engineBest": "h3h8",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 6,
+          "fen": "2qr3k/pp4pp/5b2/6N1/2Q5/6P1/PP5P/6K1 w - - 0 2",
+          "move": "g5f7",
+          "san": "Nf7+",
+          "engineBest": "g5f7",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 6,
+          "fen": "2qr2k1/pp3Npp/5b2/8/2Q5/6P1/PP5P/6K1 w - - 2 3",
+          "move": "f7h6",
+          "san": "Nh6+",
+          "engineBest": "f7h6",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 6,
+          "fen": "2qr3k/pp4pp/5b1N/8/2Q5/6P1/PP5P/6K1 w - - 4 4",
+          "move": "c4g8",
+          "san": "Qg8+",
+          "engineBest": "c4g8",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": [
+            {
+              "uci": "h6f7",
+              "san": "Nf7+",
+              "winPct": 100.0
+            }
+          ]
+        },
+        {
+          "step": 6,
+          "fen": "2q3rk/pp4pp/5b1N/8/8/6P1/PP5P/6K1 w - - 0 5",
+          "move": "h6f7",
+          "san": "Nf7#",
+          "engineBest": "h6f7",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-opening-development",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 2,
+          "fen": "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2",
+          "move": "d8h4",
+          "san": "Qh4#",
+          "engineBest": "d8h4",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": []
+        },
+        {
+          "step": 5,
+          "fen": "rnbqkbnr/pppp1ppp/8/8/3QP3/8/PPP2PPP/RNB1KBNR b KQkq - 0 3",
+          "move": "b8c6",
+          "san": "Nc6",
+          "engineBest": "b8c6",
+          "bestWinPct": 52.4,
+          "moveWinPct": 52.2,
+          "alternatives": [
+            {
+              "uci": "g8f6",
+              "san": "Nf6",
+              "winPct": 51.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-opening-threats",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 1,
+          "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+          "move": "b8c6",
+          "san": "Nc6",
+          "engineBest": "b8c6",
+          "bestWinPct": 47.2,
+          "moveWinPct": 47.9,
+          "alternatives": [
+            {
+              "uci": "d7d6",
+              "san": "d6",
+              "winPct": 44.8
+            },
+            {
+              "uci": "g8f6",
+              "san": "Nf6",
+              "winPct": 45.8
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "fen": "r1bqkb1r/ppp2ppp/2p2n2/4N3/4P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5",
+          "move": "d8d4",
+          "san": "Qd4",
+          "engineBest": "d8d4",
+          "bestWinPct": 55.3,
+          "moveWinPct": 56.0,
+          "alternatives": [
+            {
+              "uci": "f6e4",
+              "san": "Nxe4",
+              "winPct": 51.5
+            }
+          ]
+        },
+        {
+          "step": 3,
+          "fen": "rnbqk1nr/pppp1ppp/8/2b1p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+          "move": "d8e7",
+          "san": "Qe7",
+          "engineBest": "d8e7",
+          "bestWinPct": 51.4,
+          "moveWinPct": 51.5,
+          "alternatives": [
+            {
+              "uci": "d8f6",
+              "san": "Qf6",
+              "winPct": 49.8
+            }
+          ]
         }
       ]
     },
@@ -90,8 +585,9 @@
           "move": "c1d1",
           "san": "Qd1+",
           "engineBest": "c1d1",
-          "bestWinPct": 92.0,
-          "moveWinPct": 89.4
+          "bestWinPct": 90.7,
+          "moveWinPct": 91.5,
+          "alternatives": []
         },
         {
           "step": 2,
@@ -99,8 +595,15 @@
           "move": "d1a4",
           "san": "Qxa4+",
           "engineBest": "d1a4",
-          "bestWinPct": 91.9,
-          "moveWinPct": 91.5
+          "bestWinPct": 92.0,
+          "moveWinPct": 91.3,
+          "alternatives": [
+            {
+              "uci": "d1a1",
+              "san": "Qa1+",
+              "winPct": 92.6
+            }
+          ]
         },
         {
           "step": 4,
@@ -108,8 +611,9 @@
           "move": "f5e5",
           "san": "Ke5",
           "engineBest": "f5e5",
-          "bestWinPct": 97.7,
-          "moveWinPct": 100.0
+          "bestWinPct": 92.3,
+          "moveWinPct": 93.5,
+          "alternatives": []
         },
         {
           "step": 5,
@@ -117,8 +621,20 @@
           "move": "e5f6",
           "san": "Kf6",
           "engineBest": "e5f6",
-          "bestWinPct": 100.0,
-          "moveWinPct": 100.0
+          "bestWinPct": 95.9,
+          "moveWinPct": 97.9,
+          "alternatives": [
+            {
+              "uci": "e5d5",
+              "san": "Kd5",
+              "winPct": 100.0
+            },
+            {
+              "uci": "e5f5",
+              "san": "Kf5",
+              "winPct": 100.0
+            }
+          ]
         },
         {
           "step": 6,
@@ -127,7 +643,8 @@
           "san": "Ke8",
           "engineBest": "e7e8",
           "bestWinPct": 50.0,
-          "moveWinPct": 50.0
+          "moveWinPct": 50.0,
+          "alternatives": []
         },
         {
           "step": 6,
@@ -136,7 +653,8 @@
           "san": "Kf8",
           "engineBest": "e8f8",
           "bestWinPct": 50.0,
-          "moveWinPct": 50.0
+          "moveWinPct": 50.0,
+          "alternatives": []
         },
         {
           "step": 6,
@@ -145,7 +663,8 @@
           "san": "Ke8",
           "engineBest": "f8e8",
           "bestWinPct": 50.0,
-          "moveWinPct": 50.0
+          "moveWinPct": 50.0,
+          "alternatives": []
         }
       ]
     },
@@ -160,7 +679,29 @@
           "san": "Kd3",
           "engineBest": "f3f4",
           "bestWinPct": 90.5,
-          "moveWinPct": 89.9
+          "moveWinPct": 90.5,
+          "alternatives": [
+            {
+              "uci": "c2c3",
+              "san": "Kc3",
+              "winPct": 90.8
+            },
+            {
+              "uci": "c2d2",
+              "san": "Kd2",
+              "winPct": 90.6
+            },
+            {
+              "uci": "f3f4",
+              "san": "f4",
+              "winPct": 91.2
+            },
+            {
+              "uci": "g2g3",
+              "san": "g3",
+              "winPct": 91.0
+            }
+          ]
         },
         {
           "step": 4,
@@ -168,8 +709,30 @@
           "move": "d3e3",
           "san": "Ke3",
           "engineBest": "f3f4",
-          "bestWinPct": 91.3,
-          "moveWinPct": 91.5
+          "bestWinPct": 91.5,
+          "moveWinPct": 91.7,
+          "alternatives": [
+            {
+              "uci": "b3b4",
+              "san": "b4",
+              "winPct": 91.5
+            },
+            {
+              "uci": "d3c3",
+              "san": "Kc3",
+              "winPct": 91.8
+            },
+            {
+              "uci": "f3f4",
+              "san": "f4",
+              "winPct": 91.9
+            },
+            {
+              "uci": "g2g3",
+              "san": "g3",
+              "winPct": 92.2
+            }
+          ]
         },
         {
           "step": 4,
@@ -177,8 +740,30 @@
           "move": "b3b4",
           "san": "b4",
           "engineBest": "f3f4",
-          "bestWinPct": 91.9,
-          "moveWinPct": 92.0
+          "bestWinPct": 92.2,
+          "moveWinPct": 92.3,
+          "alternatives": [
+            {
+              "uci": "e3d3",
+              "san": "Kd3",
+              "winPct": 92.0
+            },
+            {
+              "uci": "f3f4",
+              "san": "f4+",
+              "winPct": 92.6
+            },
+            {
+              "uci": "g2g3",
+              "san": "g3",
+              "winPct": 92.0
+            },
+            {
+              "uci": "g2g4",
+              "san": "g4",
+              "winPct": 91.7
+            }
+          ]
         },
         {
           "step": 5,
@@ -186,8 +771,30 @@
           "move": "e3d4",
           "san": "Kd4",
           "engineBest": "e3d4",
-          "bestWinPct": 92.0,
-          "moveWinPct": 92.7
+          "bestWinPct": 92.5,
+          "moveWinPct": 92.6,
+          "alternatives": [
+            {
+              "uci": "b6b7",
+              "san": "b7",
+              "winPct": 93.2
+            },
+            {
+              "uci": "e3d3",
+              "san": "Kd3",
+              "winPct": 94.1
+            },
+            {
+              "uci": "f3f4",
+              "san": "f4",
+              "winPct": 93.2
+            },
+            {
+              "uci": "g2g4",
+              "san": "g4",
+              "winPct": 92.9
+            }
+          ]
         },
         {
           "step": 5,
@@ -195,8 +802,25 @@
           "move": "d4e5",
           "san": "Ke5",
           "engineBest": "d4e5",
-          "bestWinPct": 93.2,
-          "moveWinPct": 93.5
+          "bestWinPct": 96.9,
+          "moveWinPct": 97.0,
+          "alternatives": [
+            {
+              "uci": "d4d5",
+              "san": "Kd5",
+              "winPct": 98.2
+            },
+            {
+              "uci": "f3f4",
+              "san": "f4",
+              "winPct": 92.8
+            },
+            {
+              "uci": "g2g3",
+              "san": "g3",
+              "winPct": 94.1
+            }
+          ]
         },
         {
           "step": 5,
@@ -204,8 +828,30 @@
           "move": "e5f5",
           "san": "Kf5",
           "engineBest": "e5f5",
-          "bestWinPct": 94.6,
-          "moveWinPct": 97.7
+          "bestWinPct": 97.6,
+          "moveWinPct": 99.1,
+          "alternatives": [
+            {
+              "uci": "e5d5",
+              "san": "Kd5",
+              "winPct": 98.5
+            },
+            {
+              "uci": "e5e4",
+              "san": "Ke4",
+              "winPct": 99.1
+            },
+            {
+              "uci": "e5e6",
+              "san": "Ke6",
+              "winPct": 99.5
+            },
+            {
+              "uci": "e5f6",
+              "san": "Kf6",
+              "winPct": 99.1
+            }
+          ]
         }
       ]
     },
@@ -219,8 +865,9 @@
           "move": "f3e5",
           "san": "Nxe5",
           "engineBest": "f3e5",
-          "bestWinPct": 42.1,
-          "moveWinPct": 40.5
+          "bestWinPct": 40.0,
+          "moveWinPct": 40.3,
+          "alternatives": []
         },
         {
           "step": 2,
@@ -228,8 +875,9 @@
           "move": "f1e1",
           "san": "Re1",
           "engineBest": "f1e1",
-          "bestWinPct": 40.7,
-          "moveWinPct": 41.3
+          "bestWinPct": 38.1,
+          "moveWinPct": 40.8,
+          "alternatives": []
         },
         {
           "step": 9,
@@ -237,8 +885,15 @@
           "move": "f3d4",
           "san": "Nxd4",
           "engineBest": "c3d5",
-          "bestWinPct": 90.9,
-          "moveWinPct": 92.3
+          "bestWinPct": 92.2,
+          "moveWinPct": 91.3,
+          "alternatives": [
+            {
+              "uci": "c3d5",
+              "san": "Nd5",
+              "winPct": 91.2
+            }
+          ]
         },
         {
           "step": 9,
@@ -246,8 +901,9 @@
           "move": "d2d4",
           "san": "Qxd4",
           "engineBest": "d2d4",
-          "bestWinPct": 92.4,
-          "moveWinPct": 92.6
+          "bestWinPct": 92.3,
+          "moveWinPct": 92.2,
+          "alternatives": []
         },
         {
           "step": 9,
@@ -255,8 +911,9 @@
           "move": "e1e7",
           "san": "Rxe7",
           "engineBest": "e1e7",
-          "bestWinPct": 92.2,
-          "moveWinPct": 92.4
+          "bestWinPct": 92.1,
+          "moveWinPct": 92.4,
+          "alternatives": []
         },
         {
           "step": 9,
@@ -264,8 +921,9 @@
           "move": "g5f6",
           "san": "Bxf6",
           "engineBest": "g5f6",
-          "bestWinPct": 92.9,
-          "moveWinPct": 91.5
+          "bestWinPct": 92.2,
+          "moveWinPct": 92.3,
+          "alternatives": []
         },
         {
           "step": 9,
@@ -273,8 +931,46 @@
           "move": "e7d7",
           "san": "Rxd7",
           "engineBest": "e7d7",
-          "bestWinPct": 92.9,
-          "moveWinPct": 92.9
+          "bestWinPct": 92.5,
+          "moveWinPct": 92.4,
+          "alternatives": []
+        }
+      ]
+    },
+    {
+      "lesson": "lasker-queen-mate",
+      "revision": 1,
+      "tries": [
+        {
+          "step": 4,
+          "fen": "8/3Q4/k7/8/2K5/8/8/8 w - - 10 6",
+          "move": "c4c5",
+          "san": "Kc5",
+          "engineBest": "c4c5",
+          "bestWinPct": 100.0,
+          "moveWinPct": 100.0,
+          "alternatives": [
+            {
+              "uci": "c4d4",
+              "san": "Kd4",
+              "winPct": 100.0
+            },
+            {
+              "uci": "c4d5",
+              "san": "Kd5",
+              "winPct": 100.0
+            },
+            {
+              "uci": "d7e7",
+              "san": "Qe7",
+              "winPct": 100.0
+            },
+            {
+              "uci": "d7h7",
+              "san": "Qh7",
+              "winPct": 100.0
+            }
+          ]
         }
       ]
     }

@@ -1,0 +1,107 @@
+{
+  "id": "lasker-attack-and-defense",
+  "conceptId": "safety.hanging-pieces",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "Special terms: attack, defense and the unprotected man",
+  "locator": "Part I, section “Special Terms” (Attack and Defense; Check and Checkmate), Diagram 5",
+  "revision": 1,
+  "estMinutes": 6,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "A man is said to ATTACK another man if he moves so that on his next move he could capture the other man. Thus, in Diagram 5, White could attack Black's Bishop by moving his Rook to d1 or to e6."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "6k1/5pp1/3b1n1p/8/P7/2P4P/6P1/4R1K1 w - - 0 1",
+      "diagram": 5,
+      "orientation": "white"
+    },
+    {
+      "type": "try",
+      "fen": "6k1/5pp1/3bRn1p/8/P7/2P4P/6P1/6K1 b - - 1 1",
+      "diagram": 5,
+      "diagramFen": "6k1/5pp1/3b1n1p/8/P7/2P4P/6P1/4R1K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Re6"
+      ],
+      "orientation": "black",
+      "moves": [
+        "f7e6"
+      ],
+      "before": [
+        "A man is said to DEFEND or to PROTECT another man if he moves so that in case the other man is captured by a hostile man he could recapture the latter. Thus, in Diagram 5, Black could defend his Bishop by moving his Knight to either e4 or e8 in case White attacks with the Rook from d1. Should White attack from e6, then Black would not defend the Bishop with the Knight, for on e4 as well as on e8 the Knight is unprotected and could be captured by the Rook without White losing anything in exchange."
+      ],
+      "after": [
+        "Black has a much more simple way to defend the attack of the Rook from e6, that is, by capturing the Rook with the Pawn f7. For this reason White would not have moved the Rook to e6."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "6k1/5pp1/5n1p/2b5/P7/2P1R2P/6P1/6K1 b - - 2 2",
+      "diagram": 5,
+      "diagramFen": "6k1/5pp1/3b1n1p/8/P7/2P4P/6P1/4R1K1 b - - 0 1",
+      "afterDiagramMoves": [
+        "Bc5+",
+        "Re3"
+      ],
+      "orientation": "black",
+      "moves": [
+        "c5e3"
+      ],
+      "before": [
+        "If a man makes a move which attacks the opposing King the King is said to be in \"check.\"",
+        "Unless the attacking man can be captured there are only two ways of getting out of check. One of these is to interpose a man between the King and the attacking piece, and the other to move the King out of the line of attack. In Diagram 5 Black could give check by moving the Bishop to c5. In answer to this White has four moves at his disposal. He may either move the King to f1 or h1 or h2, or he may interpose his Rook on e3."
+      ],
+      "after": [
+        "The latter would be very unwise as Black would simply take the Rook with his Bishop, again checking White's King. The situation would then not have changed at all except that White would have lost his Rook. White's King could not move to f2, for this would leave him still attacked by the Bishop."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "6k1/5pp1/5n1p/8/P7/2P4P/6Pb/4R1K1 w - - 1 2",
+      "diagram": 5,
+      "diagramFen": "6k1/5pp1/3b1n1p/8/P7/2P4P/6P1/4R1K1 b - - 0 1",
+      "afterDiagramMoves": [
+        "Bh2+"
+      ],
+      "orientation": "white",
+      "moves": [
+        "g1h2"
+      ],
+      "before": [
+        "Instead of checking on c5 Black could have attacked White's King on h2."
+      ],
+      "after": [
+        "But in this case the King would have simply captured the Bishop."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "4R1k1/5pp1/3b1n1p/8/P7/2P4P/6P1/6K1 b - - 1 1",
+      "diagram": 5,
+      "diagramFen": "6k1/5pp1/3b1n1p/8/P7/2P4P/6P1/4R1K1 w - - 0 1",
+      "afterDiagramMoves": [
+        "Re8+"
+      ],
+      "orientation": "black",
+      "moves": [
+        "f6e8"
+      ],
+      "before": [
+        "If it were White's move he could give check with the Rook on e8."
+      ],
+      "after": [
+        "But Black could take the Rook with the Knight. He would naturally do this instead of either moving out with the King to h7 or interposing the Bishop on f8."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

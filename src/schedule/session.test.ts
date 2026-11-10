@@ -60,10 +60,15 @@ describe('session plan', () => {
   });
 
   it('offline: defers a link-only concept honestly and teaches an offline lesson instead', () => {
-    const s = plan([ev('safety.hanging-pieces', 'check-passed')], { online: false });
+    // The first seven concepts have lessons on the device. Once they are done, the next one
+    // ("Defending against threats") only has linked lessons.
+    const done = CONCEPTS.slice(0, 7).map((c) => ev(c.id, 'check-passed'));
+    expect(plan([], { online: false }).blocks[1]!.conceptId).toBe('safety.hanging-pieces'); // nothing deferred at the start
+    expect(plan([], { online: false }).blocks[1]!.notice).toBeNull();
+    const s = plan(done, { online: false });
     const learn = s.blocks[1]!;
-    expect(learn.conceptId).toBe('tactics.double-attack');
-    expect(learn.notice).toMatch(/Counting attackers and defenders.*connection/);
+    expect(learn.conceptId).toBe('conversion.trade-when-ahead');
+    expect(learn.notice).toMatch(/Defending against threats.*connection/);
   });
 
   it('offline with no local lesson available: no fake lesson, the time goes to practice', () => {

@@ -57,6 +57,6 @@ on the device. That is the only outside service it contacts, and nothing is uplo
 ## Licence
 
 GPL-3.0-or-later (the board and rules libraries and the bundled Stockfish engine are GPL). Bundled content: Lichess puzzle
-data and theme definitions (CC0); excerpts from Edward Lasker, *Chess and Checkers* (1918,
-public domain in the United States). Lessons on Chess.com, Chessreps and Lichess are linked,
+data and theme definitions (CC0); excerpts from Edward Lasker, *Chess and Checkers* (1918)
+and J. R. Capablanca, *Chess Fundamentals* (1921), both public domain in the United States. Lessons on Chess.com, Chessreps and Lichess are linked,
 never copied. See `docs/CONTENT_INVENTORY.md`.

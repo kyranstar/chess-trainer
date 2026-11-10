@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { failPuzzle, openApp, playUntilAccepted, solvePuzzle } from './helpers';
+import { failPuzzle, openApp, playMove, playUntilAccepted, solvePuzzle } from './helpers';
 
 test('daily session: linked lesson -> apply -> mixed test (no check on the lesson day) -> summary -> progress, surviving a restart', async ({ page, context }) => {
   await openApp(page);
@@ -220,5 +220,23 @@ test('the check for a studied concept comes in a later day’s session, unannoun
   await page.getByTestId('check-done').click();
   await page.goto('./#/learn');
   await expect(page.getByTestId('concept-safety.hanging-pieces')).toHaveAttribute('data-stage', 'demonstrated');
+});
+
+test('a lesson example accepts a move the engine check rates as good as the text’s, and records no miss', async ({ page }) => {
+  await openApp(page, '#/learn/safety.threat-scan');
+  await page.getByTestId('start-lesson').click();
+  const example = page.getByTestId('lesson-try');
+  // The text answers 2.Nf3 with 2...Nc6; 2...Nf6 defends just as well by the engine check.
+  await expect(example).toHaveAttribute('data-expected', 'b8c6');
+  await playMove(page, 'g8f6');
+  await expect(page.getByTestId('lesson-equal')).toContainText('Nf6 is as good here');
+  await expect(page.getByTestId('lesson-equal')).toContainText('The text plays Nc6');
+  await expect(example).toHaveAttribute('data-finished', 'true');
+  await expect(example.locator('.verdict.wrong')).toHaveCount(0);
+  // A move that is not as good is still told apart: next example, a plainly worse move.
+  await page.getByTestId('lesson-next').click();
+  await expect(example).toHaveAttribute('data-finished', 'false');
+  await playMove(page, 'a7a6');
+  await expect(example.locator('.verdict.wrong')).toContainText('is not the move the text plays');
 });
 

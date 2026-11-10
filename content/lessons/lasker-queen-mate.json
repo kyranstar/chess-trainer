@@ -1,0 +1,66 @@
+{
+  "id": "lasker-queen-mate",
+  "conceptId": "mate.basic-pieces",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "Fundamental endings: mating the lone king with king and queen",
+  "locator": "Part II, section “Fundamental Endings”, Diagram 9",
+  "revision": 1,
+  "estMinutes": 6,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "It is clear that in order to checkmate the lone King it is necessary to attack the square on which he stands as well as all adjacent squares to which he could escape. The most unfavorable position for the King is, of course, a corner of the board as there he has only three squares to go to while in the middle of the board eight squares are accessible to him. Consequently, in an ending in which one player has only his King left the other player will try to drive the King into a corner where he needs control over only three additional squares.",
+        "It can easily be seen that this can be done without difficulty with King and Queen or with King and Rook. Supposing, for instance, White has his King on c3 and his Queen on h3 while Black's King stands on d6 as shown in the following diagram."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "8/8/3k4/8/8/2K4Q/8/8 w - - 0 1",
+      "diagram": 9,
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "How will White proceed in order to drive the King into a corner and checkmate him there?",
+        "A direct onslaught with the Queen on e6 or d7 is clearly not advisable as the Queen would not be protected on these squares, so that the King could simply capture her. A long range attack from h2, g3, d3 or h6 is not effective either as it would not restrict the mobility of the King who could go to either d5 or e6 or e5, that is away from the corner to which he is to be driven.",
+        "The correct way of maneuvering for White will be to confine Black's King to a smaller and smaller territory until he finally has to back up against the side or the corner of the board. This consideration indicates the following line of play:"
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "8/3Q4/k7/8/2K5/8/8/8 w - - 10 6",
+      "diagram": 9,
+      "diagramFen": "8/8/3k4/8/8/2K4Q/8/8 w - - 0 1",
+      "afterDiagramMoves": [
+        "Qf5",
+        "Kc6",
+        "Qe5",
+        "Kd7",
+        "Kc4",
+        "Kc6",
+        "Qe7",
+        "Kb6",
+        "Qd7",
+        "Ka6"
+      ],
+      "orientation": "white",
+      "moves": [
+        "c4c5"
+      ],
+      "before": [
+        "(1)Q-f5, K-c6; (2)Q-e5, K-d7; (3) K-c4, K-c6; (4) Q-e7, K-b6; (5) Q-d7, K-a6. White must now be very careful to avoid a stalemate which would result if he deprived the King of all mobility without attacking him at the same time. This would be the case if he now moved Q-c7. For then Black could not move the King to b5, as this square is controlled by White's King, and he could not go to any of the other four squares in his range on account of White's Queen attacking all of them."
+      ],
+      "after": [
+        "The correct move is (6) K-c5. This leaves only the square a5 for Black's King, and White checkmates by (7) Q-a7 or (7) Q-b5."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

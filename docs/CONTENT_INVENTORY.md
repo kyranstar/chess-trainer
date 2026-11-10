@@ -19,7 +19,7 @@ Nothing in this file should be read as "every link was clicked".
 | Lichess puzzle database | **Bundled** (filtered pack) | "Database exports are released under the Creative Commons CC0 license" (database.lichess.org) | Yes |
 | Lichess puzzle theme names and descriptions (English) | **Bundled** as concept definitions | `translation/source/puzzleTheme.xml` is listed as CC0 1.0 in lila's COPYING.md | Yes |
 | Edward Lasker, *Chess and Checkers: The Way to Mastership* (1918) | **Bundled** verbatim excerpts | US public domain (published before 1931); Project Gutenberg #4913. **Not** public domain in life+70 countries until 2052 (author died 1981) | Yes |
-| J. R. Capablanca, *Chess Fundamentals* (1921) | **Cleared for bundling**, no lesson built yet | Public domain in the US and in life+70 countries (author died 1942); Project Gutenberg #33870. Plain text has no diagrams, so positions must be reconstructed and proven against the text's move sequences | Yes |
+| J. R. Capablanca, *Chess Fundamentals* (1921) | **Cleared for bundling**; two lessons built (opening strategy, control of the centre), from positions replayed from the text's moves | Public domain in the US and in life+70 countries (author died 1942); Project Gutenberg #33870. Plain text has no diagrams, so positions must be reconstructed and proven against the text's move sequences | Yes |
 | Lichess Practice (32 studies) | **Link only** | Chapter content is in studies owned by Lichess accounts; no public licence found. Titles are AGPL (lila repo) | No |
 | Lichess Learn | **Link only** | Text is AGPL-3.0 in the lila repo; bundling would add AGPL obligations for little gain at this level | No |
 | Chess.com Lessons | **Link only** | User Agreement (updated 2026-03-25) §2(B), §4(C) forbid copying; §5 permits linking; §4(D) restricts automated/AI access | No |
@@ -177,3 +177,5 @@ Chess Tutor (official software) is Windows-only and covers Steps 1–3.
 - Chessreps logged-in features (export) and anything past each course's first line.
 - How the Steps distributor's rating scale relates to Chess.com rapid.
 - iOS file export behaviour on the owner's actual device.
+
+Update 2026-11-10 (ADR-035): ten on-device lessons were added after this table was written (`content/lessons/`: eight from Lasker, two from Capablanca). `content/concepts.json` is the authority for which concept has which on-device lesson; the "local" column above predates them.

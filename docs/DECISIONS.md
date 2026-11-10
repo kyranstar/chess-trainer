@@ -157,3 +157,11 @@ The owner answered the open questions. This narrows the product contract ("one u
 - **The 30-day projection is removed.** The owner did not know it existed, the outside reviewer advised deleting it, and its premise (a check passed on the day of the lesson) no longer holds.
 - **No confirm step before a move is judged.**
 
+## ADR-035 Ten more on-device lessons; a move as good as the text's is not a miss — accepted 2026-11-10
+Because sessions happen underground (ADR-034), the first concepts of the curriculum needed lessons that are on the device. Ten lessons were added from the two cleared public-domain books (eight from Lasker 1918, two from Capablanca 1921), by the same rules as before: every paragraph is a verbatim excerpt, every position is a diagram parsed from the e-text or reached by replaying the text's moves, and every move the learner is asked for passed the engine gate. The first seven concepts in the order of ADR-034 now all have an on-device lesson (15 lessons, 13 of 29 concepts).
+- Capablanca's e-text has no machine-readable diagrams, only placeholders, so its lessons use only positions replayed from the starting position; his "simple mates", "winning positions" and endings could not be used. His text is in descriptive notation and is shown as printed, with a short key.
+- One book move failed the engine gate and is shown, not asked (Lasker's Diagram 33, 1.R-g3). An eleventh drafted lesson, on the back rank, was not adopted: Lasker never teaches that mate as a topic and the excerpt would have misrepresented him.
+- Titles, locators and notation keys are the only words not from the books.
+- **A move as good as the text's is not a miss.** The validity audit found other moves within the gate's five points in many lesson examples; with the new lessons it is 20 of 62. The validator now searches each such candidate exactly as it searched the text's move and records those that pass (for a mating move, only other mates). When the learner plays one, the app says it is as good by the engine's check, puts the text's move on the board so the lesson can go on, and records no mistake. The engine is cleared before each lesson so the evidence does not depend on the order of lessons.
+- All on-device lessons remain `ownerReview: pending`.
+

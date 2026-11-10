@@ -88,11 +88,15 @@ describe('next concept to learn', () => {
   });
 
   it('offline, skips link-only concepts, says so, and offers a local lesson instead', () => {
-    const events = [ev('safety.hanging-pieces', 'check-passed')];
+    const events = CONCEPTS.slice(0, 7).map((c) => ev(c.id, 'check-passed'));
     const r = nextToLearn(conceptStatuses(CONCEPTS, events, []), { online: false });
-    expect(r.deferred?.concept.id).toBe('safety.counting'); // link-only, first in order
-    expect(r.pick?.concept.id).toBe('tactics.double-attack'); // has a local lesson
+    expect(r.deferred?.concept.id).toBe('defense.basics'); // link-only, first in order
+    expect(r.pick?.concept.id).toBe('conversion.trade-when-ahead'); // has a local lesson
     expect(r.pick?.offlineLesson).toBe(true);
+    // At the very start nothing has to be deferred: the first concepts are on the device.
+    const fresh = nextToLearn(conceptStatuses(CONCEPTS, [], []), { online: false });
+    expect(fresh.deferred).toBeNull();
+    expect(fresh.pick?.concept.id).toBe('safety.hanging-pieces');
   });
 
   it('never returns a demonstrated concept or one already taught', () => {

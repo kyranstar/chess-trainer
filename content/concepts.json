@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "revision": 4,
+ "revision": 5,
  "concepts": [
   {
    "id": "safety.hanging-pieces",
@@ -13,7 +13,9 @@
    "themes": [
     "hangingPiece"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-attack-and-defense"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -33,7 +35,7 @@
     ]
    },
    "stepsMethod": "Step 1",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "safety.counting",
@@ -44,7 +46,9 @@
    "prereqs": [],
    "descriptionTheme": null,
    "themes": [],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-counting"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -82,7 +86,7 @@
     "reason": "The CC0 puzzle data has no tag for exchange counting. Planned: engine-generated capture-sequence drills (M5)."
    },
    "stepsMethod": "Step 1-2",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "safety.threat-scan",
@@ -97,7 +101,9 @@
    "themes": [
     "defensiveMove"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-opening-threats"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -127,7 +133,7 @@
     ]
    },
    "stepsMethod": "Step 1 plus-Step 2",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "mate.in-one",
@@ -140,7 +146,9 @@
    "themes": [
     "mateIn1"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-checkmate"
+   ],
    "links": [
     {
      "sourceId": "lichess-practice",
@@ -169,7 +177,7 @@
     ]
    },
    "stepsMethod": "Step 1-2",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "opening.principles",
@@ -180,7 +188,11 @@
    "prereqs": [],
    "descriptionTheme": null,
    "themes": [],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-opening-development",
+    "capablanca-control-of-centre",
+    "capablanca-opening-strategy"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -198,7 +210,7 @@
     "reason": "Principles are assessed through opening decisions in the repertoire trainer (M3)."
    },
    "stepsMethod": "Step 2",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "tactics.double-attack",
@@ -527,7 +539,9 @@
    "themes": [
     "mateIn2"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-mate-in-two"
+   ],
    "links": [
     {
      "sourceId": "chesscom-lessons",
@@ -556,7 +570,7 @@
     ]
    },
    "stepsMethod": "Step 2-3",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "mate.basic-pieces",
@@ -569,7 +583,9 @@
    ],
    "descriptionTheme": null,
    "themes": [],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-queen-mate"
+   ],
    "links": [
     {
      "sourceId": "lichess-practice",
@@ -606,7 +622,7 @@
     "reason": "Needs play-out against tablebase defence (M5). Capablanca's 'Some simple mates' is the planned local text."
    },
    "stepsMethod": "Step 2-3",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "tactics.discovered-attack",
@@ -872,7 +888,9 @@
     "smotheredMate",
     "mateIn2"
    ],
-   "localLessons": [],
+   "localLessons": [
+    "lasker-mating-positions"
+   ],
    "links": [
     {
      "sourceId": "lichess-practice",
@@ -911,7 +929,7 @@
     ]
    },
    "stepsMethod": "Step 3-4",
-   "revision": 1
+   "revision": 2
   },
   {
    "id": "calc.candidate-moves",

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
-import { SOURCE_BY_ID } from '../content';
+import { lessonAlternatives, SOURCE_BY_ID } from '../content';
 import type { Lesson, LessonStep } from '../content/types';
 import { getMeta, recordAttempt, recordLessonEvent, setMeta } from '../db/db';
 import { useDb, useFocusMode } from '../app/store';
@@ -23,14 +23,17 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   const [wrong, setWrong] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [finished, setFinished] = useState(false);
+  /** The learner played a move the engine check rates as good as the text's: said so, never counted as a mistake. */
+  const [equal, setEqual] = useState<{ played: string; text: string } | null>(null);
+  const usedEqual = useRef(false);
   const first = useRef<string | null>(null);
   const started = useRef(Date.now());
   const recorded = useRef(false);
   const solver = step.orientation;
 
   useEffect(() => {
-    setPly(0); setFen(step.fen); setLastMove(null); setMistakes(0); setRevealed(false); setWrong(null); setFinished(false);
-    first.current = null; started.current = Date.now(); recorded.current = false;
+    setPly(0); setFen(step.fen); setLastMove(null); setMistakes(0); setRevealed(false); setWrong(null); setFinished(false); setEqual(null);
+    first.current = null; usedEqual.current = false; started.current = Date.now(); recorded.current = false;
     // Keyed on what the example is, not on the object passed in: a parent that builds a new
     // `step` object on every render must not reset the board in the middle of the answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,7 +47,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       sessionId, context, exerciseId: `lesson:${lesson.id}:${stepIndex + 1}`, exerciseKind: 'lesson-try',
       contentVersion: `${lesson.id}@${lesson.revision}`, conceptId: lesson.conceptId, themes: [], rating: null, ts: Date.now(),
       elapsedMs: Date.now() - started.current, firstMove: first.current, played: step.moves.slice(0, ply + 1), mistakes: m, hints: shown ? 1 : 0,
-      outcome: shown ? 'assisted' : m > 0 ? 'fail' : 'success', acceptedAlternative: false,
+      outcome: shown ? 'assisted' : m > 0 ? 'fail' : 'success', acceptedAlternative: usedEqual.current,
     });
   }
 
@@ -54,10 +57,19 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
     const expected = step.moves[ply]!;
     first.current ??= uci;
     if (!sameMove(pos, uci, expected)) {
-      setWrong(sanOf(pos, uci));
-      setMistakes((m) => m + 1);
-      setResetKey((k) => k + 1);
-      return;
+      const asGood = lessonAlternatives(lesson.id, stepIndex + 1, fen).some((a) => sameMove(pos, uci, a.uci));
+      if (!asGood) {
+        setWrong(sanOf(pos, uci));
+        setMistakes((m) => m + 1);
+        setResetKey((k) => k + 1);
+        return;
+      }
+      // As good as the text's move by the engine check: no mistake. The lesson follows the
+      // text, so the text's move is put on the board and the example goes on from there.
+      usedEqual.current = true;
+      setEqual({ played: sanOf(pos, uci), text: sanOf(pos, expected) });
+    } else {
+      setEqual(null);
     }
     setWrong(null);
     let next = applyUci(pos, expected);
@@ -97,6 +109,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       <Board fen={fen} orientation={solver} movable={finished ? null : solver} lastMove={lastMove} onMove={onMove} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
         {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown.</p></div>}
+        {equal && <div className="verdict neutral" data-testid="lesson-equal"><strong>{equal.played} is as good here by the engine’s check.</strong><p>The text plays {equal.text}, so that move is on the board and the lesson goes on from it. Nothing is recorded as missed.</p></div>}
       </div>
       {!finished && <div className="actions"><button onClick={reveal}>Show the move</button></div>}
       {finished && (

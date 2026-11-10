@@ -1,0 +1,83 @@
+{
+  "id": "lasker-opening-threats",
+  "conceptId": "safety.threat-scan",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "King's Pawn openings: what the last move threatens",
+  "locator": "Part III, section “King's Pawn Openings”",
+  "revision": 1,
+  "estMinutes": 6,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "try",
+      "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3"
+      ],
+      "orientation": "black",
+      "moves": [
+        "b8c6"
+      ],
+      "before": [
+        "Supposing White plays (2) Kt-f3. Then the Pawn e5 is attacked."
+      ],
+      "after": [
+        "The only sensible protection is (2) ..., Kt-c6; for P-f6 does not come into consideration, as it is a Pawn move which does not add anything to the development of the pieces; P-d6 blocks the Bishop f8; B-d6 obstructs the Queen's Pawn and Q-f6 or Q-e7 hinders the development of the Knight or the Bishop respectively."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r1bqkb1r/ppp2ppp/2p2n2/4N3/4P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "Bb5",
+        "Nf6",
+        "Bxc6",
+        "dxc6",
+        "Nxe5"
+      ],
+      "orientation": "black",
+      "moves": [
+        "d8d4"
+      ],
+      "before": [
+        "Now, it can readily be seen that after (2) ..., Kt-c6 White may want to place his King's Bishop on b5, for with this move he repeats indirectly his attack on the King's Pawn through the threat to remove the protecting Knight. It is true, that this threat needs no attention as long as White's King's Pawn is not protected (for instance: (3) ..., Kt-f6; (4) Bxc6, Pd7xc6; (5) Ktxe5,"
+      ],
+      "after": [
+        "Q-d4 attacking Knight and Pawn at the same time and thereby regaining the Pawn) but as soon as White has defended the Pawn--with P-d3 may be--the Bishop b5 is at work and Black must seek additional protection for the Pawn e5."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbqk1nr/pppp1ppp/8/2b1p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "fromMoves": [
+        "e4",
+        "e5",
+        "Bc4",
+        "Bc5",
+        "Qh5"
+      ],
+      "orientation": "black",
+      "moves": [
+        "d8e7"
+      ],
+      "before": [
+        "If White, on his second move, plays B-c4, he attacks the Pawn f7. This Pawn is protected by Black's King and so he need not be defended any further; but Black must be on the alert against a concentration of some more white men on f7. White could try (3) Q-f3 or Q-h5. However, Black would then have time to defend himself with Kt-f6 or Q-e7 respectively.",
+        "Therefore, on the second move, Black may make any developing move; he could, of course, play (2) ..., Kt-f6, preventing White's Queen from going to h5, but this is unnecessary, as Q-h5 would be a very bad move, placing the Queen on a square from which she is bound to be chased away very soon. For instance: (2) ...., B-c5; (3) Q-h5,"
+      ],
+      "after": [
+        "Q-e7 (not P-g6 on account of Qxe5 attacking the King and the Rook at the same time). Now, whatever White plays, he will have to retire again with his Queen as soon as Black attacks her with Kt-f6, and so he loses his birth-right of attack; for it will be Black who is a move ahead in the development instead of White, as it ought to be."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}

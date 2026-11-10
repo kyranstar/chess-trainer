@@ -1,0 +1,82 @@
+{
+  "id": "lasker-counting",
+  "conceptId": "safety.counting",
+  "sourceId": "lasker-chess-and-checkers-1918",
+  "title": "More attackers than defenders, and what the men are worth",
+  "locator": "Part II, sections “Relative Value of the Men” and “How the Different Men Cooperate”, Diagrams 24–25",
+  "revision": 1,
+  "estMinutes": 9,
+  "notationNote": "This 1918 text writes Kt for the knight and names the piece and its target square: Kt-d5 is today's Nd5, P-e4 is e4.",
+  "steps": [
+    {
+      "type": "text",
+      "paragraphs": [
+        "There are two kinds of elementary attack. One when a single man attacks two or more hostile men at the same time; the other when more men are brought up to attack an opposing man than can be mustered for defense. The beginner, as a rule, makes attacks with the sole aim of driving away a hostile piece; it is clear that these attempts will in most cases be futile as they generally allow the attacked piece to move to another square just as or perhaps more favorable. The advantage of attacking two men at once is evident in that probably only one of them can be saved. The advantage of bringing up more men for attack than can be gathered for defense is not less obvious, but will be found more difficult to carry out. Using both methods of attack in conjunction is the secret of the successful cooperation of the men.",
+        "Although it is impossible to indicate exactly the relative value of the men in each position, experience enables a fair estimation of their average strength. The Queen is about as strong as two Rooks or as three minor pieces (Bishops or Knights). A minor piece is about equivalent to three Pawns, and a Rook is consequently equal to a minor piece and one to two Pawns."
+      ]
+    },
+    {
+      "type": "board",
+      "fen": "rnbqk2r/ppppnppp/8/2b5/2BpP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+      "diagram": 25,
+      "orientation": "white"
+    },
+    {
+      "type": "text",
+      "paragraphs": [
+        "Black's last move was Kt-e7, while Kt-f6, which protects the Pawn h7 against future attacks, is generally preferable in any opening. White can now play Kt-g5, attacking the Pawn f7 for the second time, as it is already attacked by the Bishop c4.",
+        "There are only two ways for Black to defend f7. One is to advance the Queen's Pawn to d5, interrupting the diagonal of White's Bishop; the other is to castle, so that the Rook procures the second protection for the Pawn f7 which is needed. It would then not be good for White to capture the Pawn because he would have to give up Knight and Bishop for Rook and one Pawn, which is not a sufficient equivalent."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "rnbq1rk1/ppppnppp/8/2b3N1/2BpP3/8/PPP2PPP/RNBQK2R w KQ - 2 2",
+      "diagram": 25,
+      "diagramFen": "rnbqk2r/ppppnppp/8/2b5/2BpP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+      "afterDiagramMoves": [
+        "Ng5",
+        "O-O"
+      ],
+      "orientation": "white",
+      "moves": [
+        "d1h5",
+        "h7h6",
+        "g5f7"
+      ],
+      "before": [
+        "Of the two ways indicated only the first one is feasible. For if Black castles he gives White an opportunity to institute an attack on the weak Pawn h7 with Knight and Queen against which Black has no satisfactory defense. Play would develop as follows:"
+      ],
+      "after": [
+        "This is the only defense against the threat Qxh7 mate. But White's Queen's move involved a double threat. It brought up a third attack on the Pawn f7, and the latter now falls, forcing Black to give up some more material.",
+        "(3) Ktxf7          Rxf7",
+        "Black has to sacrifice the exchange. If he moved the Queen, which is attacked by the Knight, he would expose his King to a deadly double check, viz.: (4) Ktxh6++, K-h8 or h7; (5) Kt-f7+ (discovered), K-g8; (6) Q-h8 mate. After giving up his Rook for the Knight on the third move Black has a lost game, for as explained in the previous chapter White can simply exchange all pieces and force the win in the ending with his superior material."
+      ]
+    },
+    {
+      "type": "try",
+      "fen": "r1b2rk1/ppppbppp/8/2q5/8/2PB1Q2/PPP2PPP/R1B1R1K1 w - - 2 2",
+      "diagram": 24,
+      "diagramFen": "r1b1k2r/ppppbppp/8/1Bq5/8/2P2Q2/PPP2PPP/R1B1R1K1 w kq - 0 1",
+      "afterDiagramMoves": [
+        "Bd3",
+        "O-O"
+      ],
+      "orientation": "white",
+      "moves": [
+        "f3e4"
+      ],
+      "before": [
+        "Diagram 24 shows a typical case of a double threat with the Queen in conjunction with other pieces. White on the move plays B-d3, and now Black cannot castle"
+      ],
+      "after": [
+        "as White would continue with Q-e4 threatening mate through Qxh7 and at the same time attacking the Bishop e7 for the second time who is only once protected. Black would have to defend the mate by either P-g6 or P-f5 or Q-h5 and White would capture the Bishop.",
+        "When castling on the King side a player must always beware of an attack by the Queen and another piece on the King's Rook's Pawn."
+      ]
+    }
+  ],
+  "review": {
+    "textCheck": "verbatim-from-source (pipeline/trainer_pipeline/lessons.py)",
+    "moveCheck": "legal + engine evidence in content/verification/lessons.json",
+    "ownerReview": "pending"
+  }
+}
