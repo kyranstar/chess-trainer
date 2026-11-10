@@ -2,6 +2,7 @@
 # Publish the built app to GitHub Pages as a single-commit, deploy-only repository.
 #
 #   scripts/deploy-pages.sh <github-owner> [repo-name]
+#   DRY_RUN=1 scripts/deploy-pages.sh <github-owner> [repo-name]   # build the bundle in data/deploy, publish nothing
 #
 # What is published: the contents of dist/ (the app and its rights-cleared content packs)
 # and source.tar.gz (a snapshot of the tracked source, as the GPL requires for a public copy).
@@ -28,6 +29,11 @@ served at https://$OWNER.github.io/$REPO/ . Source for this exact build: \`sourc
 (GPL-3.0-or-later; commit $(git rev-parse --short HEAD)). No personal training data is stored here:
 progress lives only in the browser of the device that uses the app.
 TXT
+
+if [ "${DRY_RUN:-}" = "1" ]; then
+  echo "Dry run: bundle is in $OUT ($(du -sh "$OUT" | cut -f1)); nothing was published."
+  exit 0
+fi
 
 cd "$OUT"
 git init -q -b main
