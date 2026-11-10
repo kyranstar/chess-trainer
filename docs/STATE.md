@@ -45,8 +45,9 @@ Status: **M0 done. M1–M4 built; M5 started. Published: source at https://githu
 | `npm run check` (all of the above in one command) | exit 0 on the final run |
 | Red-then-green | the tap-accuracy and promotion-cancel browser tests were run against a build with the two fixes removed and failed there |
 | Live cross-origin check (earlier this round) | `api.chess.com` answered a browser request from the published origin with status 200 in WebKit and Chromium |
+| Published site, fresh iPhone-size WebKit profile, no setup (`npx playwright test --config data/playwright.smoke.config.ts`, git-ignored) | new build served; 11 requests to Chess.com's public API, all 200; 87 games stored; current ratings shown (rapid 457, blitz 423, daily 772); on-device analysis started by itself and finished its first game within seconds; headline reports 41 rapid games waiting to be measured |
 
-Not re-verified this round: the iOS simulator run and the Mac pipeline on the owner's real games (unchanged code paths apart from the engine-name fix).
+Not re-verified this round: the iOS simulator run and the Mac pipeline on the owner's real games (unchanged code paths apart from the engine-name fix). The full browser suite is no longer run against the published site: that build carries a default username, so every test would query Chess.com for real. Use the smoke config above for the live site and `npm run e2e` (mocked API) for everything else.
 
 Bugs found by the audits and fixed this round: review of a lesson example could never be completed; a session running at midnight vanished and wrote an empty row; cancelling a promotion froze the board; a correct tap could be scored as a different, wrong move after the board moved on screen; the five check positions were re-drawn after every answer; "Show solution" during the reply animation crashed; the baseline cut off its last position; "Check Chess.com now" was ignored while a background round ran; a changed repertoire move kept the old move's schedule; knight and bishop promotions in the pawn ending were scored as wins.
 
