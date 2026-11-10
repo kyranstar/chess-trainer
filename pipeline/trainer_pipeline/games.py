@@ -11,10 +11,14 @@ What the analysis claims, and what it does not:
   * every number comes from Stockfish at a fixed node budget, recorded in the manifest;
   * "expected score" is the Lichess win% sigmoid of the engine score, from the learner's side;
   * a MAJOR ERROR is a move that lowers expected score by >= MAJOR_LOSS points;
-  * an error is labelled only when a concrete short line shows it (allows mate, or loses
-    >= MATERIAL_SWING points of material within PV_PLIES plies); everything else is "unclassified";
-  * a TACTICAL OPPORTUNITY is a position where the engine's best line wins material or mates
-    in that same concrete sense; it is "missed" when the move played gave up >= MISS_LOSS points.
+  * an error is labelled only when a concrete short line shows it: "allows mate"; "loses
+    material" (after the engine's reply line the learner is >= MATERIAL_SWING points down on
+    where they stood before the move); "misses material" (the engine's best line ends
+    >= MATERIAL_SWING points better than the line after the move played); else "unclassified";
+  * a TACTICAL OPPORTUNITY is a position where the engine's best line mates, or ends
+    >= MATERIAL_SWING points up on the balance BEFORE the opponent's last move, so that
+    simply taking back a piece is not counted as a chance; it is "missed" when the move
+    played gave up >= MISS_LOSS points.
 No label says why a move was played. Engine evaluation is not a diagnosis.
 """
 
@@ -40,7 +44,7 @@ from .puzzles import win_percent
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "data" / "analysis" / "my-games.json"
 
-ANALYSIS_VERSION = "game-analysis-v1"
+ANALYSIS_VERSION = "game-analysis-v2"
 NODES = 200_000
 MAJOR_LOSS = 20.0
 MISS_LOSS = 10.0
@@ -77,7 +81,7 @@ def game_id(headers: chess.pgn.Headers, moves: list[str]) -> str:
 def parse_games(text: str, player: str) -> tuple[list[dict], dict]:
     """Parse a multi-game PGN. Returns importable games and counts of what was left out."""
     games: dict[str, dict] = {}
-    stats = {"read": 0, "notPlayer": 0, "variant": 0, "empty": 0, "duplicates": 0}
+    stats = {"read": 0, "notPlayer": 0, "variant": 0, "computer": 0, "empty": 0, "duplicates": 0}
     stream = io.StringIO(text)
     while True:
         game = chess.pgn.read_game(stream)
@@ -91,6 +95,11 @@ def parse_games(text: str, player: str) -> tuple[list[dict], dict]:
             continue
         if h.get("Variant", "Standard") not in ("Standard", "") or h.get("SetUp") == "1":
             stats["variant"] += 1
+            continue
+        # Games against Chess.com's coach or bots are untimed practice, not rated play: left out
+        # of every game metric, and counted so the omission is visible.
+        if h.get("Event", "").startswith("Play vs") or "/game/computer/" in h.get("Link", ""):
+            stats["computer"] += 1
             continue
         color = "white" if white.lower() == player.lower() else "black"
         ucis, clocks = [], []
@@ -142,12 +151,11 @@ def material(board: chess.Board, color: chess.Color) -> int:
     return sum(v * (len(board.pieces(p, color)) - len(board.pieces(p, not color))) for p, v in VALUES.items())
 
 
-def line_swing(board: chess.Board, pv: list[chess.Move], color: chess.Color) -> int:
-    """Material change for `color` after the first PV_PLIES plies of `pv` (ending on a
+def material_after(board: chess.Board, pv: list[chess.Move], color: chess.Color) -> int:
+    """Material balance for `color` after the first PV_PLIES plies of `pv` (ending on a
     non-capture where possible, so a recapture in the line is not cut off)."""
-    start = material(board, color)
     b = board.copy(stack=False)
-    last = start
+    last = material(b, color)
     for i, move in enumerate(pv):
         if i >= PV_PLIES and not b.is_capture(move):
             break
@@ -155,7 +163,12 @@ def line_swing(board: chess.Board, pv: list[chess.Move], color: chess.Color) -> 
             break
         b.push(move)
         last = material(b, color)
-    return last - start
+    return last
+
+
+def line_swing(board: chess.Board, pv: list[chess.Move], color: chess.Color) -> int:
+    """Material change for `color` over the line, measured from `board`."""
+    return material_after(board, pv, color) - material(board, color)
 
 
 def analyse_game(game: dict, engine: chess.engine.SimpleEngine, nodes: int = NODES) -> dict:
@@ -163,6 +176,8 @@ def analyse_game(game: dict, engine: chess.engine.SimpleEngine, nodes: int = NOD
     board = chess.Board()
     decisions, events = [], []
     limit = chess.engine.Limit(nodes=nodes)
+    # Balance after the learner's previous move, i.e. before the opponent's last move.
+    before_opponent = material(board, color)
     for ply, uci in enumerate(game["moves"]):
         move = chess.Move.from_uci(uci)
         if board.turn != color:
@@ -193,10 +208,13 @@ def analyse_game(game: dict, engine: chess.engine.SimpleEngine, nodes: int = NOD
         decisions.append([ply, round(loss, 1), clock])
 
         best_score = best["score"].pov(color)
+        here = material(board, color)
+        best_end = material_after(board, list(best["pv"]), color)
+        played_end = material_after(after, reply_pv, color) if reply_pv else material(after, color)
         opportunity = None
         if best_score.is_mate() and (best_score.mate() or 0) > 0:
             opportunity = "mate"
-        elif line_swing(board, list(best["pv"]), color) >= MATERIAL_SWING and best_wp >= 60:
+        elif best_end - before_opponent >= MATERIAL_SWING and best_wp >= 60:
             opportunity = "material"
         missed = opportunity is not None and move != best_move and loss >= MISS_LOSS
 
@@ -204,8 +222,10 @@ def analyse_game(game: dict, engine: chess.engine.SimpleEngine, nodes: int = NOD
         if move != best_move and loss >= MAJOR_LOSS:
             if not after.is_game_over() and reply_mate is not None and 0 < reply_mate <= 3:
                 label = "allows-mate"
-            elif reply_pv and line_swing(after, reply_pv, color) <= -MATERIAL_SWING:
+            elif played_end - here <= -MATERIAL_SWING:
                 label = "loses-material"
+            elif best_end - played_end >= MATERIAL_SWING:
+                label = "misses-material"
             else:
                 label = "unclassified"
 
@@ -231,6 +251,7 @@ def analyse_game(game: dict, engine: chess.engine.SimpleEngine, nodes: int = NOD
                 "drill": move != best_move and second_wp is not None and best_wp - second_wp >= UNIQUE_GAP and loss >= MISS_LOSS,
             })
         board.push(move)
+        before_opponent = material(board, color)
     return {"decisions": decisions, "events": events}
 
 

@@ -6,6 +6,7 @@ import { installPack, packStatus } from './db/pack';
 import { ConceptPage, LearnHome } from './ui/Learn';
 import { OpeningsHome } from './ui/Openings';
 import { PracticeHome, PracticeRun } from './ui/Practice';
+import { DeviceCheck } from './ui/DeviceCheck';
 import { GameEventsList, GameEventView } from './ui/Games';
 import { PositionsList, PositionView, ProgressHome, sinceDateOf } from './ui/Progress';
 import { BaselineRun, SessionRun, Today } from './ui/Today';
@@ -68,6 +69,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
   else if (tab === 'practice') page = route.parts[1] === 'run' ? <PracticeRun key={route.query.toString()} route={route} learner={learner} /> : route.parts[1] === 'openings' ? <OpeningsHome learner={learner} /> : <PracticeHome learner={learner} />;
   else if (tab === 'progress') {
     if (route.parts[1] === 'positions') page = <PositionsList route={route} learner={learner} />;
+    else if (route.parts[1] === 'device-check') page = <DeviceCheck />;
     else if (route.parts[1] === 'game-events') page = <GameEventsList route={route} sinceDateOf={sinceDateOf} />;
     else if (route.parts[1] === 'game-event' && route.parts[2] && route.parts[3]) page = <GameEventView key={`${route.parts[2]}:${route.parts[3]}`} gameId={route.parts[2]} ply={Number(route.parts[3])} />;
     else if (route.parts[1] === 'position' && route.parts[2]) page = <PositionView key={route.parts[2]} uuid={route.parts[2]} learner={learner} />;

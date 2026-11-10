@@ -62,7 +62,7 @@ export function PracticeHome({ learner }: { learner: Learner }) {
           {row('review', 'Review what is due', `${due.length} due now, ${learner.reviews.length} in the queue`, { mode: 'review' })}
         </ul>
         <ul className="concept-list">
-          {row('own', 'Positions from your own games', games && games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where you missed a move the engine found clearly best` : 'Appears after analysed games are imported under Progress, Your data', { mode: 'own' })}
+          {row('own', 'Positions from your own games', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where you missed a move the engine found clearly best` : 'Appears after analysed games are imported under Progress, Your data', { mode: 'own' })}
         </ul>
       </section>
 

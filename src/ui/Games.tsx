@@ -22,7 +22,12 @@ const CLASSES: { key: TimeClass; label: string }[] = [
   { key: 'daily', label: 'Daily' },
   { key: 'bullet', label: 'Bullet' },
 ];
-const LABEL_TEXT = { 'loses-material': 'loses material in a short line', 'allows-mate': 'allows a short mate', unclassified: 'no concrete short line found' } as const;
+const LABEL_TEXT = {
+  'loses-material': 'loses material in a short line',
+  'allows-mate': 'allows a short mate',
+  'misses-material': 'passes up material that could be won',
+  unclassified: 'no concrete short line found',
+} as const;
 
 /** Rating after each game as a small line, one time control at a time. */
 function Sparkline({ values }: { values: number[] }) {
@@ -93,7 +98,7 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
               <span className="metric-range">{errs.errors} in {errs.decisions} decisions, plausible range {(errs.interval!.lo * 100).toFixed(1)}–{(errs.interval!.hi * 100).toFixed(1)}</span>
               {errs.confidence === 'provisional' && <span className="badge">provisional, fewer than {PROVISIONAL_N} games</span>}
             </p>
-            <p>{errs.perGame!.toFixed(1)} per game over {errs.games} analysed game{errs.games === 1 ? '' : 's'}. {errs.byLabel['loses-material']} lose material in a short line, {errs.byLabel['allows-mate']} allow a short mate, {errs.byLabel.unclassified} have no concrete short line.</p>
+            <p>{errs.perGame!.toFixed(1)} per game over {errs.games} analysed game{errs.games === 1 ? '' : 's'}. {errs.byLabel['loses-material']} lose material in a short line, {errs.byLabel['allows-mate']} allow a short mate, {errs.byLabel['misses-material']} pass up material that could be won, {errs.byLabel.unclassified} have no concrete short line.</p>
             <table className="concept-table">
               <thead><tr><th scope="col">Time control</th><th scope="col">Errors / decisions</th><th scope="col">Per 100</th></tr></thead>
               <tbody>
@@ -128,7 +133,7 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
             {missed.missed > 0 && <a href={href('progress/game-events', { kind: 'missed', period })} data-testid="view-missed">View the {missed.missed} positions</a>}
           </>
         )}
-        <p className="definition-small">A chance is a position on your move where the engine’s best line mates or wins at least two points of material within five half-moves. It is missed when your move gave up 10 or more points of expected score. Chances are only looked for at your own moves; {periodLabel}.</p>
+        <p className="definition-small">A chance is a position on your move where the engine’s best line mates, or ends at least two points of material up on where things stood before the opponent’s last move (so simply taking a piece back is not counted). It is missed when your move gave up 10 or more points of expected score. Chances are only looked for at your own moves; {periodLabel}.</p>
       </section>
 
       <section className="card" data-testid="card-clock">
@@ -141,7 +146,7 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
         ) : (
           <p className="metric-empty" data-testid="clock-insufficient">Insufficient data: {clock.low.decisions} decisions made under 10% of the starting time and {clock.normal.decisions} otherwise; at least {CLOCK_MIN_DECISIONS} are needed in each group before the two are compared.</p>
         )}
-        <p className="definition-small">Clock times come from the game file; {clock.noClock} analysed game{clock.noClock === 1 ? ' has' : 's have'} no clock data and {clock.noClock === 1 ? 'is' : 'are'} left out; {periodLabel}. Late moves are also in harder positions, so a difference here is not proof that the clock caused it.</p>
+        <p className="definition-small">Clock times come from the game file; {clock.noClock} analysed game{clock.noClock === 1 ? ' has' : 's have'} no clock data and {clock.noClock === 1 ? 'is' : 'are'} left out; {periodLabel}. Positions late in a game differ from earlier ones (many are already decided either way), so a difference here says little about the clock itself.</p>
       </section>
     </>
   );

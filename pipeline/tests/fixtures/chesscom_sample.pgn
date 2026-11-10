@@ -95,3 +95,36 @@
 [Link "https://www.chess.com/game/live/900000005"]
 
 1. e4 {[%clk 0:10:03]} 1... e5 {[%clk 0:10:02]} 2. Bc4 {[%clk 0:10:05]} 2... Nc6 {[%clk 0:10:01]} 3. Qh5 {[%clk 0:10:06]} 3... Nf6 {[%clk 0:09:50]} 4. Qxe5+ {[%clk 0:10:07]} 4... Nxe5 {[%clk 0:09:48]} 0-1
+
+[Event "Play vs Coach"]
+[Site "Chess.com"]
+[Date "2026.11.05"]
+[White "fixture_learner"]
+[Black "Coach-Nelson"]
+[Result "1-0"]
+[WhiteElo "800"]
+[BlackElo "800"]
+[TimeControl "-"]
+[Termination "fixture_learner won by resignation"]
+[Link "https://www.chess.com/game/computer/900000006"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.11.06"]
+[Round "-"]
+[White "fixture_learner"]
+[Black "opponent_seven"]
+[Result "1-0"]
+[UTCDate "2026.11.06"]
+[UTCTime "21:00:00"]
+[WhiteElo "455"]
+[BlackElo "450"]
+[TimeControl "600"]
+[Termination "opponent_seven resigned"]
+[EndDate "2026.11.06"]
+[EndTime "21:04:00"]
+[Link "https://www.chess.com/game/live/900000007"]
+
+1. e4 {[%clk 0:09:58]} 1... e5 {[%clk 0:09:58]} 2. Nf3 {[%clk 0:09:55]} 2... Qh4 {[%clk 0:09:50]} 3. Nxh4 {[%clk 0:09:50]} 3... Nc6 {[%clk 0:09:45]} 4. Bb5 {[%clk 0:09:40]} 4... a6 {[%clk 0:09:40]} 5. Bxc6 {[%clk 0:09:35]} 5... dxc6 {[%clk 0:09:30]} 6. d3 {[%clk 0:09:30]} 6... Bg4 {[%clk 0:09:20]} 7. Qxg4 {[%clk 0:09:20]} 1-0

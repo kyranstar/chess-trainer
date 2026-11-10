@@ -25,7 +25,8 @@ def test_time_class_follows_chesscom_boundaries():
 
 def test_import_reads_side_result_ratings_and_clocks():
     games, stats = parse_games(PGN, PLAYER)
-    assert stats["read"] == 5 and len(games) == 5
+    assert stats["read"] == 7 and len(games) == 6
+    assert stats["computer"] == 1  # the coach game is counted and left out
     by_url = {g["url"].rsplit("/", 1)[1]: g for g in games}
     g1, g2, g4 = by_url["900000001"], by_url["900000002"], by_url["900000004"]
     assert (g1["color"], g1["result"], g1["playerRating"], g1["opponentRating"], g1["timeClass"]) == ("white", "win", 465, 451, "rapid")
@@ -39,7 +40,7 @@ def test_import_is_idempotent_and_case_insensitive_and_skips_other_players():
     once, _ = parse_games(PGN, PLAYER)
     twice, stats = parse_games(PGN + "\n\n" + PGN, PLAYER.upper())
     assert [g["id"] for g in twice] == [g["id"] for g in once]
-    assert stats["duplicates"] == 5
+    assert stats["duplicates"] == 6
     assert parse_games(PGN, "someone_else")[0] == []
 
 
@@ -91,7 +92,7 @@ def test_a_missed_queen_win_is_a_missed_opportunity_but_not_a_drill_when_other_m
     miss = next(e for e in a["events"] if e["ply"] == 8)
     assert miss["bestSan"] == "Nc6+"
     assert miss["opportunity"] == "material" and miss["missed"] is True
-    assert miss["majorError"] is True and miss["errorLabel"] == "unclassified"  # a missed win, no concrete loss
+    assert miss["majorError"] is True and miss["errorLabel"] == "misses-material"  # nothing lost, a queen not won
     # Other discovered checks win material too, so this position has no single answer to drill.
     assert miss["bestWp"] - miss["secondWp"] < 20 and miss["drill"] is False
 
@@ -111,3 +112,27 @@ def test_every_decision_carries_a_loss_between_0_and_100(analysed):
     for _, a in analysed.values():
         for ply, loss, _clock in a["decisions"]:
             assert 0 <= loss <= 100 and ply >= 0
+
+
+@needs_engine
+def test_taking_a_free_piece_is_a_chance_but_taking_back_is_not(analysed):
+    _, a = analysed["900000007"]  # learner is White
+    by_ply = {e["ply"]: e for e in a["events"]}
+    # 2...Qh4?? leaves the queen to be taken: a chance, and it was taken.
+    assert by_ply[4]["opportunity"] == "material" and by_ply[4]["missed"] is False
+    # 6...Bg4?? leaves a bishop to be taken by the queen: a chance, taken.
+    assert by_ply[12]["opportunity"] == "material" and by_ply[12]["missed"] is False
+    # 5.Bxc6 starts an even exchange (bishop for knight) while far ahead: not a chance.
+    assert 8 not in by_ply or by_ply[8]["opportunity"] is None
+    # No move in this game is an error of any kind.
+    assert not any(e["majorError"] for e in a["events"])
+
+
+def test_material_helpers_measure_whole_lines():
+    from trainer_pipeline.games import material, material_after
+
+    board = chess.Board("r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4")
+    trade = [chess.Move.from_uci(u) for u in ["b5c6", "d7c6"]]
+    assert material(board, chess.WHITE) == 0
+    assert material_after(board, trade, chess.WHITE) == 0  # bishop for knight: even
+    assert material_after(board, trade[:1], chess.WHITE) == 3  # cut before the recapture

@@ -26,9 +26,9 @@ describe('game import', () => {
   it('stores every game with its analysis provenance', async () => {
     const db = fresh();
     const r = await importGames(db, text, 1000);
-    expect(r).toMatchObject({ added: 5, updated: 0, unchanged: 0, analysed: 5 });
+    expect(r).toMatchObject({ added: 6, updated: 0, unchanged: 0, analysed: 6 });
     const g = (await db.games.toArray())[0]!;
-    expect(g.analysisKey).toBe('game-analysis-v1/Stockfish 19/200000');
+    expect(g.analysisKey).toBe('game-analysis-v2/Stockfish 19/200000');
     expect(g.importedAt).toBe(1000);
   });
 
@@ -36,7 +36,7 @@ describe('game import', () => {
     const db = fresh();
     await importGames(db, text, 1000);
     const before = await db.games.toArray();
-    expect(await importGames(db, text, 2000)).toMatchObject({ added: 0, updated: 0, unchanged: 5 });
+    expect(await importGames(db, text, 2000)).toMatchObject({ added: 0, updated: 0, unchanged: 6 });
     expect(await db.games.toArray()).toEqual(before);
   });
 
@@ -44,8 +44,8 @@ describe('game import', () => {
     const db = fresh();
     await importGames(db, text, 1000);
     const deeper = JSON.stringify({ ...FILE, manifest: { ...FILE.manifest, engine: { ...FILE.manifest.engine!, nodes: 400000 } } });
-    expect(await importGames(db, deeper, 2000)).toMatchObject({ added: 0, updated: 5 });
-    expect((await db.games.toArray()).every((g) => g.analysisKey === 'game-analysis-v1/Stockfish 19/400000' && g.importedAt === 1000 && g.updatedAt === 2000)).toBe(true);
+    expect(await importGames(db, deeper, 2000)).toMatchObject({ added: 0, updated: 6 });
+    expect((await db.games.toArray()).every((g) => g.analysisKey === 'game-analysis-v2/Stockfish 19/400000' && g.importedAt === 1000 && g.updatedAt === 2000)).toBe(true);
   });
 
   it('an import-only file (no engine) never erases an existing analysis', async () => {
@@ -65,7 +65,7 @@ describe('game import', () => {
     const db = fresh();
     await importGames(db, text, 1000);
     await expect(importGames(db, bad, 2000)).rejects.toThrow();
-    expect(await db.games.count()).toBe(5);
+    expect(await db.games.count()).toBe(6);
     expect(() => parseGamesFile(bad)).toThrow();
   });
 });
@@ -74,9 +74,9 @@ describe('game metrics', () => {
   it('rating series are separate per time control and ordered by date', async () => {
     const games = await loaded();
     const rapid = ratingSeries(games, 'rapid');
-    expect(rapid.points.map((p) => p.rating)).toEqual([465, 457, 449]);
-    expect(rapid.current).toMatchObject({ rating: 449, date: '2026-11-04' });
-    expect(rapid.n).toBe(3);
+    expect(rapid.points.map((p) => p.rating)).toEqual([465, 457, 449, 455]);
+    expect(rapid.current).toMatchObject({ rating: 455, date: '2026-11-06' });
+    expect(rapid.n).toBe(4);
     expect(ratingSeries(games, 'blitz').points.map((p) => p.rating)).toEqual([431]);
     expect(ratingSeries(games, 'daily').current?.rating).toBe(772);
     expect(ratingSeries(games, 'bullet')).toMatchObject({ n: 0, current: null });
@@ -86,9 +86,9 @@ describe('game metrics', () => {
     const games = await loaded();
     const withBare = [...games, { ...games[0]!, id: 'x', analysis: null, analysisKey: null }];
     const c = gameCoverage(withBare);
-    expect(c).toMatchObject({ games: 6, analysedGames: 5 });
+    expect(c).toMatchObject({ games: 7, analysedGames: 6 });
     expect(c.decisions).toBe(games.reduce((t, g) => t + g.analysis!.decisions.length, 0));
-    expect(c.analysisKeys).toEqual(['game-analysis-v1/Stockfish 19/200000']);
+    expect(c.analysisKeys).toEqual(['game-analysis-v2/Stockfish 19/200000']);
   });
 
   it('major-error rate is errors per analysed decision, with the positions behind it', async () => {
@@ -98,7 +98,7 @@ describe('game metrics', () => {
     expect(m.decisions).toBe(gameCoverage(games).decisions);
     expect(m.per100).toBeCloseTo((100 * 3) / m.decisions);
     expect(m.interval!.lo).toBeLessThan(m.rate!);
-    expect(m.byLabel).toEqual({ 'loses-material': 2, 'allows-mate': 0, unclassified: 1 });
+    expect(m.byLabel).toEqual({ 'loses-material': 2, 'allows-mate': 0, 'misses-material': 1, unclassified: 0 });
     expect(m.events.map((e) => e.event.playedSan).sort()).toEqual(['Nf6', 'Qxe5+', 'd4']);
     expect(m.confidence).toBe('provisional');
   });
@@ -115,7 +115,7 @@ describe('game metrics', () => {
   it('missed opportunities are counted out of opportunities that existed', async () => {
     const games = await loaded();
     const m = missedOpportunities(games);
-    expect(m.available).toBe(3); // Qxf7# taken; Nc6+ missed; Qxf7# missed
+    expect(m.available).toBe(5); // Qxf7# taken; Nc6+ missed; Qxf7# missed; a free queen and a free bishop taken
     expect(m.missed).toBe(2);
     expect(m.events).toHaveLength(2);
   });

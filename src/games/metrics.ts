@@ -70,7 +70,7 @@ export interface MajorErrors {
   perGame: number | null;
   interval: Interval | null;
   confidence: Confidence;
-  byLabel: Record<'loses-material' | 'allows-mate' | 'unclassified', number>;
+  byLabel: Record<'loses-material' | 'allows-mate' | 'misses-material' | 'unclassified', number>;
   events: EventRef[];
 }
 
@@ -78,13 +78,13 @@ export interface MajorErrors {
  * Major-error rate.
  *   numerator   = learner moves that lowered engine expected score by >= the pipeline's threshold
  *   denominator = learner decisions in analysed games (unanalysed games are excluded, not counted as clean)
- * Labels are concrete ("loses material", "allows mate") or "unclassified"; none claims a cause.
+ * Labels are concrete ("loses material", "allows mate", "misses material") or "unclassified"; none claims a cause.
  */
 export function majorErrors(games: GameRecord[], f: GameFilter = {}): MajorErrors {
   const done = analysed(select(games, f));
   const decisions = done.reduce((t, g) => t + g.analysis!.decisions.length, 0);
   const events = eventsOf(done, (e) => e.majorError);
-  const byLabel = { 'loses-material': 0, 'allows-mate': 0, unclassified: 0 };
+  const byLabel = { 'loses-material': 0, 'allows-mate': 0, 'misses-material': 0, unclassified: 0 };
   for (const { event } of events) byLabel[event.errorLabel ?? 'unclassified']++;
   const rate = decisions ? events.length / decisions : null;
   return {
@@ -111,9 +111,10 @@ export interface Missed {
 }
 
 /**
- * Missed tactical opportunities: positions where the engine's best line wins material or
- * mates within a few moves (found among the learner's own decisions), and the move played
- * gave up at least the pipeline's miss threshold. Denominator: all such opportunities.
+ * Missed tactical opportunities: positions where the engine's best line mates, or ends at
+ * least two points up on the balance before the opponent's last move (so taking back a piece
+ * is not a chance), and the move played gave up at least the pipeline's miss threshold.
+ * Denominator: all such opportunities among the learner's own decisions.
  */
 export function missedOpportunities(games: GameRecord[], f: GameFilter = {}): Missed {
   const done = analysed(select(games, f));

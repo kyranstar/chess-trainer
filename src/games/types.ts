@@ -17,7 +17,7 @@ export interface GameEvent {
   opportunity: 'mate' | 'material' | null;
   missed: boolean;
   majorError: boolean;
-  errorLabel: 'allows-mate' | 'loses-material' | 'unclassified' | null;
+  errorLabel: 'allows-mate' | 'loses-material' | 'misses-material' | 'unclassified' | null;
   refutation: string | null;
   /** The engine found one clearly best move here, so the position can be drilled. */
   drill: boolean;

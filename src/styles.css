@@ -134,7 +134,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .run-foot { margin-top: 0.5rem; display: flex; justify-content: center; }
 
 /* Board */
-.board-wrap { position: relative; width: min(100%, calc(100dvh - 21rem)); min-width: min(100%, 17rem); margin: 0 auto; }
+.board-wrap { position: relative; width: min(100%, calc(100dvh - 23rem)); min-width: min(100%, 17rem); margin: 0 auto; }
 .board { width: 100%; aspect-ratio: 1; }
 .board.cg-wrap, .board .cg-wrap { width: 100%; height: 100%; }
 cg-board {
@@ -158,7 +158,7 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(176,
 .orientation-white .ranks :nth-child(even), .orientation-white .files :nth-child(even),
 .orientation-black .ranks :nth-child(odd), .orientation-black .files :nth-child(odd) { color: #1f3b2c; }
 .cg-wrap piece.ghost { opacity: 0.3; }
-.flip { position: absolute; right: 0; bottom: -2.4rem; min-height: 2.2rem; padding: 0.2rem 0.7rem; font-size: 0.85rem; font-weight: 500; border-color: transparent; color: var(--muted); background: transparent; text-decoration: underline; }
+.flip { display: block; margin: 0.15rem 0 0 auto; min-height: 2.2rem; padding: 0.2rem 0.4rem; font-size: 0.85rem; font-weight: 500; border-color: transparent; color: var(--muted); background: transparent; text-decoration: underline; }
 .promo { position: absolute; inset: 0; z-index: 10; background: rgba(20, 32, 26, 0.72); display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; padding: 12%; align-content: center; border-radius: 3px; }
 .promo button { flex-direction: column; min-height: 4.2rem; }
 .promo button span { font-size: 1.8rem; line-height: 1; }
@@ -166,7 +166,7 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(176,
 
 .puzzle, .lesson-try { display: flex; flex-direction: column; gap: 0.6rem; }
 .puzzle-head h2 { font-size: 1.4rem; }
-.feedback { min-height: 3.2rem; padding-right: 3.5rem; }
+.feedback { min-height: 3.2rem; }
 .verdict { padding: 0.6rem 0.75rem; border-radius: 6px; border-left: 5px solid; }
 .verdict p { font-size: 0.95rem; margin-top: 0.15rem; }
 .verdict.right { background: var(--good-soft); border-color: var(--good); }

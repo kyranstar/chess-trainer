@@ -19,23 +19,23 @@ test('own games: import the analysed file, see ratings and error metrics with th
   await expect(page.getByTestId('card-games-import')).toContainText('0 imported');
 
   await page.getByTestId('games-input').setInputFiles(FIXTURE);
-  await expect(page.getByTestId('games-message')).toContainText('5 new, 0 re-analysed, 0 unchanged');
-  await expect(page.getByTestId('games-message')).toContainText('game-analysis-v1/Stockfish 19/200000');
+  await expect(page.getByTestId('games-message')).toContainText('6 new, 0 re-analysed, 0 unchanged');
+  await expect(page.getByTestId('games-message')).toContainText('game-analysis-v2/Stockfish 19/200000');
 
   // Ratings are per time control and never blended.
-  await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '449');
+  await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');
   await expect(page.getByTestId('rating-blitz')).toHaveAttribute('data-current', '431');
   await expect(page.getByTestId('rating-daily')).toHaveAttribute('data-current', '772');
   await expect(page.getByTestId('rating-bullet')).toHaveCount(0);
 
   // Major errors: numerator, denominator, coverage, engine settings, and no causal claim.
   const errors = page.getByTestId('card-errors');
-  await expect(errors).toContainText('3 in 20 decisions');
+  await expect(errors).toContainText('3 in 27 decisions');
   await expect(errors).toContainText('provisional');
-  await expect(errors).toContainText('5 of 5 imported games analysed');
+  await expect(errors).toContainText('6 of 6 imported games analysed');
   await expect(errors).toContainText('not an explanation of why they were played');
   await expect(page.getByTestId('errors-blitz')).toContainText('1/5');
-  await expect(page.getByTestId('card-missed')).toContainText('2 of 3');
+  await expect(page.getByTestId('card-missed')).toContainText('2 of 5');
   await expect(page.getByTestId('clock-insufficient')).toContainText('at least 30 are needed in each group');
 
   // Drill-down reaches the actual position with what is and is not established.
@@ -67,6 +67,6 @@ test('own games: import the analysed file, see ratings and error metrics with th
 
   // Re-importing the same file changes nothing.
   await page.getByTestId('games-input').setInputFiles(FIXTURE);
-  await expect(page.getByTestId('games-message')).toContainText('0 new, 0 re-analysed, 5 unchanged');
-  await expect(errors).toContainText('3 in 20 decisions');
+  await expect(page.getByTestId('games-message')).toContainText('0 new, 0 re-analysed, 6 unchanged');
+  await expect(errors).toContainText('3 in 27 decisions');
 });

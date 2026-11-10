@@ -111,7 +111,10 @@ export function DataPanel({ learner }: { learner: Learner }) {
         <p className="definition-small" data-testid="persist-state">
           Storage protection: {persisted === null ? 'not reported by this browser' : persisted ? 'granted (the browser will not clear this data on its own)' : 'not granted yet'}.{usage ? ` ${usage}.` : ''}
         </p>
-        {persisted === false && <div className="actions"><button onClick={() => void persist()}>Ask the browser to protect storage</button></div>}
+        <div className="actions">
+          {persisted === false && <button onClick={() => void persist()}>Ask the browser to protect storage</button>}
+          <a className="button" data-testid="open-device-check" href="#/progress/device-check">Check this device</a>
+        </div>
       </section>
 
       <GamesImport />
@@ -133,7 +136,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
             <li key={s.id}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a>, {s.author}. {s.licenseNotes}</li>
           ))}
           <li><a href="https://database.lichess.org/#puzzles" target="_blank" rel="noreferrer">Lichess puzzle database</a> and puzzle theme definitions: CC0.</li>
-          <li>Board and rules: chessground and chessops by Lichess, GPL-3.0-or-later. This app is licensed GPL-3.0-or-later; its source is the repository it was built from.</li>
+          <li>Board and rules: chessground and chessops by Lichess, GPL-3.0-or-later. This app is licensed GPL-3.0-or-later. <a href="./source.tar.gz">Download the source of this build</a> (available where the app is hosted).</li>
           <li>Typefaces: Atkinson Hyperlegible Next and Literata, SIL Open Font License 1.1.</li>
         </ul>
         <p className="definition-small">Chess Trainer {__APP_VERSION__}. Lessons on Chess.com, Chessreps and Lichess are linked, never copied.</p>
