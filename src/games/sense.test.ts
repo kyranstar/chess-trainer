@@ -214,3 +214,36 @@ describe('how often a question has something in it', () => {
   });
 });
 
+describe('cases from the outside reviewer (third pass)', () => {
+  it('the coin toss is not tied to the turn number: both kinds get real questions on their own turns', () => {
+    const mk = (kind: 'safe-or-not' | 'chance-or-not', truth: boolean, i: number): SenseItem => ({ id: `sense:${kind}:${truth ? 'g' : 'h'}:${i}`, kind, gameId: 'g', ply: i, fen: '', color: 'white', truth, date: '' });
+    const items = [
+      ...Array.from({ length: 30 }, (_, i) => mk('safe-or-not', true, i)), ...Array.from({ length: 300 }, (_, i) => mk('safe-or-not', false, i)),
+      ...Array.from({ length: 30 }, (_, i) => mk('chance-or-not', true, i)), ...Array.from({ length: 300 }, (_, i) => mk('chance-or-not', false, i)),
+    ];
+    // The practice screen asks "safe?" on even turns and "something?" on odd turns, seeded by the turn number.
+    let safeReal = 0;
+    let chanceReal = 0;
+    for (let n = 0; n < 200; n++) {
+      const kind = n % 2 === 0 ? 'safe-or-not' : 'chance-or-not';
+      if (pickSense(items, kind, new Set(), 2, `sense|${n}`)[0]!.truth) kind === 'safe-or-not' ? safeReal++ : chanceReal++;
+    }
+    expect(safeReal).toBeGreaterThan(30);
+    expect(safeReal).toBeLessThan(70);
+    expect(chanceReal).toBeGreaterThan(30);
+    expect(chanceReal).toBeLessThan(70);
+    // And the very first turns are not all of one sort.
+    const firstTen = Array.from({ length: 10 }, (_, n) => pickSense(items, n % 2 === 0 ? 'safe-or-not' : 'chance-or-not', new Set(), 2, `sense|${n}`)[0]!);
+    expect(new Set(firstTen.filter((i) => i.kind === 'safe-or-not').map((i) => i.truth)).size).toBe(2);
+  });
+
+  it('a move that wins material but walks into mate is not a chance taken', () => {
+    // White can take a knight with Rxb7, but then ...Rd1 is mate. (Some other move is the stored chance.)
+    const item: SenseItem = { id: 'sense:chance-or-not:g:30', kind: 'chance-or-not', gameId: 'g', ply: 30, fen: '3r2k1/1n3ppp/8/8/8/8/5PPP/1R4K1 w - - 0 1', color: 'white', truth: true, date: '', best: 'h2h3', bestSan: 'h3', bestLine: '1. h3', bestWp: 70 };
+    expect(verifyReply(item, 'b1b7', { wp: 100, pv: ['d8d1'] })).toBe('no');
+    // The mirror case for "is it safe?": a reply after which the owner (to move) has a forced mate does not punish anything.
+    const hung: SenseItem = { id: 'sense:safe-or-not:g:60', kind: 'safe-or-not', gameId: 'g', ply: 60, fen: '3r2k1/5ppp/8/8/8/8/5PPP/R3Q1K1 w - - 0 1', color: 'white', truth: true, date: '', proposed: 'a1d1', proposedSan: 'Rd1', afterFen: '3r2k1/5ppp/8/8/8/8/5PPP/3RQ1K1 b - - 0 1', replyUci: 'd8d1' };
+    expect(verifyReply(hung, 'g8h8', { wp: 100, pv: ['d1d8'] })).toBe('no');
+  });
+});
+

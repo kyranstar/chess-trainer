@@ -8,6 +8,7 @@ import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
 import { type DrillPosition, drillPositions } from '../games/metrics';
+import { reviewOrder } from '../schedule/mix';
 import type { SenseItem } from '../games/sense';
 import { drillId } from '../openings/repertoire';
 import { OwnGameDrill, useGames } from './Games';
@@ -247,8 +248,12 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
 }
 
 /** Works through review items that are due, oldest first. */
-export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
+export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, heading, single }: {
   due: ReviewState[]; sessionId: string | null; stop?: boolean; onAttempt?: (a: Attempt) => void; onFinished: (reason: 'done' | 'stopped') => void;
+  /** Shown instead of "Review, n due" (one-button practice does not say what kind of item this is). */
+  heading?: string;
+  /** Finish straight after the last item, without the "queue cleared" screen. */
+  single?: boolean;
 }) {
   const pool = usePool();
   const book = useOpeningBook();
@@ -256,13 +261,15 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
   const prefs = useOpeningPrefs();
   const games = useGames();
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
-  const queue = useRef(due.map((d) => d.itemId));
+  // Own-game positions first: review minutes are few and that is where the rating is lost.
+  const queue = useRef(reviewOrder(due).map((d) => d.itemId));
   const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition } | null>(null);
   const [i, setI] = useState(0);
   if (!pool) return <p className="muted">Loading positions</p>;
 
   const advance = () => {
     if (stop) return onFinished('stopped');
+    if (single && i + 1 >= queue.current.length) return onFinished('done');
     setI((x) => x + 1);
   };
   const itemId = queue.current[i];
@@ -280,7 +287,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
     if (!puzzle) return <RetiredItem onNext={advance} />;
     return (
       <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
-        allowHints={false} heading={`Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
+        allowHints={false} heading={heading ?? `Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
     );
   }
   if (itemId.startsWith('sense:')) {
@@ -290,23 +297,23 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
     if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
     const item = held.current.sense;
     if (!item) return <RetiredItem onNext={advance} />;
-    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={`Review, ${left} due`} onDone={advance} />;
+    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={heading ?? `Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('kpk:')) {
     const [, goal, ...rest] = itemId.split(':');
-    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
+    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('game:')) {
     if (!games) return <p className="muted">Loading your games</p>;
     if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
     const drill = held.current.drill;
     if (!drill) return <RetiredItem onNext={advance} />;
-    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
+    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
   }
   if (itemId.startsWith('opening:')) {
     const entry = repertoire.find((e) => drillId(e) === itemId);
     if (!entry) return <RetiredItem onNext={advance} />;
-    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} heading={`Review, ${left} due`} onDone={advance} />;
+    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
   }
   const [, lessonId, stepNo] = itemId.split(':');
   const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
@@ -315,7 +322,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished }: {
   return (
     <section className="puzzle">
       <header className="puzzle-head">
-        <p className="kicker">Review, {left} due</p>
+        <p className="kicker">{heading ?? `Review, ${left} due`}</p>
         <h2>{CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title}</h2>
       </header>
       <LessonTry key={itemId} lesson={lesson} stepIndex={Number(stepNo) - 1} step={step} hideBefore sessionId={sessionId} context="review" onDone={advance} />

@@ -132,9 +132,12 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   const side = solver === 'white' ? 'White' : 'Black';
   return (
     <div className="lesson-try" data-testid="lesson-try" data-expected={finished ? '' : step.moves[ply]} data-finished={finished}>
+      {/* The board stays in view while the text is read: on a phone the two do not fit on one screen. */}
+      <div className="lesson-board">
+        <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
+      </div>
       {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
       <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Play the move the text plays here.`}</p>
-      <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
         {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown.</p></div>}
         {checking && <p className="muted">Checking your move with the engine</p>}
@@ -178,6 +181,21 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
   const step = useMemo(() => (index === null ? null : lesson.steps[index]), [index, lesson]);
   useScreenChange(`${lesson.id}|${index}`);
   const stepArmed = useArmed();
+  // The position a page of text is about: the board just shown, or else the one that follows.
+  // Text and its diagram used to be on separate screens.
+  const context = useMemo(() => {
+    if (index === null || step?.type !== 'text') return null;
+    const prev = lesson.steps[index - 1];
+    const next = lesson.steps[index + 1];
+    if (prev && prev.type === 'board') return prev;
+    if (next && (next.type === 'board' || next.type === 'try')) return next;
+    if (prev && prev.type === 'try') {
+      let pos = positionFromFen(prev.fen);
+      for (const u of prev.moves) pos = applyUci(pos, u);
+      return { fen: fenOf(pos), orientation: prev.orientation };
+    }
+    return null;
+  }, [index, step, lesson]);
   if (index === null || !step) return <p className="muted">Loading lesson</p>;
 
   async function advance() {
@@ -219,14 +237,19 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
       <progress value={index} max={total} aria-label="Lesson progress" />
       {step.type === 'text' && (
         <>
+          {context && (
+            <div className="lesson-board" data-testid="lesson-context-board">
+              <Board fen={context.fen} orientation={context.orientation} movable={null} />
+            </div>
+          )}
           {step.paragraphs.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
           <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}
       {step.type === 'board' && (
         <>
+          <div className="lesson-board"><Board fen={step.fen} orientation={step.orientation} movable={null} /></div>
           <p className="prompt">{step.diagram && !step.afterDiagramMoves?.length ? `Diagram ${step.diagram} from the book.` : 'Position from the text.'} {positionFromFen(step.fen).turn === 'white' ? 'White' : 'Black'} to move.</p>
-          <Board fen={step.fen} orientation={step.orientation} movable={null} />
           <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}

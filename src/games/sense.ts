@@ -188,6 +188,11 @@ export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv
   if (!line || line.pv.length === 0) return 'unresolved';
   // After a punishing reply the owner is to move and is being mated; after a chance the opponent is.
   if (line.wp === 0) return 'yes';
+  // The side to move has a forced mate instead: the learner's move did the opposite of its job,
+  // whatever material it picked up on the way.
+  if (line.wp === 100) return 'no';
+  // A chance taken must leave the learner at least level by the engine's score.
+  if (!safety && 100 - line.wp < 50) return 'no';
   const base = material(positionFromFen(item.fen), item.color);
   const end = lineEnd(fenOf(after), line.pv, item.color);
   if (!end.settled) return 'unresolved';
@@ -223,6 +228,13 @@ function hash(s: string): number {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
+  // Final mixing. Without it the lowest bit is just the parity of the characters, so a coin
+  // toss on a seed ending in the turn number followed the turn's even/odd schedule.
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
   return h >>> 0;
 }
 

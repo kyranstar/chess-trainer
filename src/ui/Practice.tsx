@@ -10,6 +10,7 @@ import { OpeningRecallRun } from './Openings';
 import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
+import { MixRun } from './Mix';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
@@ -60,7 +61,10 @@ export function PracticeHome({ learner }: { learner: Learner }) {
     <div className="page" data-testid="practice-home">
       <h1>Practice</h1>
       {pack?.state !== 'installed' && <p className="note">The practice positions are not installed on this device yet. Connect once to download them.</p>}
-      <p className="lede">Extra practice outside today’s session. Everything here is recorded the same way: first tries on unseen positions count as evidence, repeats do not.</p>
+      <div className="actions">
+        <a className="button primary big" data-testid="practice-mix" href={href('practice/run', { mode: 'mix' })}>Just practise</a>
+      </div>
+      <p className="lede">One button: the app picks what comes next from what you missed before, your own games and new positions, and does not say which it is. Or choose something yourself below. Everything is recorded the same way: first tries on unseen positions count as evidence, repeats do not.</p>
 
       <section className="concept-group">
         <h2>From your own games</h2>
@@ -139,9 +143,10 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
     <div className="page run" data-testid="practice-run">
       <header className="run-bar">
         <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
+        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : mode === 'mix' ? 'Practice' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
         <span />
       </header>
+      {mode === 'mix' && <MixRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'sense' && <SenseRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}

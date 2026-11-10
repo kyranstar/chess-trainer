@@ -106,7 +106,7 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
       <p className="muted">One session is too small a sample to judge a trend. Progress shows the running totals with their uncertainty.</p>
       <div className="actions">
         <a className="button primary" href={href('progress')}>See progress</a>
-        <a className="button" href={href('practice')}>Keep practising</a>
+        <a className="button" data-testid="summary-mix" href={href('practice/run', { mode: 'mix' })}>Keep practising</a>
       </div>
     </section>
   );
@@ -165,6 +165,7 @@ export function Today({ learner }: { learner: Learner }) {
               Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
           <button className={suggestion.kind === 'study' ? 'primary big' : ''} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>{suggestion.kind === 'study' ? `Start ${length}-minute session` : `Study for ${length} minutes instead`}</button>
           <button className={suggestion.kind === 'play' ? 'primary big' : ''} data-testid="start-play" onClick={() => void start('play')}>{suggestion.kind === 'play' ? 'Start play day: one rapid game' : 'Make today a play day instead'}</button>
+          <a className="button" data-testid="start-mix" href={href('practice/run', { mode: 'mix' })}>Just practise: no plan, the app picks</a>
         </div>
         <div className="length-picker" role="group" aria-label="Session length">
           {SESSION_LENGTHS.map((m) => (

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { openApp, playMove } from './helpers';
+import { openApp, playMove, solvePuzzle } from './helpers';
 
 const archive = JSON.parse(readFileSync('src/games/fixtures/chesscom-archive.fixture.json', 'utf8'));
 const API = 'https://api.chess.com/pub/player/fixture_learner';
@@ -125,5 +125,51 @@ test('a question from your own games stays put while new games arrive and are an
   expect(await drill.locator('.board').getAttribute('data-fen')).toBe(fen);
   await page.getByTestId('sense-no').click();
   await expect(page.getByTestId('sense-verdict')).toBeVisible();
+});
+
+test('one button: "Just practise" mixes own-game questions, missed moves and new positions without saying which is coming', async ({ page }) => {
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: archive });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  await openApp(page, '#/progress');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
+
+  await page.goto('./#/today');
+  await page.getByTestId('start-mix').click();
+  const mix = page.getByTestId('mix-run');
+  const kinds: string[] = [];
+  for (let turn = 0; turn < 9; turn++) {
+    await expect(mix).toHaveAttribute('data-turn', String(turn));
+    const kind = (await mix.getAttribute('data-kind'))!;
+    kinds.push(kind);
+    // The same plain heading whatever the item is; no concept or exercise type is announced.
+    await expect(mix.locator('.kicker').first()).toHaveText(turn === 0 ? 'Practice' : `Practice, ${turn} done`);
+    if (kind === 'puzzle') {
+      await solvePuzzle(page);
+      await page.getByTestId('next').click();
+    } else if (kind === 'sense') {
+      await page.getByTestId('sense-no').click();
+      await expect(page.getByTestId('sense-verdict')).toBeVisible();
+      await page.getByTestId('sense-next').click();
+    } else if (kind === 'missed') {
+      const drill = page.getByTestId('own-drill');
+      await playMove(page, (await drill.getAttribute('data-expected'))!);
+      await page.getByTestId('own-next').click();
+    } else {
+      // Something answered wrongly earlier in this run can come back as a review only on a later day.
+      throw new Error(`unexpected kind on a first day: ${kind}`);
+    }
+  }
+  expect(new Set(kinds).size).toBeGreaterThanOrEqual(2);
+  // Everything was recorded as ordinary practice.
+  await page.goto('./#/progress');
+  await expect(page.getByTestId('card-unseen')).toBeVisible();
 });
 
