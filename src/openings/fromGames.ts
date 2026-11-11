@@ -17,7 +17,7 @@
  * clearly below the best move is not taken over: it is listed for him instead.
  */
 import { applyUci, canonicalUci, fenOf, isLegalUci, positionFromFen, positionKey, sanOf } from '../chess/rules';
-import { classifyMove, entryId, makeEntry, type OpeningBook, type RepertoireEntry, type Side, START_FEN, walkRepertoire } from './repertoire';
+import { classifyMove, type Decision, entryId, makeEntry, type OpeningBook, type RepertoireEntry, type Side, START_FEN, walkRepertoire } from './repertoire';
 
 export interface GameLine {
   color: Side;
@@ -135,8 +135,11 @@ export const SUGGEST_MARGIN = 3;
  * check rates within SUGGEST_MARGIN of its best; where the data has no such move, nothing is
  * suggested. Each one extends the walk, so the next most frequent gap may lie behind it.
  */
-/** `skip`: position keys that are left to the learner (a move he removed, a habit not taken over). */
-export function suggestForGaps(book: OpeningBook, existing: RepertoireEntry[], side: Side, bands: number[], now: number, opts = SUGGEST_DEFAULTS, skip: Set<string> = new Set()): RepertoireEntry[] {
+/**
+ * `skip`: position keys that are left to the learner (a move he removed, a habit not taken over).
+ * `leave`: positions where the app has no business suggesting (inside an opening one of his courses covers).
+ */
+export function suggestForGaps(book: OpeningBook, existing: RepertoireEntry[], side: Side, bands: number[], now: number, opts = SUGGEST_DEFAULTS, skip: Set<string> = new Set(), leave: (gap: Decision) => boolean = () => false): RepertoireEntry[] {
   const added: RepertoireEntry[] = [];
   const noMove = new Set<string>(skip);
   const played = (n: number[]) => bands.reduce((t, i) => t + (n[i] ?? 0), 0);
@@ -144,6 +147,10 @@ export function suggestForGaps(book: OpeningBook, existing: RepertoireEntry[], s
     const walk = walkRepertoire(book, [...existing, ...added], side, bands);
     const gap = walk.gaps.find((d) => d.reach >= opts.minReach && !noMove.has(d.positionKey));
     if (!gap) break;
+    if (leave(gap)) {
+      noMove.add(gap.positionKey);
+      continue;
+    }
     const data = book.positions[gap.positionKey];
     const sound = (data?.moves ?? [])
       .filter((m) => m.wp !== undefined && data!.bestWp !== undefined && data!.bestWp - m.wp <= SUGGEST_MARGIN)

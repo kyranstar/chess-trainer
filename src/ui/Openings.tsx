@@ -7,6 +7,8 @@ import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { formatPct } from '../metrics/metrics';
 import { declineEntry, DOUBTFUL_KEY, refreshRepertoire } from '../openings/auto';
 import { DEFAULT_BAND, loadOpeningBook } from '../openings/book';
+import { COURSES, courseFor, leftRepertoire, needsConfirming } from '../openings/courses';
+import { useArmed, useScreenChange } from '../app/tapGuard';
 import type { Doubtful } from '../openings/fromGames';
 import { entriesFromPgn, repertoireToPgn } from '../openings/pgn';
 import { classifyMove, type Decision, drillId, makeEntry, type MoveEvidence, type OpeningBook, type RepertoireEntry, type Side, SOUND_MARGIN, walkRepertoire } from '../openings/repertoire';
@@ -33,7 +35,7 @@ export function useOpeningBook(): OpeningBook | null | undefined {
 
 /** How a move got into the repertoire, in a few words. */
 export function sourceLabel(e: RepertoireEntry): string {
-  if (e.source === 'own-games') return e.games ? `from your games: played in ${e.games.played} of ${e.games.reached}` : 'from your games';
+  if (e.source === 'own-games') return `${e.games ? `from your games: played in ${e.games.played} of ${e.games.reached}` : 'from your games'}${needsConfirming(e) ? '; not yet confirmed against your course' : ''}`;
   if (e.source === 'suggested') return 'suggested: the sound move most played at your level';
   return 'recorded by you';
 }
@@ -154,6 +156,53 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
   );
 }
 
+/**
+ * A move the app inferred inside an opening that one of his courses covers. The app does not
+ * know what the course teaches, so it does not drill this move: it asks once whether it is his
+ * move. His answer (a tap, or a different move played on the board) is what gets recalled later.
+ */
+function ConfirmMove({ entry, book, band, heading, onDone }: { entry: RepertoireEntry; book: OpeningBook | null | undefined; band: number; heading?: string; onDone: () => void }) {
+  const db = useDb();
+  useFocusMode();
+  const course = courseFor(entry.side, entry.path)!;
+  const pos = useMemo(() => positionFromFen(entry.fen), [entry.fen]);
+  const [choice, setChoice] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState(0);
+  useScreenChange(`confirm|${entry.id}|${choice ?? ''}`);
+  const armed = useArmed();
+  const same = choice ? sameMove(pos, choice, entry.uci) : false;
+  const ev = choice && !same && book ? classifyMove(book, entry.positionKey, choice, [band]) : null;
+
+  async function save(uci: string) {
+    await db.repertoire.put(makeEntry(entry.side, entry.fen, entry.path, uci, Date.now()));
+    void refreshRepertoire(db);
+    onDone();
+  }
+
+  return (
+    <section className="puzzle" data-testid="opening-confirm" data-inferred={entry.uci}>
+      <header className="puzzle-head">
+        {heading && <p className="kicker">{heading}</p>}
+        <h2>Is {entry.san} your move here?</h2>
+        <p className="muted">
+          After {pathText(entry.path)}. This opening is covered by your course {course.title} on {course.provider}.{' '}
+          {entry.source === 'own-games' ? `In your games you play ${entry.san} here${entry.games ? ` (${entry.games.played} of ${entry.games.reached})` : ''}.` : `${entry.san} was a suggestion.`}{' '}
+          The app does not know what the course teaches. If the course plays a different move, play that move on the board.
+        </p>
+      </header>
+      <Board fen={choice ? fenOf(applyUci(pos, choice)) : entry.fen} orientation={entry.side} movable={choice ? null : entry.side} lastMove={choice} onMove={setChoice} resetKey={resetKey} />
+      <div className="feedback">{choice && !same && ev && <EvidenceText ev={ev} san={sanOf(pos, choice)} />}</div>
+      <div className="actions">
+        {!choice && <button className="primary" data-testid="confirm-yes" disabled={!armed} onClick={() => void save(entry.uci)}>Yes, {entry.san} is my move</button>}
+        {choice && <button className="primary" data-testid="confirm-other" disabled={!armed} onClick={() => void save(choice)}>{same ? `Yes, ${entry.san} is my move` : `Make ${sanOf(pos, choice)} my move here`}</button>}
+        {choice && <button disabled={!armed} onClick={() => { setChoice(null); setResetKey((k) => k + 1); }}>Take it back</button>}
+        <a className="button" data-testid="confirm-course" href={course.url} target="_blank" rel="noreferrer">Open the course</a>
+        <button className="quiet" data-testid="confirm-later" disabled={!armed} onClick={onDone}>Ask me later</button>
+      </div>
+    </section>
+  );
+}
+
 function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision; side: Side; book: OpeningBook; band: number; onSaved: () => void; onSkip: () => void }) {
   const db = useDb();
   const [choice, setChoice] = useState<string | null>(null);
@@ -161,6 +210,7 @@ function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision;
   const pos = useMemo(() => positionFromFen(gap.fen), [gap.fen]);
   const ev = choice ? classifyMove(book, gap.positionKey, choice, [band]) : null;
   const shownFen = choice ? fenOf(applyUci(pos, choice)) : gap.fen;
+  const course = courseFor(side, gap.path);
 
   async function save() {
     if (!choice) return;
@@ -171,7 +221,8 @@ function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision;
   return (
     <section className="puzzle" data-testid="gap-builder" data-path={gap.path.join(' ')} data-reach={gap.reach.toFixed(4)}>
       <h2>What do you play here?</h2>
-      <p className="muted">After {pathText(gap.path)}. With your repertoire so far, {formatPct(gap.reach)} of games at this level reach this position. Play the move from your own course on the board.</p>
+      <p className="muted">After {pathText(gap.path)}. With your repertoire so far, {formatPct(gap.reach)} of games at this level reach this position. {course ? `This opening is covered by your course ${course.title}: look the position up there and play its move here. The app suggests nothing of its own in this opening.` : 'Play the move you want to play here on the board.'}</p>
+      {course && <p><a className="button" data-testid="gap-course" href={course.url} target="_blank" rel="noreferrer">Open {course.title} on {course.provider}</a></p>}
       <Board fen={shownFen} orientation={side} movable={choice ? null : side} lastMove={choice} onMove={setChoice} resetKey={resetKey} />
       <div className="feedback">{choice && ev && <EvidenceText ev={ev} san={sanOf(pos, choice)} />}</div>
       <div className="actions">
@@ -229,6 +280,8 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
 
   const walk = useMemo(() => (book ? walkRepertoire(book, entries, prefs.side, [prefs.band]) : null), [book, entries, prefs.side, prefs.band]);
   const doubtful = useLiveQuery(async () => ((await getMeta<Doubtful[]>(db, DOUBTFUL_KEY)) ?? []), [db]) ?? [];
+  const games = useLiveQuery(() => db.games.toArray(), [db]);
+  const left = useMemo(() => (games ? leftRepertoire(games, entries).filter((x) => x.side === prefs.side) : []), [games, entries, prefs.side]);
   // Opening the page, recording or removing a move by hand, or choosing another rating band
   // brings the moves read from the games and the suggestions up to date.
   const handKey = entries.filter((e) => !e.source).map((e) => `${e.id}:${e.uci}`).sort().join(',');
@@ -266,8 +319,37 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
     <div className="page" data-testid="openings-home">
       <a className="back" href={href('practice')}>Practice</a>
       <h1>Opening repertoire</h1>
-      <p className="lede">Your moves are read from your own games. The common positions you have no move for get a suggestion: the sound move most played at your level, from open game data and an engine check. A move you record yourself replaces either.</p>
-      <p className="definition-small" data-testid="course-note">Nothing is copied from your opening course: Chessreps’ terms do not allow its lines to be copied or collected. What you learned there shows up here because you play it; where a suggestion differs from your course, play your course’s move in recall and make it yours with one tap.</p>
+      <p className="lede">One set of answers. In the openings your courses cover, the course decides: the app suggests nothing there and asks you to confirm a move before it is recalled. Elsewhere your moves are read from your own games, and common positions with no move get a suggestion from open game data and an engine check.</p>
+      <section className="card" data-testid="courses-card">
+        <h2>Your courses</h2>
+        <ul className="attempt-list">
+          {COURSES.filter((c) => c.side === prefs.side).map((c) => (
+            <li key={c.id} data-testid="course-row">
+              <span className="journal-row">
+                <span className="concept-name">{c.title}</span>
+                <span className="concept-meta">{c.author}; covers positions after {pathText(c.root)}</span>
+                <a href={c.url} target="_blank" rel="noreferrer">Open on {c.provider}</a>
+              </span>
+            </li>
+          ))}
+          {COURSES.every((c) => c.side !== prefs.side) && <li className="muted">No course recorded for this side.</li>}
+        </ul>
+        <p className="definition-small" data-testid="course-note">The courses stay on Chessreps: its terms do not allow their lines to be copied or collected, so the app does not know them. It learns a course move from you, when you confirm it or play it on the board here, and then holds you to it.</p>
+      </section>
+      {left.length > 0 && (
+        <section className="card" data-testid="left-card">
+          <h2>Where recent games left your repertoire</h2>
+          <ul className="attempt-list">
+            {left.map((x) => (
+              <li key={x.gameId} data-testid="left-row">
+                {x.date}: after {pathText(x.path)} you played {x.playedSan}; your move is {x.mineSan}.{' '}
+                {x.course && <a href={x.course.url} target="_blank" rel="noreferrer">Review it in {x.course.title}</a>}
+              </li>
+            ))}
+          </ul>
+          <p className="definition-small">Only moves you recorded or confirmed yourself count here. The first such move of each game, newest first.</p>
+        </section>
+      )}
 
       <div className="length-picker" role="group" aria-label="Side">
         {(['white', 'black'] as Side[]).map((s) => (
@@ -313,7 +395,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
       <section className="card" data-testid="recall-card">
         <h2>Recall</h2>
         <p>{mine.length} move{mine.length === 1 ? '' : 's'} recorded as {prefs.side === 'white' ? 'White' : 'Black'}; {toRecall.length} to recall now (new or due).</p>
-        {(count('own-games') > 0 || count('suggested') > 0) && <p className="muted" data-testid="repertoire-sources">{count('own-games')} read from your games, {count('suggested')} suggested, {count(undefined)} recorded by you.</p>}
+        {(count('own-games') > 0 || count('suggested') > 0) && <p className="muted" data-testid="repertoire-sources">{count('own-games')} read from your games, {count('suggested')} suggested, {count(undefined)} recorded or confirmed by you.{mine.filter(needsConfirming).length > 0 ? ` ${mine.filter(needsConfirming).length} in your courses’ openings wait for your confirmation; recall asks about those first-hand instead of testing them.` : ''}</p>}
         {toRecall.length > 0 && <div className="actions"><a className="button primary" data-testid="start-recall" href={href('practice/run', { mode: 'openings', side: prefs.side })}>Recall {toRecall.length} move{toRecall.length === 1 ? '' : 's'}</a></div>}
       </section>
 
@@ -384,5 +466,6 @@ export function OpeningRecallRun({ learner, side, onFinished }: { learner: Learn
       </div>
     );
   }
+  if (needsConfirming(entry)) return <ConfirmMove key={entry.id} entry={entry} book={book} band={prefs.band} heading={`Your course decides here, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
   return <OpeningDrill key={entry.id} entry={entry} book={book} band={prefs.band} sessionId={null} heading={`Recall, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
 }

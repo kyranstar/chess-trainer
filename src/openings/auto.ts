@@ -6,9 +6,12 @@
  * a suggestion. A lower one never replaces a higher one. A suggestion gives way as soon as
  * his games show a habit in that position, and suggestions that hung on a replaced move are
  * removed unless he has already practised them. A move he removed does not come back.
+ *
+ * Inside an opening one of his courses covers (courses.ts) nothing is suggested at all.
  */
 import { getMeta, setMeta, type TrainerDB } from '../db/db';
 import { DEFAULT_BAND, loadOpeningBook } from './book';
+import { courseFor } from './courses';
 import { type Doubtful, repertoireFromGames, suggestForGaps } from './fromGames';
 import { drillId, type OpeningBook, type RepertoireEntry, type Side, walkRepertoire } from './repertoire';
 
@@ -69,7 +72,10 @@ export async function updateRepertoire(db: TrainerDB, book: OpeningBook, band: n
   const habitIds = new Set(habits.map((e) => e.id));
 
   // 2. Suggestions for the common gaps, on top of his moves and the suggestions already there.
-  const keptSuggestions = stored.filter((e) => e.source === 'suggested' && !habitIds.has(e.id));
+  const practised = new Set((await db.reviewStates.toArray()).map((r) => r.itemId));
+  // A suggestion made inside an opening one of his courses covers (before the app knew to keep
+  // out) goes, unless he has already practised it; then it stays as a move for him to confirm.
+  const keptSuggestions = stored.filter((e) => e.source === 'suggested' && !habitIds.has(e.id) && (!courseFor(e.side, e.path) || practised.has(drillId(e))));
   const fresh: RepertoireEntry[] = [];
   const final: RepertoireEntry[] = [...hand, ...habits, ...keptSuggestions];
   for (const side of ['white', 'black'] as Side[]) {
@@ -78,7 +84,8 @@ export async function updateRepertoire(db: TrainerDB, book: OpeningBook, band: n
     for (const id of declined) if (id.startsWith(`${side}|`)) skip.add(id.slice(side.length + 1));
     // Suggestions extend what his games show; they do not pick an opening for a side he has no games with.
     if (!habits.some((e) => e.side === side)) continue;
-    const add = suggestForGaps(book, final, side, [band], now, undefined, skip);
+    // Inside an opening one of his courses covers, the course decides: nothing is suggested there.
+    const add = suggestForGaps(book, final, side, [band], now, undefined, skip, (gap) => !!courseFor(side, gap.path));
     fresh.push(...add);
     final.push(...add);
   }
@@ -90,10 +97,10 @@ export async function updateRepertoire(db: TrainerDB, book: OpeningBook, band: n
   for (const side of ['white', 'black'] as Side[]) {
     for (const d of walkRepertoire(book, final, side, [band]).decisions) if (d.entry) reachable.add(d.entry.id);
   }
-  const practised = new Set((await db.reviewStates.toArray()).map((r) => r.itemId));
   const gone: string[] = [];
   for (const e of stored) {
-    if (!e.source || habitIds.has(e.id) || reachable.has(e.id)) continue;
+    if (!e.source || habitIds.has(e.id)) continue;
+    if (reachable.has(e.id) && final.some((f) => f.id === e.id)) continue;
     // A habit his games no longer show, or a suggestion behind a move that changed.
     if (practised.has(drillId(e))) continue;
     gone.push(e.id);
@@ -108,7 +115,7 @@ export async function updateRepertoire(db: TrainerDB, book: OpeningBook, band: n
   return out;
 }
 
-export const AUTO_VERSION = 'repertoire-auto-v1';
+export const AUTO_VERSION = 'repertoire-auto-v2';
 const AUTO_KEY = 'openings.auto';
 let refreshing: Promise<RepertoireUpdate | null> | null = null;
 

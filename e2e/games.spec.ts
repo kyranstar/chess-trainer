@@ -352,52 +352,76 @@ test('your move: a position left by a reload never comes back as a first look, a
 });
 
 
-test('repertoire fills itself from your own games, with suggestions for common gaps; a move you prefer replaces a suggestion', async ({ page }) => {
-  // Two games as White with the same first moves: a habit. Nothing is read from any course.
-  const game = (id: number, day: string) => {
+test('repertoire: read from your own games; your courses decide inside their openings; suggestions only elsewhere; games that left it point back to the course', async ({ page }) => {
+  // Two games as White with the same first moves (a habit), and a newer one that differs on move 4.
+  // Nothing is read from any course.
+  const game = (id: number, day: string, moves: string) => {
     const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', `[Date "2026.11.${day}"]`, '[White "fixture_learner"]', '[Black "opponent_rep"]', '[Result "1-0"]', `[UTCDate "2026.11.${day}"]`, '[UTCTime "10:00:00"]',
       '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', `[EndDate "2026.11.${day}"]`, '[EndTime "10:20:00"]', `[Link "https://www.chess.com/game/live/${id}"]`, '',
-      '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 1-0'].join('\n');
+      `${moves} 1-0`].join('\n');
     return { url: `https://www.chess.com/game/live/${id}`, pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', end_time: 1794133200 + id % 1000, white: { username: 'fixture_learner', rating: 455, result: 'win' }, black: { username: 'opponent_rep', rating: 470, result: 'resigned' } };
   };
+  const usual = '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O';
   await page.route('https://api.chess.com/**', async (route) => {
     const url = route.request().url();
     const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
     if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
     if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
-    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [game(900000801, '07'), game(900000802, '08')] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [game(900000801, '06', usual), game(900000802, '07', usual), game(900000803, '08', '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6')] } });
     return route.fulfill({ status: 404, headers, json: {} });
   });
   await openApp(page, '#/progress');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
-  await expect(page.getByTestId('games-count')).toContainText('2 games on this device', { timeout: 120_000 });
+  await expect(page.getByTestId('games-count')).toContainText('3 games on this device', { timeout: 120_000 });
 
   await page.goto('./#/practice/openings');
-  await expect(page.getByTestId('course-note')).toContainText('Nothing is copied from your opening course');
+  await expect(page.getByTestId('courses-card')).toContainText('The Italian Game');
+  await expect(page.getByTestId('course-note')).toContainText('the app does not know them');
   const sources = page.getByTestId('repertoire-sources');
   await expect(sources).toContainText('read from your games', { timeout: 30_000 });
   const rows = page.getByTestId('repertoire-row');
-  // His first move and the Italian, each played in both games.
-  await expect(rows.filter({ hasText: 'after the starting position, you play e4; from your games: played in 2 of 2' })).toHaveCount(1);
-  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6, you play Bc4; from your games: played in 2 of 2' })).toHaveCount(1);
-  // Other replies to 1.e4 are common at this level and he has no games with them: suggestions, marked as such.
+  // His first move and the move into the Italian are his own habits.
+  await expect(rows.filter({ hasText: 'after the starting position, you play e4; from your games: played in 3 of 3' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6, you play Bc4; from your games: played in 3 of 3' })).toHaveCount(1);
+  // Inside the Italian his course decides: the habit is listed, but waits for his confirmation ...
+  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5, you play c3; from your games: played in 2 of 3; not yet confirmed against your course' })).toHaveCount(1);
+  // ... and the app suggests nothing of its own there or in the Caro-Kann. Elsewhere it does.
   const suggested = rows.filter({ hasText: 'suggested: the sound move most played at your level' });
   expect(await suggested.count()).toBeGreaterThan(0);
+  await expect(suggested.filter({ hasText: /after 1\.e4 c6|2\.Nf3 Nc6 3\.Bc4 / })).toHaveCount(0);
+  await expect(page.getByTestId('left-card')).toHaveCount(0);
 
-  // In recall a suggestion is asked like any move; a different sound move can be made his own with one tap.
+  // Recall: a move inside a course's opening is asked about, not tested. Outside, a suggestion is
+  // asked like any move, and a different sound move can be made his own with one tap.
   await page.getByTestId('start-recall').click();
   const drill = page.getByTestId('opening-drill');
+  const confirm = page.getByTestId('opening-confirm');
+  const done = page.getByTestId('recall-done');
   const book = JSON.parse(readFileSync('public/packs/openings-lichess.json', 'utf8')) as { positions: Record<string, { bestWp?: number; moves: { uci: string; wp?: number }[] }> };
   let adopted = false;
-  for (let i = 0; i < 60 && !adopted; i++) {
+  let confirmed = false;
+  for (let i = 0; i < 80; i++) {
+    await expect(drill.or(confirm).or(done).first()).toBeVisible();
+    if (await done.isVisible()) break;
+    if (await confirm.isVisible()) {
+      await expect(confirm).toContainText('covered by your course The Italian Game');
+      await expect(page.getByTestId('confirm-course')).toHaveAttribute('href', /chessreps\.com/);
+      const inferred = await confirm.getAttribute('data-inferred');
+      if (inferred === 'c2c3') {
+        await page.getByTestId('confirm-yes').click();
+        confirmed = true;
+      } else await page.getByTestId('confirm-later').click();
+      await expect(page.locator(`[data-testid=opening-confirm][data-inferred="${inferred}"]`)).toHaveCount(0);
+      continue;
+    }
     await expect(drill).toHaveAttribute('data-done', 'false');
     const expected = (await drill.getAttribute('data-expected'))!;
     const isSuggestion = (await drill.locator('.muted').first().textContent())!.includes('suggested');
     const fen = (await drill.locator('.board').getAttribute('data-fen'))!;
     const data = book.positions[fen.split(' ').slice(0, 4).join(' ')];
     // Another move that the data rates as sound in this position, if there is one.
-    const other = isSuggestion && data?.bestWp !== undefined ? data.moves.find((m) => m.uci !== expected && m.wp !== undefined && data.bestWp! - m.wp <= 8) : undefined;
+    const other = !adopted && isSuggestion && data?.bestWp !== undefined ? data.moves.find((m) => m.uci !== expected && m.wp !== undefined && data.bestWp! - m.wp <= 8) : undefined;
     if (!other) {
       await playMove(page, expected);
       await page.getByTestId('drill-next').click();
@@ -408,11 +432,20 @@ test('repertoire fills itself from your own games, with suggestions for common g
     await page.getByTestId('drill-adopt').click();
     await expect(page.getByTestId('drill-adopted')).toContainText('is now your move here');
     adopted = true;
+    await page.getByTestId('drill-next').click();
   }
   expect(adopted).toBe(true);
+  expect(confirmed).toBe(true);
+
+  // The confirmed move is now his, and the newer game that played something else is listed with the way back to the course.
+  await page.goto('./#/practice/openings');
+  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5, you play c3; recorded by you' })).toHaveCount(1);
+  const left = page.getByTestId('left-row');
+  await expect(left).toHaveCount(1);
+  await expect(left).toContainText('2026-11-08: after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 you played d3; your move is c3.');
+  await expect(left.getByRole('link')).toHaveText('Review it in The Italian Game');
 
   // Removing a suggestion leaves the position to him: it does not come back.
-  await page.goto('./#/practice/openings');
   await expect(suggested.first()).toBeVisible();
   const gone = (await suggested.first().locator('.concept-name').textContent())!;
   await suggested.first().getByRole('button').click();
