@@ -144,7 +144,11 @@ export function chanceItems(games: GameRecord[], opts: { minControlPly?: number 
       const e = byPly.get(ply);
       const base = { id: `sense:chance-or-not:${g.id}:${ply}`, kind: 'chance-or-not' as const, gameId: g.id, ply, fen, color: g.color, date: g.endDate };
       if (e?.opportunity) {
-        const clear = e.opportunity === 'mate' || e.secondWp === null || e.bestWp - e.secondWp >= CHANCE_GAP;
+        // Asked only where the evidence holds: a second move to compare with; for material, a
+        // settled line and a clear margin; for mate, a short one (a mate in nine is not a chance
+        // this learner can be said to take or miss). Another mating or winning move is still
+        // accepted when it is played.
+        const clear = e.secondWp !== null && (e.opportunity === 'mate' ? (f.mateIn === undefined || f.mateIn <= 3) : !f.unsure && e.bestWp - e.secondWp >= CHANCE_GAP);
         if (clear) out.push({ ...base, truth: true, best: e.best, bestSan: e.bestSan, bestLine: e.bestLine, bestWp: e.bestWp });
       } else if (!f.mating && !f.unsure && f.best <= 0 && ply >= minPly) {
         out.push({ ...base, truth: false });
@@ -154,7 +158,7 @@ export function chanceItems(games: GameRecord[], opts: { minControlPly?: number 
   return out;
 }
 
-export type SenseResponse = 'hit' | 'miss' | 'wrong-reply' | 'unverified-reply' | 'correct-rejection' | 'false-alarm';
+export type SenseResponse = 'hit' | 'miss' | 'wrong-reply' | 'unverified-reply' | 'correct-rejection' | 'false-alarm' | 'label-disputed';
 export interface SenseGrade {
   response: SenseResponse;
   correct: boolean;
@@ -175,9 +179,17 @@ export type Verified = 'yes' | 'no' | 'unresolved';
  * barely moves, and any quiet move would pass. `line` is the engine's best line from the
  * position after the learner's move (expected score for the side then to move), or null.
  */
-export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv: string[] } | null): Verified {
+export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv: string[]; mate?: number | null } | null): Verified {
   const safety = item.kind === 'safe-or-not';
-  const from = safety ? item.afterFen! : item.fen;
+  // A control carries no stored reply position: it is the position after the proposed move.
+  let from = item.fen;
+  if (safety) {
+    try {
+      from = item.afterFen ?? fenOf(applyUci(positionFromFen(item.fen), item.proposed!));
+    } catch {
+      return 'unresolved';
+    }
+  }
   let after;
   try {
     after = applyUci(positionFromFen(from), uci);
@@ -186,11 +198,14 @@ export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv
   }
   if (after.isCheckmate()) return 'yes';
   if (!line || line.pv.length === 0) return 'unresolved';
+  // A forced mate decides before any material is counted. The engine's own mate score is
+  // used where it is given; the percentage only where it is not.
   // After a punishing reply the owner is to move and is being mated; after a chance the opponent is.
-  if (line.wp === 0) return 'yes';
-  // The side to move has a forced mate instead: the learner's move did the opposite of its job,
-  // whatever material it picked up on the way.
-  if (line.wp === 100) return 'no';
+  const mate = line.mate ?? (line.wp === 0 ? -1 : line.wp === 100 ? 1 : null);
+  if (mate !== null && mate < 0) return 'yes';
+  // The side to move has the forced mate instead: the learner's move did the opposite of its
+  // job, whatever material it picked up on the way.
+  if (mate !== null && mate > 0) return 'no';
   // A chance taken must leave the learner at least level by the engine's score.
   if (!safety && 100 - line.wp < 50) return 'no';
   const base = material(positionFromFen(item.fen), item.color);
@@ -202,17 +217,30 @@ export function verifyReply(item: SenseItem, uci: string, line: { wp: number; pv
 
 /** @param verified the outcome of `verifyReply` when the reply differs from the stored one; omitted when it has not been checked yet. */
 export function gradeSafety(item: SenseItem, answer: 'safe' | 'unsafe', replyUci: string | null, verified?: Verified): SenseGrade {
-  if (!item.truth) return answer === 'safe' ? { response: 'correct-rejection', correct: true } : { response: 'false-alarm', correct: false };
+  if (!item.truth) return answer === 'safe' ? { response: 'correct-rejection', correct: true } : gradeClaimOnControl(replyUci, verified);
   if (answer === 'safe') return { response: 'miss', correct: false };
   if (replyUci && replyUci === item.replyUci) return { response: 'hit', correct: true };
   return gradeOther(verified);
 }
 
 export function gradeChance(item: SenseItem, answer: 'something' | 'nothing', moveUci: string | null, verified?: Verified): SenseGrade {
-  if (!item.truth) return answer === 'nothing' ? { response: 'correct-rejection', correct: true } : { response: 'false-alarm', correct: false };
+  if (!item.truth) return answer === 'nothing' ? { response: 'correct-rejection', correct: true } : gradeClaimOnControl(moveUci, verified);
   if (answer === 'nothing') return { response: 'miss', correct: false };
   if (moveUci && moveUci === item.best) return { response: 'hit', correct: true };
   return gradeOther(verified);
+}
+
+/**
+ * "There is something" on an item stored as having nothing. A claim with no move is a false
+ * alarm. A claim with a move is checked like any other answer: if the move does mate or win
+ * material by the board test, the stored label was wrong and the item is not scored.
+ */
+function gradeClaimOnControl(moveUci: string | null, verified: Verified | undefined): SenseGrade {
+  if (!moveUci) return { response: 'false-alarm', correct: false };
+  if (verified === undefined) return { response: 'unverified-reply', correct: false, needsEngine: true };
+  if (verified === 'yes') return { response: 'label-disputed', correct: false };
+  if (verified === 'no') return { response: 'false-alarm', correct: false };
+  return { response: 'unverified-reply', correct: false };
 }
 
 function gradeOther(verified: Verified | undefined): SenseGrade {
@@ -244,9 +272,9 @@ export function pickSense(items: SenseItem[], kind: SenseKind, seen: Set<string>
   const order = (xs: SenseItem[]) => xs.slice().sort((a, b) => hash(`${seed}|${a.id}`) - hash(`${seed}|${b.id}`) || (a.id < b.id ? -1 : 1));
   const yes = order(pool.filter((i) => i.truth));
   const no = order(pool.filter((i) => !i.truth));
-  // With nothing left that has something in it, nothing is asked: a stream of controls only
-  // would make "safe" / "nothing" always right.
-  if (yes.length === 0) return [];
+  // Both sorts are needed. A stream of controls only would make "safe" / "nothing" always
+  // right, and a stream of real ones only would make "something" always right.
+  if (yes.length === 0 || no.length === 0) return [];
   // Interleaved, starting with a real item or a control by a coin toss on the seed. (Sorting the
   // chosen ones together by hash put the control first almost every time: it is the smallest
   // hash of a much larger pool. Callers that take the first item then asked nine controls in ten.)

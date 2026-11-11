@@ -52,8 +52,9 @@ describe('review scheduling (FSRS via ts-fsrs)', () => {
     expect(gaps[2]!).toBeGreaterThan(gaps[1]!);
   });
 
-  it('lesson examples always enter the queue, even when found first time', () => {
-    const s = applyAttempt(undefined, att({ exerciseKind: 'lesson-try', exerciseId: 'lesson:x:2', outcome: 'success' }));
+  it('a lesson example found first time does not enter the queue; a missed one does (policy v2)', () => {
+    expect(applyAttempt(undefined, att({ exerciseKind: 'lesson-try', exerciseId: 'lesson:x:2', outcome: 'success' }))).toBeUndefined();
+    const s = applyAttempt(undefined, att({ exerciseKind: 'lesson-try', exerciseId: 'lesson:x:2', outcome: 'fail' }));
     expect(s).toBeDefined();
     expect(s!.due - T0).toBeGreaterThanOrEqual(DAY);
   });
@@ -135,6 +136,53 @@ describe('repertoire drills from before the move was part of the id', () => {
     const old = applyAttempt(undefined, att({ exerciseId: 'opening:white|rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -', exerciseKind: 'opening', outcome: 'fail', ts: T0 }))!;
     const current = applyAttempt(undefined, att({ exerciseId: 'opening:white|rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -:e2e4', exerciseKind: 'opening', outcome: 'fail', ts: T0 }))!;
     expect(dueItems([old, current], T0 + 3 * 86_400_000).map((x) => x.itemId)).toEqual([current.itemId]);
+  });
+});
+
+describe('what enters the review queue, and what leaves it (policy v2)', () => {
+  const DAY = 86_400_000;
+  const run = (steps: [number, Attempt['outcome'], Partial<Attempt>?][], base: Partial<Attempt>) => {
+    let state: ReturnType<typeof applyAttempt>;
+    let last: number | null = null;
+    for (const [day, outcome, over] of steps) {
+      const ts = T0 + day * DAY;
+      const scheduledReview = !!state && state.due <= ts + DAY;
+      state = applyAttempt(state, att({ ...base, outcome, ts, scheduledReview, daysSinceLast: last === null ? null : day - last, ...over }));
+      last = day;
+    }
+    return state;
+  };
+
+  it('only a miss puts a lesson example, an own-game position or an ending into the queue; a repertoire move always goes in', () => {
+    for (const kind of ['lesson-try', 'own-game', 'endgame'] as const) {
+      expect(run([[0, 'success']], { exerciseId: `x:${kind}`, exerciseKind: kind }), kind).toBeUndefined();
+      expect(run([[0, 'fail']], { exerciseId: `x:${kind}`, exerciseKind: kind }), kind).toBeDefined();
+      expect(run([[0, 'assisted']], { exerciseId: `x:${kind}`, exerciseKind: kind }), kind).toBeDefined();
+    }
+    expect(run([[0, 'success']], { exerciseId: 'opening:white|k:e2e4', exerciseKind: 'opening' })).toBeDefined();
+  });
+
+  it('a missed position leaves the queue once it has been recalled after two weeks or more, and comes back if it is missed again', () => {
+    const base = { exerciseId: 'lichess:zz', exerciseKind: 'puzzle' as const };
+    const early = run([[0, 'fail'], [1, 'success'], [5, 'success']], base)!;
+    expect(early.retired).toBeUndefined();
+    const graduated = run([[0, 'fail'], [1, 'success'], [5, 'success'], [21, 'success']], base)!;
+    expect(graduated.retired).toBe('graduated');
+    expect(dueItems([graduated], T0 + 400 * DAY)).toEqual([]);
+    const back = run([[0, 'fail'], [1, 'success'], [5, 'success'], [21, 'success'], [60, 'fail']], base)!;
+    expect(back.retired).toBeUndefined();
+    expect(dueItems([back], T0 + 62 * DAY).map((s) => s.itemId)).toEqual(['lichess:zz']);
+  });
+
+  it('a repertoire move is never graduated: recalling it is the point', () => {
+    const s = run([[0, 'success'], [3, 'success'], [30, 'success']], { exerciseId: 'opening:white|k:e2e4', exerciseKind: 'opening' })!;
+    expect(s.retired).toBeUndefined();
+  });
+
+  it('a position missed four times is set aside instead of coming back every day', () => {
+    const s = run([[0, 'fail'], [1, 'fail'], [2, 'fail'], [3, 'fail']], { exerciseId: 'lichess:hard', exerciseKind: 'puzzle' })!;
+    expect(s.retired).toBe('set-aside');
+    expect(dueItems([s], T0 + 10 * DAY)).toEqual([]);
   });
 });
 

@@ -91,7 +91,7 @@ describe('analysing games on the device', () => {
     expect(n).toBe(6); // all six, including the two the Mac already analysed
     expect(newGames).toBe(7); // once to start, then the engine's memory is cleared before every game
     expect(order[0]).toBe('0/6');
-    const deviceKey = 'game-analysis-v3/Test engine/10';
+    const deviceKey = 'game-analysis-v4/Test engine/10';
     let all = await db.games.toArray();
     for (const g of all) {
       expect(g.measureKey).toBe(deviceKey);

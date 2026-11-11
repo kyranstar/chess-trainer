@@ -14,6 +14,13 @@ import archive from './fixtures/chesscom-archive.fixture.json';
 import { earlyBlunderGames, ratingSeries } from './metrics';
 import { localDate, planSession, spend, suggestSessionKind } from '../schedule/session';
 
+import { legalDests, positionFromFen } from '../chess/rules';
+
+const firstLegal = (fen: string) => {
+  const [from, tos] = [...legalDests(positionFromFen(fen))].sort()[0]!;
+  return `${from}${tos.slice().sort()[0]}`;
+};
+
 const API = 'https://api.chess.com/pub/player';
 const names: string[] = [];
 function fresh(): TrainerDB {
@@ -169,6 +176,53 @@ describe('after Chess.com says "too many requests"', () => {
     broken = false;
     expect((await syncChessCom(db, fetcher, 'fixture_learner', 2000)).status).toBe('ok');
     expect(await db.games.count()).toBe(2);
+  });
+});
+
+describe('a month whose answer was stale when it was re-read (outside reviewer, third pass)', () => {
+  it('the previous month is read again on later passes, so a game that shows up late still arrives', async () => {
+    const db = fresh();
+    let months: Months = { '2026/10': [mine[0]] };
+    const api = fakeApi('fixture_learner', () => months);
+    await syncChessCom(db, api.fetcher, 'fixture_learner', 1000);
+    // November appears. October is re-read, but Chess.com still serves its old answer.
+    months = { '2026/10': [mine[0]], '2026/11': [mine[2]] };
+    expect((await syncChessCom(db, api.fetcher, 'fixture_learner', 2000)).status).toBe('ok');
+    expect(await db.games.count()).toBe(2);
+    // Later the October answer catches up with a game finished on the 31st.
+    months = { '2026/10': [mine[0], mine[1]], '2026/11': [mine[2]] };
+    await syncChessCom(db, api.fetcher, 'fixture_learner', 3000);
+    expect(await db.games.count()).toBe(3);
+    // Months further back are final and are not asked for again.
+    months = { '2026/09': [], '2026/10': [mine[0], mine[1]], '2026/11': [mine[2]], '2026/12': [] };
+    await syncChessCom(db, api.fetcher, 'fixture_learner', 4000);
+    api.calls.length = 0;
+    await syncChessCom(db, api.fetcher, 'fixture_learner', 5000);
+    expect(api.calls.filter((u) => u.includes('/games/2026/')).map((u) => u.slice(-7)).sort()).toEqual(['2026/11', '2026/12']);
+  });
+});
+
+describe('a game the engine cannot analyse', () => {
+  it('is left unmeasured and does not stop the games after it', async () => {
+    const db = fresh();
+    await setMeta(db, 'chesscom.username', 'fixture_learner');
+    await syncIfDue(db, fakeApi('fixture_learner', () => ({ '2026/11': games })).fetcher, 1000);
+    const total = await db.games.count();
+    let calls = 0;
+    // The engine returns nothing for every position of the first game it is given, then works.
+    let failing: string | null = null;
+    const engine = {
+      name: 'Test engine',
+      newGame: async () => { calls++; failing = calls === 2 ? 'first' : null; },
+      analyse: async (fen: string): Promise<PvLine[]> => {
+        if (failing) return [];
+        const move = firstLegal(fen);
+        return [{ move, score: { cp: 0 }, pv: [move] }];
+      },
+    };
+    const done = await analysePending(db, engine, { nodes: 10 });
+    expect(done).toBe(total - 1);
+    expect((await db.games.toArray()).filter((g) => !g.measure)).toHaveLength(1);
   });
 });
 

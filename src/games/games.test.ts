@@ -275,3 +275,26 @@ describe('castling is spelled two ways', () => {
   });
 });
 
+describe('the headline compares fixed groups of games (outside reviewer, third pass)', () => {
+  it('"the latest two" means the latest two: while the newest game is not measured there is no comparison, not one with an older game slipped in', async () => {
+    const db = fresh();
+    await importGames(db, text, 1);
+    const rapid = (await db.games.toArray()).filter((g) => g.timeClass === 'rapid').map((g) => withMeasure({ ...g, rated: true }));
+    expect(rapid.length).toBeGreaterThanOrEqual(4);
+    // Five games in date order; the newest has not been measured yet.
+    const five = [0, 1, 2, 3, 0].map((k, i) => ({ ...rapid[k]!, id: `g${i}`, endDate: `2026-11-0${i + 1}` }));
+    const newestPending = five.map((g, i) => (i === 4 ? { ...g, measure: null, measureKey: null } : g));
+    const m = earlyBlunderGames(newestPending, { timeClass: 'rapid', window: 2 });
+    expect(m.recent).toBeNull();
+    expect(m.previous).toBeNull();
+    expect(m.windowPending).toBe(1);
+    expect(m.games).toBe(4); // the overall share still covers the four measured games
+    // Once it is measured the two groups are exactly games 4-5 and games 2-3.
+    const all = earlyBlunderGames(five, { timeClass: 'rapid', window: 2 });
+    const has = (g: (typeof five)[number]) => g.measure!.events.some((e) => !!e.target && e.ply < 40);
+    expect(all.recent).toEqual({ games: 2, withBlunder: five.slice(3, 5).filter(has).length });
+    expect(all.previous).toEqual({ games: 2, withBlunder: five.slice(1, 3).filter(has).length });
+    expect(all.windowPending).toBe(0);
+  });
+});
+

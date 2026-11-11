@@ -154,4 +154,17 @@ export async function rebuildReviews(db: TrainerDB): Promise<number> {
   });
 }
 
+/**
+ * Review states are derived from the attempt log by the current policy. When the policy has
+ * changed since they were last built (what enters the queue, what graduates), they are built
+ * again from the log, so an app update applies the new rules to old history too. Attempts are
+ * never changed. Returns true if a rebuild happened.
+ */
+export async function ensureReviewPolicy(db: TrainerDB): Promise<boolean> {
+  if ((await getMeta<string>(db, 'scheduler.version')) === SCHEDULER_VERSION) return false;
+  await rebuildReviews(db);
+  await setMeta(db, 'scheduler.version', SCHEDULER_VERSION);
+  return true;
+}
+
 export type { Table };

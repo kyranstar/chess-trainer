@@ -412,7 +412,7 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
           {early.games === 0 ? (early.pending > 0 ? `${early.pending} rapid games are waiting to be measured on this device` : 'No rapid games yet') : (
             <>
               <strong>{early.withBlunder} of {early.games}</strong> rapid games had a move in the first {EARLY_MOVES} that lost material or allowed mate ({formatPct(early.rate)}, plausible range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)}).
-              {early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`}
+              {early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : early.windowPending > 0 ? ` The last ${COMPARE_WINDOW} games against the ${COMPARE_WINDOW} before will be shown once ${early.windowPending} of those games ${early.windowPending === 1 ? 'has' : 'have'} been measured.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`}
               {` All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.`}
               {early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
             </>

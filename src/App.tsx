@@ -2,7 +2,7 @@ import { Component, type ReactNode, useEffect, useState } from 'react';
 import { href, useRoute } from './app/router';
 import { DbContext, useLearner, useOnline, usePack } from './app/store';
 import { useAutoSync } from './app/useAutoSync';
-import { openDb } from './db/db';
+import { openDb, ensureReviewPolicy } from './db/db';
 import { installPack, packStatus } from './db/pack';
 import { ConceptPage, LearnHome } from './ui/Learn';
 import { OpeningsHome } from './ui/Openings';
@@ -50,6 +50,10 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
   const [packError, setPackError] = useState<string | null>(null);
   const pack = usePack();
   useAutoSync(db);
+  // An app update can change which missed positions are kept in review; old history follows the new rules.
+  useEffect(() => {
+    void ensureReviewPolicy(db);
+  }, [db]);
   const tab = route.parts[0] ?? 'today';
 
   // First run: copy the practice pack into local storage. Later runs are a cheap manifest check.

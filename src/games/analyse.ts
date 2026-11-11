@@ -10,7 +10,7 @@ import type { PvLine, UciEngine } from '../engine/uci';
 import { winPercent } from '../engine/uci';
 import type { DecisionFact, GameAnalysis, GameEvent, PipelineGame } from './types';
 
-export const ANALYSIS_VERSION = 'game-analysis-v3';
+export const ANALYSIS_VERSION = 'game-analysis-v4';
 export const RULES = { majorLoss: 20, missLoss: 10, materialSwing: 2, pvPlies: 5, uniqueGap: 20 };
 /** Node budget for the small in-app engine: enough to see a 20-point drop, light on battery. */
 export const DEVICE_NODES = 60_000;
@@ -28,14 +28,17 @@ export const SOUND_WITHIN = 2;
  * the move allowed an avoidable mate, or lost at least two points of material in a short
  * line that the best move would not have lost. The expected-score scale flattens out in
  * positions that are already won or lost, so a piece hung there barely moves the score; it
- * is still counted. A sacrifice the engine accepts in an undecided position is not.
+ * is still counted, as long as it cost at least SOUND_WITHIN points. A sacrifice the engine
+ * accepts (no cost to its score) is not, in any position.
  */
 export function targetKind(f: DecisionFact, loss: number): 'mate' | 'material' | null {
   if (f.mated) return 'mate';
   if (f.unsure) return null; // a line cut off mid-exchange proves nothing about material
   const loses = f.played <= -RULES.materialSwing && f.best - f.played >= RULES.materialSwing;
   if (!loses) return null;
-  if (f.wp >= UNDECIDED.lo && f.wp <= UNDECIDED.hi && loss < SOUND_WITHIN) return null;
+  // Material given up at no cost to the engine's score is a sacrifice it accepts, wherever the
+  // game stands. (A piece hung in a won game does cost something and is still counted.)
+  if (loss < SOUND_WITHIN) return null;
   return 'material';
 }
 
@@ -59,30 +62,32 @@ function isCapture(pos: Pos, uci: string): boolean {
 }
 
 /**
- * Balance for `color` after the first plies of a line, ending on a non-capture where
- * possible, and whether the line is settled there. It is not settled when it stops right
- * after a capture (the recapture may be pending): the engine's line ran out, or captures
- * were still going on at the cut-off.
+ * Balance for `color` along the first plies of an engine line, and whether that balance can
+ * be relied on. It is a snapshot of one continuation, not a proof. It is called settled only
+ * when the line runs the whole window and then continues with a quiet move, or the game ends
+ * inside it. A line that runs out early, stops on a capture or promotion, or still has
+ * captures going on at the cut-off is not settled.
  */
 export function lineEnd(fen: string, pv: string[], color: Color): { balance: number; settled: boolean } {
   let pos = positionFromFen(fen);
   let last = material(pos, color);
-  let lastWasCapture = false;
   for (let i = 0; i < pv.length; i++) {
     const uci = pv[i]!;
-    let capture: boolean;
     try {
-      capture = isCapture(pos, uci);
-      if (i >= RULES.pvPlies && !capture) return { balance: last, settled: true };
+      // A capture or a promotion keeps the material question open.
+      const loud = isCapture(pos, uci) || uci.length === 5;
+      if (i >= RULES.pvPlies && !loud) return { balance: last, settled: true };
       if (i >= RULES.pvPlies + 2) return { balance: last, settled: false };
       pos = applyUci(pos, uci);
     } catch {
       return { balance: last, settled: false }; // an engine line that our rules library rejects
     }
-    lastWasCapture = capture;
     last = material(pos, color);
+    if (pos.isEnd()) return { balance: last, settled: true };
   }
-  return { balance: last, settled: !lastWasCapture || pos.isEnd() };
+  // The line ran out before the window was full (or there was no line): what would follow is
+  // not known, so nothing is claimed. A quiet last move does not show an exchange is over.
+  return { balance: last, settled: false };
 }
 
 export function materialAfter(fen: string, pv: string[], color: Color): number {
@@ -128,10 +133,9 @@ export async function analyseGame(game: Pick<PipelineGame, 'moves' | 'color' | '
     for (const tos of legalDests(pos).values()) legal += tos.length;
     const lines = await engine.analyse(fen, nodes, legal > 1 ? 2 : 1);
     const best = lines[0];
-    if (!best) {
-      pos = applyUci(pos, uci);
-      continue;
-    }
+    // No line for a position is missing evidence. Skipping it would leave a game that looks
+    // analysed and clean; the whole game is refused instead and tried again later.
+    if (!best) throw new Error(`the engine gave no line for move ${Math.floor(ply / 2) + 1}`);
     const bestWp = winPercent(best.score);
     const secondWp = lines[1] ? winPercent(lines[1].score) : null;
     const after = applyUci(pos, uci);
@@ -174,7 +178,7 @@ export async function analyseGame(game: Pick<PipelineGame, 'moves' | 'color' | '
       else label = 'unclassified';
     }
     const mated = !samePlayed && !after.isEnd() && replyMate !== null && replyMate > 0 && replyMate <= 3 && !(bestMate !== null && bestMate < 0);
-    const fact: DecisionFact = { ply, wp: round1(bestWp), played: playedEnd - here, best: bestEnd - here, ...(mated ? { mated: true as const } : {}), ...(bestMate !== null && bestMate > 0 ? { mating: true as const } : {}), ...(unsure ? { unsure: true as const } : {}) };
+    const fact: DecisionFact = { ply, wp: round1(bestWp), played: playedEnd - here, best: bestEnd - here, ...(mated ? { mated: true as const } : {}), ...(bestMate !== null && bestMate > 0 ? { mating: true as const, mateIn: bestMate } : {}), ...(unsure ? { unsure: true as const } : {}) };
     facts.push(fact);
     const target = samePlayed ? null : targetKind(fact, loss);
     if (opportunity || label || target) {

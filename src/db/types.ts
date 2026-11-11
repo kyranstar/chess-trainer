@@ -75,6 +75,12 @@ export interface ReviewState {
   due: number;
   card: SerializedCard;
   lastAttemptUuid: string;
+  /**
+   * Out of active review: 'graduated' after a successful recall two weeks or more later,
+   * 'set-aside' after repeated misses. The history is kept; a later miss of a graduated item
+   * brings it back.
+   */
+  retired?: 'graduated' | 'set-aside';
 }
 
 export interface SerializedCard {

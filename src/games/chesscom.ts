@@ -27,8 +27,11 @@ export interface SyncResponse {
 export type SyncFetch = (url: string, etag: string | null) => Promise<SyncResponse>;
 
 /** Browser transport. `no-cache` makes the browser revalidate with its own stored ETag. */
+/** A request that has not answered after this long is given up (a train going into a tunnel). */
+export const FETCH_TIMEOUT_MS = 20_000;
+
 export const browserFetch: SyncFetch = async (url) => {
-  const res = await fetch(url, { cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  const res = await fetch(url, { cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   return { status: res.status, json: res.ok ? await res.json() : null, etag: res.headers.get('ETag') };
 };
 
@@ -190,8 +193,11 @@ export async function syncChessCom(db: TrainerDB, fetcher: SyncFetch, username: 
     const latest = months[months.length - 1];
     let failed: { status: SyncReport['status']; detail: string } | null = null;
     for (const url of months) {
-      // A month already read is final only if it had ended by the time of the last complete pass.
-      if (etags[url] && url !== latest && !(previousLatest !== null && url >= previousLatest)) continue;
+      // A month already read is final only if it had ended by the time of the last complete
+      // pass, and it is not one of the two newest: Chess.com's answer for the month just ended
+      // can lag behind, so that month is read again as long as it is the previous one.
+      const newestTwo = url === latest || url === months[months.length - 2];
+      if (etags[url] && !newestTwo && !(previousLatest !== null && url >= previousLatest)) continue;
       const res = await fetcher(url, etags[url] ?? null);
       if (res.status === 304) continue;
       const badMonth = fail(res.status);
@@ -227,7 +233,8 @@ export async function syncChessCom(db: TrainerDB, fetcher: SyncFetch, username: 
     return finish(db, report);
   } catch (e) {
     // A failed network request is a TypeError; anything else is a fault of ours and is said so.
-    return finish(db, e instanceof TypeError ? { ...report, status: 'offline' } : { ...report, status: 'error', detail: (e as Error).message });
+    const network = e instanceof TypeError || (e as Error)?.name === 'TimeoutError' || (e as Error)?.name === 'AbortError';
+    return finish(db, network ? { ...report, status: 'offline' } : { ...report, status: 'error', detail: (e as Error).message });
   }
 }
 

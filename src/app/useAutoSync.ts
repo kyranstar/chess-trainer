@@ -90,8 +90,9 @@ async function analysisPart(db: TrainerDB): Promise<void> {
 
 /** One round: sync if due (or forced), then analyse whatever has no analysis. Safe to call often. */
 export async function runSyncRound(db: TrainerDB, force = false): Promise<void> {
-  await syncPart(db, force);
-  await analysisPart(db);
+  // Analysis of games already on the device does not wait for the network: underground a
+  // request can hang until it times out. A second pass picks up whatever the fetch brings.
+  await Promise.all([analysisPart(db), syncPart(db, force).then(() => analysisPart(db))]);
 }
 
 /** Starts a round on launch and whenever the app returns to the foreground or comes back online. */

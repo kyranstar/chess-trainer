@@ -68,7 +68,12 @@ export async function analysePending(
     // Clear the engine's memory first: otherwise a game's analysis depends on what happened to
     // be analysed before it, and the same game would not get the same record twice.
     await engine.newGame?.();
-    const analysis = await analyseGame(game, engine, { nodes: opts.nodes, keepGoing: opts.keepGoing });
+    let analysis;
+    try {
+      analysis = await analyseGame(game, engine, { nodes: opts.nodes, keepGoing: opts.keepGoing });
+    } catch {
+      continue; // the engine gave no line somewhere: this game stays unmeasured and is tried again another time
+    }
     if (!analysis) break; // stopped: this game is retried from its start next time
     await db.transaction('rw', db.games, async () => {
       // Re-read: the row may have changed meanwhile (an import from the Mac, a newer sync).

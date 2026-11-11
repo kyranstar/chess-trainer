@@ -44,6 +44,8 @@ export interface DecisionFact {
   mated?: true;
   /** The best line is a forced mate for the learner. */
   mating?: true;
+  /** In how many moves (analysis v4). */
+  mateIn?: number;
   /**
    * One of the two lines stops in the middle of an exchange (a capture with the recapture
    * still pending), so its material balance cannot be trusted. Such a decision is neither

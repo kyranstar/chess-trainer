@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-11-10 (fourth round: owner's bug report, four fresh reviews, fixes)
+Updated: 2026-11-10 (fifth round: one-button practice, outside reviewer's third pass)
 Branch: `main` (same as `build/trainer`). Commit: see `git log -1`; this file is committed with the work it describes.
 Status: **M0 done. M1–M4 built; M5 started. Published: source at https://github.com/kyranstar/chess-trainer (public, `main`), app at https://kyranstar.github.io/chess-trainer/ (`gh-pages`). Second round: games and ratings arrive by themselves and are analysed on the device; five audits and two passes by an outside reviewer were worked through (ADR-026 to ADR-033). Third round (ADR-034, owner decisions): the product is phone only, must work offline on the subway, the session is 5 / 8 / 11 / 6 with practice from the owner's own games, the curriculum is reordered around piece safety, the Mac game route and the 30-day projection are gone. Fourth round (ADR-036): the owner found a question that changed before he could answer; four independent reviews of everything written since the audits followed and their findings were fixed (sync losing games at month end, wrong grading of own-game answers in decided games, double taps acting on the next screen, a check lost on reload, lessons contradicting their book, and more). Not done: anything on the physical iPhone, which needs the owner's hands.** M6 (sync) is dropped.
 
@@ -25,7 +25,7 @@ Status: **M0 done. M1–M4 built; M5 started. Published: source at https://githu
 
 - **Nothing has been tested on the physical iPhone**: Home Screen install, touch on the board, backup to Files, and the first real fetch and on-device analysis of the owner's games (about 90 games; expect well over half an hour of the app being open in total, resumable). On the iPhone: open https://kyranstar.github.io/chess-trainer/ in Safari, Share → Add to Home Screen, open it once online, then Progress → Your data → Check this device.
 - **The headline comparison needs 40 measured rated rapid games** before it shows "last 20 against the 20 before"; until then it shows the overall share and how many games are waiting.
-- **The reviewer's recommended next exercise is not built**: choose a move in an ordinary position, predict the reply, keep or revise. Own-game questions so far judge a move that is shown; they do not yet train checking one's own intended move.
+- **The exercise the outside reviewer calls the biggest missing piece is not built**: choose a move in an ordinary position, name a reply you must reckon with, optionally revise. Own-game questions so far judge a move that is shown; they do not yet train checking one's own intended move. Nor are checks that test the operation itself (which piece can be captured, the net of an exchange) built (ADR-038, last bullet).
 - Exact endgames cover king and pawn against king only. No conversion play-outs from won positions. No Lichess-study import. No sync (dropped, ADR-034); a backup file is the only copy outside the phone.
 - 13 of 29 concepts have an on-device lesson (two of the lessons, on the passed pawn and on exchanging when ahead, now only show the book's line and ask nothing); the rest only have links, which cannot be opened underground (the plan says so and teaches the next on-device lesson instead); 2 have no lesson at all; 7 have no independent check. The Capablanca lessons are in descriptive notation as printed.
 - Opening data is deep (14 plies) only after 1.e4 e5 and 1.e4 c6.
@@ -37,11 +37,11 @@ Status: **M0 done. M1–M4 built; M5 started. Published: source at https://githu
 | Command | Result |
 |---|---|
 | `npm run typecheck` | clean |
-| `npm test` | 24 files, 251 tests passed (adds the one-button policy, review order, and two cases from the outside reviewer's third pass). Added this round, mostly from reviewers' failing tests: month rollover, changed username, evening games west of Greenwich, rate-limit back-off, an engine that never starts, own-game answers judged on the board, controls with nothing at all in them, question balance, castling as a taken chance, on-device lessons first, midnight summary |
+| `npm test` | 24 files, 267 tests passed. This round added the outside reviewer's counterexamples (unsettled lines, promotion awaiting capture, material won while being mated, sacrifices in decided games, a control proved wrong, coin toss against the turn schedule), fixed comparison groups, stale-month sync, review admission and graduation, and the one-button policy |
 | `cd pipeline && uv run pytest -q tests` | 78 passed |
 | `uv run python -m trainer_pipeline.lessons` | all 16 lessons `ok` (run by the lessons reviewer after the re-cut); 50 asked moves, 12 with recorded sound alternatives |
 | `npm run build` | built; service worker precaches 27 entries (7.3 MB, including the 1.9 MB engine) |
-| `npm run e2e` | 47 passed, 2 skipped by design (one WebKit download test timed out once in a full run under load and passed alone) (iPhone 14 WebKit, desktop Chromium). Added this round: a question staying put while a new game arrives; a sound non-text move in a lesson; a check resumed after a reload; a double tap not acting on the next position; one-button practice across nine turns |
+| `npm run e2e` | 47 passed, 2 skipped by design on the final run |
 | `npm run e2e:churn` | 24 passed (iPhone 14 WebKit, about 4 to 7 minutes): the reviewer's harness, every flow driven while games are fetched and analysed, block clocks run out and midnight passes |
 | `npm run check` (all of the above in one command) | exit 0 on the final run |
 | Red-then-green | the tap-accuracy and promotion-cancel browser tests were run against a build with the two fixes removed and failed there |
@@ -62,7 +62,8 @@ Settled on 2026-11-10: US jurisdiction (ADR-022); public repository (ADR-025); z
 
 ## Known issues and risks
 
-- Left open from the fourth-round reviews (ADR-036, last bullet): the review backlog grows faster than five minutes a day clears it; a reload in the practice block shows a different question; only the first lesson of a concept is offered by the session; the king-and-pawn check does not survive a reload; most concept checks measure general puzzle strength more than the lesson; a lesson's text and its diagram are on separate screens.
+- The first phone open after this update measures all games again (analysis v4) and rebuilds the review queue under the new policy; both happen by themselves.
+- Left open from the fourth-round reviews (ADR-036, last bullet): a reload in the practice block shows a different question; only the first lesson of a concept is offered by the session; the king-and-pawn check does not survive a reload; most concept checks measure general puzzle strength more than the lesson; a lesson's text and its diagram are on separate screens.
 - Reports of the four reviews are not in the repository (they were written to a scratch folder); their reproductions that matter are now tests.
 
 - A queued review item whose content is gone (retired puzzle, re-analysed game) shows a "no longer available" card and stays due.

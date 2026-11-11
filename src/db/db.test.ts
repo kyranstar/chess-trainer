@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportBackup, importBackup, parseBackup, serializeBackup } from './backup';
-import { deleteDb, getDeviceId, getMeta, openDb, recordAttempt, recordLessonEvent, saveSession, setMeta, type TrainerDB, updateSession } from './db';
+import { deleteDb, getDeviceId, getMeta, openDb, recordAttempt, recordLessonEvent, saveSession, setMeta, type TrainerDB, updateSession, ensureReviewPolicy } from './db';
 import type { AttemptDraft, SessionRecord } from './types';
 
 const DAY = 86_400_000;
@@ -227,6 +227,20 @@ describe('preferences travel with a backup', () => {
     await expect(importBackup(fresh(), JSON.stringify(older))).resolves.toBeTruthy();
     const tampered = { ...file, data: { ...file.data, settings: [{ key: 'openings.band', value: 9 }] } };
     await expect(parseBackup(JSON.stringify(tampered))).rejects.toThrow(/checksum/);
+  });
+});
+
+describe('a change of review policy reaches history recorded before it', () => {
+  it('states are rebuilt once from the attempt log; attempts are untouched', async () => {
+    const db = fresh();
+    // A lesson example found first time: under the old policy it sat in the queue.
+    const a = await recordAttempt(db, draft({ exerciseId: 'lesson:x:1', exerciseKind: 'lesson-try', outcome: 'success', ts: T0 }));
+    await db.reviewStates.put({ itemId: 'lesson:x:1', algo: 'review-v1/old', due: T0 + DAY, lastAttemptUuid: a.uuid, card: { due: T0 + DAY, stability: 3, difficulty: 5, elapsed_days: 0, scheduled_days: 1, learning_steps: 0, reps: 1, lapses: 0, state: 2, last_review: T0 } });
+    await recordAttempt(db, draft({ exerciseId: 'lichess:missed', outcome: 'fail', ts: T0 }));
+    expect(await ensureReviewPolicy(db)).toBe(true);
+    expect((await db.reviewStates.toArray()).map((s) => s.itemId)).toEqual(['lichess:missed']);
+    expect(await db.attempts.count()).toBe(2);
+    expect(await ensureReviewPolicy(db)).toBe(false); // only once
   });
 });
 

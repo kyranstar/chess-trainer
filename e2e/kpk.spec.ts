@@ -71,9 +71,9 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   await expect(card).toContainText('2 of 3');
   await expect(card).toContainText('Winning: 1 of 2. Holding the draw: 1 of 1.');
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
-  // All three are scheduled for a later retention check.
+  // Only the ending that went wrong is kept for review; the two played correctly are not.
   await page.goto('./#/practice');
-  await expect(page.getByTestId('practice-review')).toContainText('3 in the queue');
+  await expect(page.getByTestId('practice-review')).toContainText('1 in the queue');
 });
 
 test('the opposition is demonstrated by playing five unseen endings correctly, not by tagged puzzles', async ({ page }) => {

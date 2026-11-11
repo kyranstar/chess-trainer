@@ -90,13 +90,13 @@ describe('sync from the phone', () => {
     expect(api.calls.map((c) => c.url)).toEqual([`${API}/stats`, `${API}/games/archives`, `${API}/games/2026/10`, `${API}/games/2026/11`]);
   });
 
-  it('a second sync sends ETags, re-reads only the latest month and adds nothing', async () => {
+  it('a second sync sends ETags, re-reads only the two newest months and adds nothing', async () => {
     const db = fresh();
     await syncChessCom(db, fakeApi(months()).fetcher, ME, 1000);
     const api = fakeApi(months());
     const r = await syncChessCom(db, api.fetcher, ME, 2000);
     expect(r).toMatchObject({ status: 'ok', added: 0 });
-    expect(api.calls.map((c) => [c.url.split('/pub/player/fixture_learner/')[1], c.etag])).toEqual([['stats', null], ['games/archives', null], ['games/2026/11', 'b']]);
+    expect(api.calls.map((c) => [c.url.split('/pub/player/fixture_learner/')[1], c.etag])).toEqual([['stats', null], ['games/archives', null], ['games/2026/10', 'a'], ['games/2026/11', 'b']]);
   });
 
   it('never overwrites a game that already has an analysis; it only fills in whether the game was rated', async () => {

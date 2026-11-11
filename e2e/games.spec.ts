@@ -154,7 +154,7 @@ test('one button: "Just practise" mixes own-game questions, missed moves and new
     if (kind === 'puzzle') {
       await solvePuzzle(page);
       await page.getByTestId('next').click();
-    } else if (kind === 'sense') {
+    } else if (kind === 'safe' || kind === 'chance') {
       await page.getByTestId('sense-no').click();
       await expect(page.getByTestId('sense-verdict')).toBeVisible();
       await page.getByTestId('sense-next').click();

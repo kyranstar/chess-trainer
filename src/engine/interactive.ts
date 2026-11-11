@@ -8,7 +8,7 @@ let chain: Promise<unknown> = Promise.resolve();
  * The engine's best line for the side to move in `fen` with its expected score (0-100) for
  * that side, or null if the engine is not available or does not answer in time. Never throws.
  */
-export function bestLineFor(fen: string, nodes = 40_000, timeoutMs = 8_000): Promise<{ wp: number; pv: string[] } | null> {
+export function bestLineFor(fen: string, nodes = 40_000, timeoutMs = 8_000): Promise<{ wp: number; pv: string[]; mate: number | null } | null> {
   const job = chain.then(async () => {
     try {
       engine ??= browserEngine();
@@ -23,7 +23,7 @@ export function bestLineFor(fen: string, nodes = 40_000, timeoutMs = 8_000): Pro
         engine = null;
         return null;
       }
-      return lines[0] ? { wp: winPercent(lines[0].score), pv: lines[0].pv } : null;
+      return lines[0] ? { wp: winPercent(lines[0].score), pv: lines[0].pv, mate: 'mate' in lines[0].score ? lines[0].score.mate : null } : null;
     } catch {
       return null;
     }

@@ -159,14 +159,14 @@ describe('cases from an independent review (2026-11-10)', () => {
 
   it('another reply is judged by what it does on the board, not by a score that barely moves in a decided game', () => {
     // 1...h6 ignores the rook. White then takes on d8 and stays far ahead: not a punishing reply.
-    const quiet = verifyReply(hung, 'h7h6', { wp: 99, pv: ['d1d8', 'g8h7', 'e1e4', 'g7g6', 'h2h3'] });
+    const quiet = verifyReply(hung, 'h7h6', { wp: 99, pv: ['d1d8', 'g8h7', 'e1e4', 'g7g6', 'h2h3', 'h7g7'] });
     expect(quiet).toBe('no');
     expect(gradeSafety(hung, 'unsafe', 'h7h6', quiet)).toMatchObject({ response: 'wrong-reply', correct: false });
     // The stored reply itself needs no engine.
     expect(gradeSafety(hung, 'unsafe', 'd8d1')).toMatchObject({ response: 'hit', correct: true });
     // A different reply that also wins the rook is accepted.
     const alsoWins: SenseItem = { ...hung, afterFen: '3r2k1/5ppp/8/8/8/5b2/5PPP/3RQ1K1 b - - 0 1', fen: '3r2k1/5ppp/8/8/8/5b2/5PPP/R3Q1K1 w - - 0 1', replyUci: 'd8d1' };
-    const bishop = verifyReply(alsoWins, 'f3d1', { wp: 30, pv: ['e1e8', 'd8e8', 'h2h3', 'e8e1', 'g1h2'] });
+    const bishop = verifyReply(alsoWins, 'f3d1', { wp: 30, pv: ['e1e8', 'd8e8', 'h2h3', 'e8e1', 'g1h2', 'g8f8'] });
     expect(bishop).toBe('yes');
     expect(gradeSafety(alsoWins, 'unsafe', 'f3d1', bishop)).toMatchObject({ response: 'hit', correct: true, alternative: true });
   });
@@ -182,7 +182,7 @@ describe('cases from an independent review (2026-11-10)', () => {
     const twoMates: SenseItem = { id: 'sense:chance-or-not:g:40', kind: 'chance-or-not', gameId: 'g', ply: 40, fen: '6k1/5ppp/8/8/8/8/5PPP/R3R1K1 w - - 0 1', color: 'white', truth: true, date: '2026-11-01', best: 'a1a8', bestSan: 'Ra8#', bestLine: '1. Ra8#', bestWp: 100 };
     expect(verifyReply(twoMates, 'e1e8', null)).toBe('yes');
     expect(gradeChance(twoMates, 'something', 'e1e8', 'yes')).toMatchObject({ response: 'hit', alternative: true });
-    const quiet = verifyReply(twoMates, 'h2h3', { wp: 1, pv: ['h7h6', 'a1a7', 'g8h7', 'e1e7', 'f7f6'] });
+    const quiet = verifyReply(twoMates, 'h2h3', { wp: 1, pv: ['h7h6', 'a1a7', 'g8h7', 'e1e7', 'f7f6', 'a7b7'] });
     expect(quiet).toBe('no');
     expect(gradeChance(twoMates, 'something', 'h2h3', quiet)).toMatchObject({ response: 'wrong-reply' });
   });
@@ -247,3 +247,32 @@ describe('cases from the outside reviewer (third pass)', () => {
   });
 });
 
+
+describe('cases from the outside reviewer: grading and item supply', () => {
+  it('taking a rook while allowing mate in one is not a chance taken (reproduced by the reviewer with the real engine)', () => {
+    const item: SenseItem = { id: 'sense:chance-or-not:g:50', kind: 'chance-or-not', gameId: 'g', ply: 50, fen: 'r3r3/1Q3ppk/7p/8/8/8/5PPP/6K1 w - - 0 1', color: 'white', truth: true, date: '', best: 'b7f7', bestSan: 'Qxf7', bestLine: '1. Qxf7', bestWp: 60 };
+    expect(verifyReply(item, 'b7a8', { wp: 100, mate: 1, pv: ['e8e1'] })).toBe('no');
+    // The typed mate score decides, not a rounded percentage.
+    expect(verifyReply(item, 'b7a8', { wp: 99.6, mate: 3, pv: ['e8e1'] })).toBe('no');
+  });
+  it('a material chance whose supporting line is unsettled, or with no second move to compare, is not asked', () => {
+    const base = games.find((g) => g.measure && g.measure.events.some((e) => e.opportunity === 'material'))!;
+    const ev = base.measure!.events.find((e) => e.opportunity === 'material')!;
+    const withFact = (over: object, evOver: object = {}): GameRecord => ({ ...base, id: 'x', measure: { ...base.measure!, events: base.measure!.events.map((e) => (e === ev ? { ...e, secondWp: e.bestWp - 30, ...evOver } : e)), facts: base.measure!.facts!.map((f) => (f.ply === ev.ply ? { ...f, ...over } : f)) } });
+    expect(chanceItems([withFact({})]).some((i) => i.ply === ev.ply && i.truth)).toBe(true);
+    expect(chanceItems([withFact({ unsure: true })]).some((i) => i.ply === ev.ply)).toBe(false);
+    expect(chanceItems([withFact({}, { secondWp: null })]).some((i) => i.ply === ev.ply)).toBe(false);
+  });
+  it('a learner who says "something" on a control and proves it with a winning move is not given a false alarm', () => {
+    const control: SenseItem = { id: 'sense:chance-or-not:g:20', kind: 'chance-or-not', gameId: 'g', ply: 20, fen: '6k1/5ppp/8/8/8/8/5PPP/R3R1K1 w - - 0 1', color: 'white', truth: false, date: '' };
+    expect(gradeChance(control, 'nothing', null)).toMatchObject({ response: 'correct-rejection', correct: true });
+    expect(gradeChance(control, 'something', 'a1a8', 'yes')).toMatchObject({ response: 'label-disputed', correct: false });
+    expect(gradeChance(control, 'something', 'h2h3', 'no')).toMatchObject({ response: 'false-alarm', correct: false });
+    expect(gradeChance(control, 'something', 'h2h3', 'unresolved')).toMatchObject({ response: 'unverified-reply', correct: false });
+    expect(gradeChance(control, 'something', 'h2h3')).toMatchObject({ needsEngine: true });
+  });
+  it('with no controls left, positives are not served on their own either', () => {
+    const yes: SenseItem[] = Array.from({ length: 5 }, (_, i) => ({ id: `sense:safe-or-not:g:${i}`, kind: 'safe-or-not', gameId: 'g', ply: i, fen: '', color: 'white', truth: true, date: '' }));
+    expect(pickSense(yes, 'safe-or-not', new Set(), 2, 's')).toEqual([]);
+  });
+});

@@ -42,8 +42,9 @@ describe('material along a line', () => {
     const fen = 'r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4';
     expect(lineEnd(fen, ['b5c6'], 'white')).toEqual({ balance: 3, settled: false });
     expect(lineEnd(fen, ['b5c6', 'd7c6'], 'white')).toEqual({ balance: 0, settled: false }); // ends on a capture too
-    expect(lineEnd(fen, ['b5c6', 'd7c6', 'd2d3'], 'white')).toEqual({ balance: 0, settled: true });
-    expect(lineEnd(fen, ['b5a4', 'g8f6'], 'white')).toEqual({ balance: 0, settled: true });
+    // A quiet move after the exchange does not settle it either while the line is shorter than the window.
+    expect(lineEnd(fen, ['b5c6', 'd7c6', 'd2d3'], 'white')).toEqual({ balance: 0, settled: false });
+    expect(lineEnd(fen, ['b5a4', 'g8f6'], 'white')).toEqual({ balance: 0, settled: false });
   });
 });
 
@@ -140,5 +141,28 @@ describe('game analysis with the shipped engine', () => {
     const { game } = await convertChessComGame(archive.games[1], 'fixture_learner');
     let n = 0;
     expect(await analyseGame(game!, engine, { nodes: 5_000, keepGoing: () => ++n < 3 })).toBeNull();
+  });
+});
+
+describe('cases from the outside reviewer: one engine line is not proof', () => {
+  it('a promotion that can be taken at once, and a line with no moves at all, are not settled', () => {
+    const fen = '1r5k/P7/2K5/8/8/8/8/8 w - - 0 1';
+    expect(lineEnd(fen, ['a7a8q'], 'white').settled).toBe(false); // ...Rxa8 follows
+    expect(lineEnd(fen, [], 'white').settled).toBe(false); // nothing was shown: missing evidence, not a quiet position
+    expect(lineEnd(fen, ['a7a8q', 'b8a8', 'c6d6'], 'white').settled).toBe(false); // still shorter than the window
+  });
+  it('a line is settled only when it runs the full window and then goes quiet, or the game is over', () => {
+    const fen = 'r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4';
+    expect(lineEnd(fen, ['b5c6', 'd7c6', 'd2d3', 'f8d6', 'e1h1', 'g8e7'], 'white')).toEqual({ balance: 0, settled: true });
+    expect(lineEnd(fen, ['b5c6', 'd7c6', 'd2d3'], 'white').settled).toBe(false);
+    expect(lineEnd('6k1/5ppp/8/8/8/8/8/4R1K1 w - - 0 1', ['e1e8'], 'white').settled).toBe(true); // mate ends it
+  });
+  it('material given up at no cost to the score is not called an error, in a decided position either', () => {
+    expect(targetKind({ ply: 40, wp: 99, played: -9, best: 0 }, 0)).toBeNull(); // a queen sacrifice that keeps a forced win
+    expect(targetKind({ ply: 40, wp: 99, played: -9, best: 0 }, 6)).toBe('material'); // a piece hung in a won game still costs something
+  });
+  it('an engine that returns no line does not produce a clean-looking analysis', async () => {
+    const { game } = await convertChessComGame(archive.games[1]!, 'fixture_learner');
+    await expect(analyseGame(game!, { analyse: async () => [] })).rejects.toThrow(/no line/);
   });
 });

@@ -257,8 +257,15 @@ export interface EarlyBlunders {
   confidence: Confidence;
   /** The first such move in each affected game. */
   events: EventRef[];
+  /**
+   * The latest `window` eligible games and the `window` before them, by date. A group is given
+   * only when every game in both groups is measured: an unmeasured game is never replaced by
+   * an older one, which would change what "the latest" means.
+   */
   recent: { games: number; withBlunder: number } | null;
   previous: { games: number; withBlunder: number } | null;
+  /** Games inside those two groups that are not measured yet. */
+  windowPending: number;
   /** Eligible games still waiting for their measurement record; they are in neither count. */
   pending: number;
   /** Secondary: every such move (not only the first per game) per decision in the same move range. */
@@ -285,9 +292,14 @@ export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeCl
   const count = new Map<string, number>();
   for (const g of eligible) if (g.measure && g.measureKey) count.set(g.measureKey, (count.get(g.measureKey) ?? 0) + 1);
   const protocol = [...count].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? 1 : -1))[0]?.[0] ?? null;
-  const pool = eligible.filter((g) => g.measure && g.measureKey === protocol).sort(byDate);
+  const isMeasured = (g: GameRecord) => !!g.measure && g.measureKey === protocol;
+  const pool = eligible.filter(isMeasured).sort(byDate);
   const targets = (g: GameRecord) => g.measure!.events.filter((e) => !!e.target && e.ply < maxPly);
-  const flagged = pool.map((g) => ({ game: g, event: targets(g)[0] }));
+  const flag = (g: GameRecord) => ({ game: g, event: targets(g)[0] });
+  const flagged = pool.map(flag);
+  // The comparison groups are fixed by date first, among all eligible games, measured or not.
+  const inWindows = eligible.slice().sort(byDate).slice(-2 * window);
+  const complete = inWindows.length === 2 * window && inWindows.every(isMeasured);
   const hits = flagged.filter((x): x is { game: GameRecord; event: GameEvent } => !!x.event);
   const slice = (xs: typeof flagged) => ({ games: xs.length, withBlunder: xs.filter((x) => x.event).length });
   const n = pool.length;
@@ -298,8 +310,9 @@ export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeCl
     interval: n ? wilson(hits.length, n) : null,
     confidence: n === 0 ? 'none' : n < PROVISIONAL_N ? 'provisional' : 'ok',
     events: hits,
-    recent: n >= window ? slice(flagged.slice(-window)) : null,
-    previous: n >= 2 * window ? slice(flagged.slice(-2 * window, -window)) : null,
+    recent: complete ? slice(inWindows.slice(window).map(flag)) : null,
+    previous: complete ? slice(inWindows.slice(0, window).map(flag)) : null,
+    windowPending: inWindows.filter((g) => !isMeasured(g)).length,
     pending: eligible.length - n,
     moves: {
       events: pool.reduce((t, g) => t + targets(g).length, 0),

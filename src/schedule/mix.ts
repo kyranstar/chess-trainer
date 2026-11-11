@@ -2,21 +2,24 @@
  * One-button practice: what to put in front of the learner next, so that he does not have to
  * choose and cannot tell in advance what kind of thing is coming.
  *
- * Four kinds of material are mixed by weight:
- *   review  : something due again (missed before);
- *   sense   : a question from his own games ("is this move safe?", "is there something here?");
- *   missed  : a position from his own games where one move was clearly best and he played another;
- *   puzzle  : an unseen position on the concept with the least evidence so far, with no hint
- *             of the theme.
- * The same kind never comes three times running while another is available. The weights are
- * a first policy (v1): a third each to what was missed, to his own games, and to new
- * positions. They are constants here so a change is one edit and one test.
+ * Kinds of material, drawn by weight from those that have something to offer (mix-v2, the
+ * shares the outside reviewer proposed as starting defaults, not as proven optima):
+ *   review 25 : something missed before that is due again;
+ *   safe   30 : "is this move safe?" from his own games (his commonest error);
+ *   chance 10 : "is there something here?" from his own games;
+ *   missed 10 : a position from his own games where one move was clearly best and he played another;
+ *   puzzle 25 : an unseen position with no hint of its theme, half the time on what is being
+ *               learned now, half on concepts already studied.
+ * The same kind never comes three times running while another is available. A run ends
+ * naturally after MIX_MINUTES of practice, at the end of an item, with the offer of a few more.
  */
 import type { ReviewState } from '../db/types';
 
-export type MixKind = 'review' | 'sense' | 'missed' | 'puzzle';
-export const MIX_VERSION = 'mix-v1';
-export const MIX_WEIGHTS: Record<MixKind, number> = { review: 3, sense: 3, puzzle: 3, missed: 1 };
+export type MixKind = 'review' | 'safe' | 'chance' | 'missed' | 'puzzle';
+export const MIX_VERSION = 'mix-v2';
+export const MIX_WEIGHTS: Record<MixKind, number> = { review: 25, safe: 30, chance: 10, missed: 10, puzzle: 25 };
+export const MIX_MINUTES = 20;
+export const MIX_EXTRA_MINUTES = 5;
 const MAX_RUN = 2;
 
 export function nextMixKind(available: Record<MixKind, boolean>, history: MixKind[], rnd: () => number): MixKind | null {

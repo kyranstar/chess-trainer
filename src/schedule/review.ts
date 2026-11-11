@@ -15,7 +15,12 @@
 import { type Card, createEmptyCard, fsrs, FSRSVersion, generatorParameters, type Grade, Rating } from 'ts-fsrs';
 import type { Attempt, ReviewState, SerializedCard } from '../db/types';
 
-export const SCHEDULER_VERSION = `review-v1/ts-fsrs-${FSRSVersion}`;
+/** A recalled item leaves active review once the gap before a successful recall reaches this many days. */
+export const GRADUATE_AFTER_DAYS = 14;
+/** Misses after which an item is set aside. */
+export const SET_ASIDE_AFTER_MISSES = 4;
+
+export const SCHEDULER_VERSION = `review-v2/ts-fsrs-${FSRSVersion}`;
 
 const scheduler = fsrs(
   generatorParameters({ request_retention: 0.9, maximum_interval: 365, enable_fuzz: false, enable_short_term: false }),
@@ -52,11 +57,22 @@ function gradeOf(a: Attempt): Grade | null {
 export function applyAttempt(state: ReviewState | undefined, a: Attempt): ReviewState | undefined {
   const grade = gradeOf(a);
   if (grade === null) return state;
-  if (!state && (a.exerciseKind === 'puzzle' || a.exerciseKind === 'sense') && a.outcome === 'success') return undefined;
+  const recall = a.exerciseKind === 'opening';
+  // Admission: only something missed is worth review minutes. A repertoire move is the one
+  // exception, because recalling it on schedule is the whole exercise.
+  if (!state && !recall && a.outcome === 'success') return undefined;
   const now = new Date(a.ts);
   const card = state ? deserialize(state.card) : createEmptyCard(now);
   const next = scheduler.next(card, now, grade).card;
-  return { itemId: a.exerciseId, algo: SCHEDULER_VERSION, due: next.due.getTime(), card: serialize(next), lastAttemptUuid: a.uuid };
+  const out: ReviewState = { itemId: a.exerciseId, algo: SCHEDULER_VERSION, due: next.due.getTime(), card: serialize(next), lastAttemptUuid: a.uuid };
+  if (!recall) {
+    // Graduation: recalled after two weeks or more. The item leaves active review (its history
+    // stays; a later miss brings it back). This says nothing about the skill being mastered.
+    if (a.outcome === 'success' && (a.daysSinceLast ?? 0) >= GRADUATE_AFTER_DAYS) out.retired = 'graduated';
+    // Set aside: missed again and again. Daily repetition is not helping; it stops coming back.
+    else if (a.outcome !== 'success' && next.lapses + 1 >= SET_ASIDE_AFTER_MISSES /* the miss that put it in the queue is not counted as a lapse */) out.retired = 'set-aside';
+  }
+  return out;
 }
 
 /** Rebuilds every review state from the log. Order of the input does not matter. */
@@ -96,7 +112,7 @@ export function isLegacyOpeningId(itemId: string): boolean {
 }
 
 export function dueItems(states: ReviewState[], now: number): ReviewState[] {
-  return states.filter((s) => isDue(s, now) && !isLegacyOpeningId(s.itemId)).sort((a, b) => a.due - b.due || (a.itemId < b.itemId ? -1 : 1));
+  return states.filter((s) => isDue(s, now) && !s.retired && !isLegacyOpeningId(s.itemId)).sort((a, b) => a.due - b.due || (a.itemId < b.itemId ? -1 : 1));
 }
 
 /** FSRS's predicted probability of recall for an item at `now` (0..1). */

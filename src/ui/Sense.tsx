@@ -34,6 +34,7 @@ const RESULT_TITLE: Record<string, string> = {
   'unverified-reply': 'Right that something is there. Your move could not be checked, so it is not scored.',
   'correct-rejection': 'Correct: nothing special here.',
   'false-alarm': 'Nothing was there.',
+  'label-disputed': 'Your move does mate or win material by the engine’s check, so this question was wrong to hold that nothing is there. It is not scored.',
 };
 
 /** One yes/no question about a real position from the learner's own games. */
@@ -87,7 +88,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     const a = await recordAttempt(db, {
       sessionId, context, exerciseId: item.id, exerciseKind: 'sense', contentVersion: 'sense-v1', conceptId: 'safety.threat-scan',
       themes: senseThemes(item, g), rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current, firstMove: move, played: move ? [move] : [],
-      mistakes: g.correct ? 0 : 1, hints: 0, outcome: g.response === 'unverified-reply' ? 'skipped' : g.correct ? 'success' : 'fail', acceptedAlternative: !!g.alternative,
+      mistakes: g.correct ? 0 : 1, hints: 0, outcome: g.response === 'unverified-reply' || g.response === 'label-disputed' ? 'skipped' : g.correct ? 'success' : 'fail', acceptedAlternative: !!g.alternative,
     });
     onRecorded?.(a);
   }
@@ -95,12 +96,12 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
   function answer(yes: boolean) {
     if (safety) {
       if (!yes) return void finish(gradeSafety(item, 'safe', null), null);
-      if (!item.truth) return void finish(gradeSafety(item, 'unsafe', null), null);
-      setFen(item.afterFen!);
+      // A claim is followed by its evidence whether or not something is stored for this item:
+      // ending at once on a "nothing here" item would also give the answer away.
+      setFen(item.afterFen ?? fenOf(applyUci(positionFromFen(item.fen), item.proposed!)));
       setLastMove(item.proposed!);
     } else {
       if (!yes) return void finish(gradeChance(item, 'nothing', null), null);
-      if (!item.truth) return void finish(gradeChance(item, 'something', null), null);
     }
     setPhase('play');
   }
@@ -139,7 +140,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Checking your move with the engine</p>}
         {grade && (
-          <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
+          <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
             <strong>{RESULT_TITLE[grade.response]}</strong>
             {item.truth && safety && <p>After {item.proposedSan} the engine’s reply is {item.replyLine}. In the game this move cost about {Math.round(item.loss ?? 0)} points of expected score.{grade.alternative ? ` Your reply ${playedSan} also wins material or mates, by the engine’s check.` : ''}</p>}
             {item.truth && !safety && <p>The engine’s line is {item.bestLine} (about {Math.round(item.bestWp ?? 0)}% expected score).{grade.alternative ? ` Your move ${playedSan} also mates or wins material, by the engine’s check.` : ''}</p>}
@@ -155,6 +156,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
             <button className="primary" data-testid="sense-yes" disabled={!armed} onClick={() => answer(true)}>{safety ? 'It loses something' : 'There is something'}</button>
           </>
         )}
+        {phase === 'play' && <button data-testid="sense-giveup" disabled={!armed} onClick={() => void finish(safety ? gradeSafety(item, 'unsafe', null, 'no') : gradeChance(item, 'something', null, 'no'), null)}>I cannot find it</button>}
         {phase === 'done' && (
           <>
             <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Continue</button>

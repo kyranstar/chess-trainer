@@ -10,7 +10,7 @@ function lcg(seed: number) {
     return s / 0x100000000;
   };
 }
-const all = { review: true, sense: true, missed: true, puzzle: true };
+const all = { review: true, safe: true, chance: true, missed: true, puzzle: true };
 
 describe('one-button practice: what comes next', () => {
   it('mixes every kind of material roughly by its weight, in no fixed order', () => {
@@ -23,7 +23,7 @@ describe('one-button practice: what comes next', () => {
       expect(Math.abs(share - MIX_WEIGHTS[k] / total), k).toBeLessThan(0.06);
     }
     // Not a fixed rotation: the same kind is followed by different kinds.
-    const afterSense = new Set(history.map((k, i) => (k === 'sense' ? history[i + 1] : undefined)).filter(Boolean));
+    const afterSense = new Set(history.map((k, i) => (k === 'safe' ? history[i + 1] : undefined)).filter(Boolean));
     expect(afterSense.size).toBeGreaterThanOrEqual(3);
   });
 
@@ -36,14 +36,14 @@ describe('one-button practice: what comes next', () => {
 
   it('only offers what exists, and ends when nothing does', () => {
     const rnd = lcg(11);
-    const only = { review: false, sense: false, missed: false, puzzle: true };
+    const only = { review: false, safe: false, chance: false, missed: false, puzzle: true };
     expect(nextMixKind(only, ['puzzle', 'puzzle'], rnd)).toBe('puzzle'); // the only thing left may repeat
-    const two = { review: true, sense: false, missed: false, puzzle: true };
+    const two = { review: true, safe: false, chance: false, missed: false, puzzle: true };
     const seen = new Set<MixKind>();
     const history: MixKind[] = [];
     for (let i = 0; i < 100; i++) { const k = nextMixKind(two, history, rnd)!; history.push(k); seen.add(k); }
     expect([...seen].sort()).toEqual(['puzzle', 'review']);
-    expect(nextMixKind({ review: false, sense: false, missed: false, puzzle: false }, [], rnd)).toBeNull();
+    expect(nextMixKind({ review: false, safe: false, chance: false, missed: false, puzzle: false }, [], rnd)).toBeNull();
   });
 });
 
