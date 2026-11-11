@@ -244,10 +244,10 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
                 {passed
                   ? engineTakes
                     ? 'That it can be taken is a fact about the board, not the rating. The engine does take it in its line and still rates your move as above: play the line through to see what you get for it.'
-                    : 'That it can be taken is a fact about the board, not the rating. The engine does not take it: by its reckoning the capture is not your opponent’s best move. “If it is taken” plays the capture out on the board.'
+                    : 'That it can be taken is a fact about the board, not the rating. The engine does not take it: by its reckoning the capture is not your opponent’s best move. That alone does not show the capture is harmless; “If it is taken” plays it out on the board.'
                   : engineTakes
                     ? 'The engine’s line takes it. Play the line through to see where the material goes.'
-                    : 'The engine’s line starts with a different move. “If it is taken” plays the capture out on the board.'}
+                    : 'The engine’s line starts with a different move, so the rating may be about something else than this piece. “If it is taken” plays the capture out on the board.'}
               </p>
             )}
             {taken?.state === 'shown' && <p data-testid="own-move-taken">On the board: {taken.san}, and the engine’s line from there{taken.pv.length > 1 ? ` (${lineSan(lineAt(facts.afterFen, taken.pv.slice(0, 1), 1).fen, taken.pv.slice(1))})` : ''}. Step back and on through it.</p>}

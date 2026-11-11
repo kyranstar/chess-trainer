@@ -82,7 +82,7 @@ Settled on 2026-11-10: US jurisdiction (ADR-022); public repository (ADR-025); z
 ## Next slice
 
 1. Owner: install on the iPhone, open it online once, run "Check this device", and leave it open for a while so games are fetched and measured. Answer the open decisions above.
-2. Build the move-check exercise (choose, predict the reply, keep or revise) on ordinary positions from own games, moves 10 to 19 first, and give it real practice time in the session.
+2. Stop every replay at the decisive consequence and mark it on the board (the piece lost, the recapture that fails, the mate), in puzzles, own-game questions and "Your move" (the UX reviewer's choice for the next step, ADR-045). Then the rest of that review's open list, starting with trying a suspected line after a "nothing here" verdict.
 3. On-device lessons for the 16 concepts that still only have links (defence, back rank, skewer, forcing moves, discovered attack and later). Lasker and Capablanca are largely used up for what can be verified mechanically; this needs another cleared source or Capablanca's diagrams from a scan.
 4. Frozen backup fixtures; unit tests for the session runner; the remaining UX items.
 
