@@ -318,7 +318,7 @@ export function PositionView({ uuid, learner }: { uuid: string; learner: Learner
     );
   }
   if (a.exerciseKind !== 'puzzle') {
-    const what: Record<string, string> = { opening: 'Repertoire move', endgame: 'King and pawn ending', 'own-game': 'Position from your own game', sense: 'Question from your own game' };
+    const what: Record<string, string> = { opening: 'Repertoire move', endgame: 'King and pawn ending', 'own-game': 'Position from your own game', sense: 'Question from your own game', 'own-move': 'Your own move in a position from your game' };
     return (
       <div className="page" data-testid="attempt-other">{back}
         <h1>{what[a.exerciseKind] ?? 'Exercise'}</h1>

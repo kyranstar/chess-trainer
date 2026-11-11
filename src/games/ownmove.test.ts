@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import { gradeOwnMove, looseAfter, moveItems } from './ownmove';
+import type { GameRecord } from './types';
+
+describe('exact facts about a move the learner chose', () => {
+  it('a knight put where a pawn takes it and nothing takes back is reported, with what takes it', () => {
+    const f = looseAfter('rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3', 'f3e5');
+    expect(f.mateInOne).toBeNull();
+    expect(f.loose).toEqual([{ square: 'e5', piece: 'knight', by: { from: 'd6', piece: 'pawn' }, reason: 'undefended' }]);
+  });
+
+  it('a defended pawn that can be exchanged is not "loose"', () => {
+    const f = looseAfter('rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3', 'd2d4');
+    expect(f.loose).toEqual([]);
+  });
+
+  it('a defended piece that a cheaper piece can take is reported as such', () => {
+    // The knight on g5 is defended by the bishop on c1, but ...h6 attacks it with a pawn only after a move; here the pawn on h6 already attacks it.
+    const f = looseAfter('rnbqkbnr/ppppppp1/7p/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 2', 'f3g5');
+    expect(f.loose).toEqual([{ square: 'g5', piece: 'knight', by: { from: 'h6', piece: 'pawn' }, reason: 'undefended' }]);
+    const defended = looseAfter('rnbqkbnr/ppppppp1/7p/8/3P4/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 2', 'f3g5');
+    expect(defended.loose).toEqual([{ square: 'g5', piece: 'knight', by: { from: 'h6', piece: 'pawn' }, reason: 'cheaper-attacker' }]);
+  });
+
+  it('a piece that was already attacked and is left where it stands counts too', () => {
+    // Black's bishop on b4 is attacked by the pawn on a3 and not defended; Black plays ...Nf6 and leaves it.
+    const f = looseAfter('rnbqk1nr/pppp1ppp/8/4p3/1b2P3/P4N2/1PPP1PPP/RNBQKB1R b KQkq - 0 3', 'g8f6');
+    expect(f.loose.map((l) => `${l.piece}@${l.square} by ${l.by.piece}@${l.by.from}`)).toContain('bishop@b4 by pawn@a3');
+  });
+
+  it('a move that allows mate in one says which', () => {
+    const f = looseAfter('rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq - 0 2', 'g2g4');
+    expect(f.mateInOne).toEqual({ uci: 'd8h4', san: 'Qh4#' });
+  });
+
+  it('an attacker that is pinned to its king cannot take, so the piece is not loose', () => {
+    // White knight goes to d5; Black's pawn on e6 would take it, but it is pinned by the rook on e1 against the king on e8.
+    const f = looseAfter('4k3/8/4p3/8/8/2N5/8/4R1K1 w - - 0 1', 'c3d5');
+    expect(f.loose).toEqual([]);
+  });
+});
+
+describe('grading with abstention: only what is established counts against the learner', () => {
+  const none = { loose: [], mateInOne: null, afterFen: '' };
+  const hung = { loose: [{ square: 'e5', piece: 'knight' as const, by: { from: 'd6', piece: 'pawn' as const }, reason: 'undefended' as const }], mateInOne: null, afterFen: '' };
+  it('allowing mate in one is a failure whatever the engine says', () => {
+    expect(gradeOwnMove({ ...none, mateInOne: { uci: 'd8h4', san: 'Qh4#' } }, null)).toBe('failed');
+  });
+  it('a loose piece is a failure only when the engine confirms a settled loss of material and a large drop; otherwise nothing is recorded', () => {
+    expect(gradeOwnMove(hung, { loss: 35, swing: -3, settled: true })).toBe('failed');
+    expect(gradeOwnMove(hung, { loss: 1, swing: -3, settled: true })).toBe('unresolved'); // the engine accepts it: a sacrifice
+    expect(gradeOwnMove(hung, { loss: 35, swing: -3, settled: false })).toBe('unresolved');
+    expect(gradeOwnMove(hung, null)).toBe('unresolved'); // no engine answer
+  });
+  it('with nothing loose and no mate, a move the engine dislikes for other reasons is not a failure either', () => {
+    expect(gradeOwnMove(none, { loss: 4, swing: 0, settled: true })).toBe('clean');
+    expect(gradeOwnMove(none, null)).toBe('clean');
+    expect(gradeOwnMove(none, { loss: 40, swing: 0, settled: true })).toBe('unresolved');
+  });
+});
+
+describe('which positions are used', () => {
+  it('undecided positions from the learner’s own games at moves 10 to 19, one per game stretch', () => {
+    const moves = Array.from({ length: 60 }, (_, i) => (i % 2 === 0 ? 'g1f3' : 'g8f6'));
+    const game = {
+      id: 'g', source: 'chess.com', url: null, date: '2026-11-01', endDate: '2026-11-01', endTime: null, timeControl: '600', timeClass: 'rapid', color: 'white', result: 'win',
+      termination: null, playerRating: 1, opponentRating: 1, opponent: 'x', moves, clocks: null, analysis: null, importedAt: 0, updatedAt: 0, analysisKey: null,
+      measure: { decisions: [], events: [], facts: [{ ply: 8, wp: 50, played: 0, best: 0 }, { ply: 20, wp: 50, played: 0, best: 0 }, { ply: 22, wp: 55, played: 0, best: 0 }, { ply: 30, wp: 97, played: 0, best: 0 }, { ply: 36, wp: 40, played: 0, best: 0 }, { ply: 44, wp: 50, played: 0, best: 0 }] },
+      measureKey: 'k',
+    } as unknown as GameRecord;
+    // The fake game's moves are not legal chess, so positions cannot be built; the selection itself is what is tested.
+    const picked = moveItems([game], { build: false }).map((i) => i.ply);
+    expect(picked).toEqual([20, 36]); // ply 8 too early, 22 next to 20, 30 decided, 44 too late
+  });
+});

@@ -9,9 +9,11 @@ import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
 import { type DrillPosition, drillPositions } from '../games/metrics';
 import { reviewOrder } from '../schedule/mix';
+import { type MoveItem, moveItems } from '../games/ownmove';
 import type { SenseItem } from '../games/sense';
 import { drillId } from '../openings/repertoire';
 import { OwnGameDrill, useGames } from './Games';
+import { OwnMoveDrill } from './OwnMove';
 import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
@@ -263,7 +265,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, head
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
   // Own-game positions first: review minutes are few and that is where the rating is lost.
   const queue = useRef(reviewOrder(due).map((d) => d.itemId));
-  const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition } | null>(null);
+  const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition; move?: MoveItem } | null>(null);
   const [i, setI] = useState(0);
   if (!pool) return <p className="muted">Loading positions</p>;
 
@@ -298,6 +300,13 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, head
     const item = held.current.sense;
     if (!item) return <RetiredItem onNext={advance} />;
     return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={heading ?? `Review, ${left} due`} onDone={advance} />;
+  }
+  if (itemId.startsWith('move:')) {
+    if (!games) return <p className="muted">Loading your games</p>;
+    if (held.current?.id !== itemId) held.current = { id: itemId, move: moveItems(games, { fromMove: 1, toMove: 200 }).find((m) => m.id === itemId) };
+    const move = held.current.move;
+    if (!move) return <RetiredItem onNext={advance} />;
+    return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" heading={heading ?? `Review, ${left} due`} onRecorded={onAttempt} onDone={advance} />;
   }
   if (itemId.startsWith('kpk:')) {
     const [, goal, ...rest] = itemId.split(':');

@@ -10,7 +10,9 @@ import { OpeningRecallRun } from './Openings';
 import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
+import { moveItems } from '../games/ownmove';
 import { MixRun } from './Mix';
+import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
@@ -22,6 +24,7 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   const due = useDueReviews(learner.reviews, now);
   const games = useGames();
   const ownDrills = useMemo(() => (games ? drillPositions(games).length : 0), [games]);
+  const moveCount = useMemo(() => (games ? moveItems(games).length : 0), [games]);
   const senseLeft = useMemo(() => {
     if (!games) return null;
     const seen = new Set(learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId));
@@ -69,6 +72,7 @@ export function PracticeHome({ learner }: { learner: Learner }) {
       <section className="concept-group">
         <h2>From your own games</h2>
         <ul className="concept-list">
+          {row('move', 'Your move', games === undefined ? 'Loading' : `Play your own move in ordinary positions from your games (moves 10 to 19), then see what can be taken: ${moveCount} position${moveCount === 1 ? '' : 's'}`, { mode: 'move' })}
           {row('sense', 'Is it safe? Is there something to win?', senseLeft === null ? 'Loading' : senseLeft > 0 ? `Real positions from your games with nothing announced: ${senseLeft} with something in them still unseen, mixed with as many that have nothing` : 'Appears once your games have been fetched and analysed (Progress, Your games)', { mode: 'sense' })}
           {row('own', 'Find the move you missed', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where one move was clearly best and you played another` : 'Appears once your games have been fetched and analysed', { mode: 'own' })}
         </ul>
@@ -126,6 +130,14 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   );
 }
 
+function OwnMoveRunFromGames({ learner }: { learner: Learner }) {
+  const games = useGames();
+  const items = useMemo(() => (games ? moveItems(games) : null), [games]);
+  const done = useRef<Set<string> | null>(null);
+  if (done.current === null && learner.ready) done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
+  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} onFinished={() => go('practice')} />;
+}
+
 export function PracticeRun({ route, learner }: { route: Route; learner: Learner }) {
   const pool = usePool();
   const now = useNow();
@@ -143,10 +155,11 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
     <div className="page run" data-testid="practice-run">
       <header className="run-bar">
         <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : mode === 'mix' ? 'Practice' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
+        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : mode === 'mix' ? 'Practice' : mode === 'move' ? 'Your move' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
         <span />
       </header>
       {mode === 'mix' && <MixRun learner={learner} onFinished={() => go('practice')} />}
+      {mode === 'move' && <OwnMoveRunFromGames learner={learner} />}
       {mode === 'sense' && <SenseRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}

@@ -3,7 +3,7 @@ import type { PackManifest, Puzzle } from '../puzzles/types';
 /** Where in the product an attempt happened. */
 export type AttemptContext = 'review' | 'apply' | 'test' | 'practice' | 'check' | 'lesson' | 'diagnostic';
 export type Outcome = 'success' | 'fail' | 'assisted' | 'skipped';
-export type ExerciseKind = 'puzzle' | 'lesson-try' | 'opening' | 'own-game' | 'endgame' | 'sense';
+export type ExerciseKind = 'puzzle' | 'lesson-try' | 'opening' | 'own-game' | 'endgame' | 'sense' | 'own-move';
 
 /**
  * Immutable record of one presentation of one exercise. Never updated or deleted.

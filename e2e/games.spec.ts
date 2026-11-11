@@ -173,3 +173,49 @@ test('one button: "Just practise" mixes own-game questions, missed moves and new
   await expect(page.getByTestId('card-unseen')).toBeVisible();
 });
 
+test('your move: play your own move in a position from your game and see exactly what can be taken', async ({ page }) => {
+  // A longer game than the fixtures, so there are positions at moves 10 to 19.
+  const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',
+    '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', '[EndDate "2026.11.08"]', '[EndTime "10:20:00"]', '[Link "https://www.chess.com/game/live/900000777"]', '',
+    '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 7. Re1 a6 8. Bb3 Ba7 9. h3 h6 10. Nbd2 Re8 11. Nf1 Be6 12. Bc2 d5 13. exd5 Bxd5 14. Ng3 Qd7 15. Nh4 Rad8 16. Nhf5 Kh8 17. Qf3 Ne7 18. Nxe7 Qxe7 1-0'].join('\n');
+  const long = { url: 'https://www.chess.com/game/live/900000777', pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', end_time: 1794133200, white: { username: 'fixture_learner', rating: 455, result: 'win' }, black: { username: 'opponent_long', rating: 470, result: 'resigned' } };
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [long] } });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  await openApp(page, '#/progress');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
+
+  await page.goto('./#/practice');
+  await page.getByTestId('practice-move').click();
+  const drill = page.getByTestId('own-move');
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  await expect(drill).toContainText('White to move. Play your move.');
+  // Move 10 of the game. Taking the pawn on e5 puts the knight where the d6 pawn takes it.
+  await playMove(page, 'f3e5');
+  await expect(drill).toHaveAttribute('data-phase', 'predict');
+  await expect(drill).toContainText('Now play the reply you had to reckon with');
+  await playMove(page, 'd6e5');
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing takes back.');
+  await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
+  await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
+  expect(['failed', 'unresolved']).toContain(await drill.getAttribute('data-verdict'));
+
+  // The next position: a quiet move, and no reply named.
+  await page.getByTestId('own-move-next').click();
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  const fen = (await drill.getAttribute('data-fen'))!;
+  expect(fen).not.toContain('2np1n1p'); // a different position from the first
+  await playMove(page, 'a2a3');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  await expect(page.getByTestId('own-move-verdict')).toBeVisible();
+});
+
