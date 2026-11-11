@@ -84,7 +84,10 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   const db = useDb();
   const online = useOnline();
   const status = learner.statuses.find((s) => s.concept.id === concept.id)!;
-  const [mode, setMode] = useState<{ kind: 'overview' } | { kind: 'lesson'; id: string } | { kind: 'check' }>({ kind: 'overview' });
+  // In a session the lesson stored on the device opens at once: the learner tapped "start
+  // training", not "choose how to study". Leaving the lesson shows the other ways.
+  const [mode, setMode] = useState<{ kind: 'overview' } | { kind: 'lesson'; id: string } | { kind: 'check' }>(() =>
+    embedded && concept.localLessons.length > 0 && status.stage !== 'taught' && status.stage !== 'demonstrated' ? { kind: 'lesson', id: concept.localLessons[0]! } : { kind: 'overview' });
   const [opened, setOpened] = useState<string | null>(null);
   const openedBefore = learner.events.some((e) => e.conceptId === concept.id && e.type === 'link-opened');
   const def = concept.descriptionTheme ? THEMES[concept.descriptionTheme] : undefined;

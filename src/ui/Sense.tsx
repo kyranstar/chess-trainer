@@ -10,6 +10,8 @@ import type { GameRecord } from '../games/types';
 import { Board } from './Board';
 import { useGames } from './Games';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { ucisOfSanLine } from '../chess/line';
+import { useLineSteps } from './LineSteps';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
 export function senseItemsFrom(games: GameRecord[]): SenseItem[] {
@@ -75,16 +77,6 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     answered.current = true;
     setGrade(g);
     setPhase('done');
-    // Show the reference line's first move on the board when there was something to see.
-    if (item.truth) {
-      if (safety) {
-        setFen(fenOf(applyUci(positionFromFen(item.afterFen!), item.replyUci!)));
-        setLastMove(item.replyUci!);
-      } else if (g.response !== 'hit' || !g.alternative) {
-        setFen(fenOf(applyUci(positionFromFen(item.fen), item.best!)));
-        setLastMove(item.best!);
-      }
-    }
     const a = await recordAttempt(db, {
       sessionId, context, exerciseId: item.id, exerciseKind: 'sense', contentVersion: 'sense-v1', conceptId: 'safety.threat-scan',
       themes: senseThemes(item, g), rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current, firstMove: move, played: move ? [move] : [],
@@ -127,6 +119,19 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     await finish(g, uci);
   }
 
+  // When there was something to see, the stored line is played through on the board: it opens
+  // on its first move, and can be stepped on to where the material goes or the mate falls.
+  // A different winning move of the learner's own stays on the board until the line is asked for.
+  const line = useMemo(() => {
+    if (!item.truth) return null;
+    const from = safety ? item.afterFen! : item.fen;
+    const first = safety ? item.replyUci! : item.best!;
+    const pv = ucisOfSanLine(from, (safety ? item.replyLine : item.bestLine) ?? '');
+    return { from, pv: pv[0] === first ? pv : [first] };
+  }, [item, safety]);
+  const keepMine = !safety && grade?.response === 'hit' && !!grade.alternative;
+  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Play the engine’s line' });
+  const onLine = phase === 'done' && steps.pos && !(keepMine && steps.step === 0);
   const question = safety ? `You are ${me}. Is ${item.proposedSan} safe to play?` : `${me} to move. Is there something to win here?`;
   const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
   return (
@@ -136,7 +141,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
         <h2>{phase === 'play' ? (safety ? 'Play the reply that punishes it' : 'Play it') : question}</h2>
         <p className="muted">From your game on {item.date}, move {Math.floor(item.ply / 2) + 1}. Many of these have nothing in them.</p>
       </header>
-      <Board fen={fen} orientation={item.color} movable={mover} lastMove={lastMove} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} />
+      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} />
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Checking your move with the engine</p>}
         {grade && (
@@ -157,6 +162,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
           </>
         )}
         {phase === 'play' && <button data-testid="sense-giveup" disabled={!armed} onClick={() => void finish(safety ? gradeSafety(item, 'unsafe', null, 'no') : gradeChance(item, 'something', null, 'no'), null)}>I cannot find it</button>}
+        {phase === 'done' && steps.controls}
         {phase === 'done' && (
           <>
             <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Continue</button>

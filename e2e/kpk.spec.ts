@@ -64,6 +64,13 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   await expect(verdict).toContainText('theoretical draw');
   await expect(verdict).toContainText('The only move that kept the win was');
   await expect(verdict).toContainText('Exact result from the table, not an opinion');
+  // The same start can be tried again at once. The second go is practice: Progress below
+  // still counts three play-outs, one of them missed.
+  await page.getByTestId('kpk-retry').click();
+  await expect(drill).toHaveAttribute('data-done', 'false');
+  await expect(drill).toHaveAttribute('data-fen', fen);
+  await playMove(page, wrong);
+  await expect(page.getByTestId('kpk-retry-note')).toContainText('not recorded');
 
   // Progress reports the three play-outs with their split, separately from puzzles.
   await page.goto('./#/progress');

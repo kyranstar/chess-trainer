@@ -273,3 +273,13 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .move-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
 .move-clock.is-up { color: var(--flag); }
 .line-steps { display: inline-flex; gap: 0.4rem; }
+
+/* Folded sections: one thing to do on the screen, the rest a tap away. */
+details.today-options, details.all-numbers, details.source-details { display: flex; flex-direction: column; gap: 0.8rem; }
+details.today-options > summary, details.all-numbers > summary, details.source-details > summary {
+  min-height: 2.75rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--muted); text-decoration: underline; list-style: none;
+}
+details.today-options > summary::-webkit-details-marker, details.all-numbers > summary::-webkit-details-marker, details.source-details > summary::-webkit-details-marker { display: none; }
+details.today-options > summary::before, details.all-numbers > summary::before, details.source-details > summary::before { content: '+'; display: inline-block; width: 1ch; text-decoration: none; }
+details[open].today-options > summary::before, details[open].all-numbers > summary::before, details[open].source-details > summary::before { content: '−'; }
+details.all-numbers[open] > * + *, details.today-options[open] > * + * { margin-top: 0.8rem; }

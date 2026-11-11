@@ -11,9 +11,13 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await expect(page.getByTestId('block-learn')).toContainText('Hanging pieces');
   await page.getByTestId('start-session').click();
 
-  // Learn: a linked course. Opening the link is not completion.
+  // Learn: the lesson stored on the device opens at once, with no page of choices first.
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'learn');
-  await expect(page.getByTestId('concept-stage')).toHaveText('Not started');
+  await expect(page.getByTestId('lesson')).toBeVisible();
+  // Leaving it shows the other ways to study: here a linked course. Opening the link is not completion.
+  await page.getByTestId('lesson-exit').click();
+  // Opened and left: started, not studied.
+  await expect(page.getByTestId('concept-stage')).toHaveText('Started');
   await expect(page.getByTestId('return-card')).toHaveCount(0);
   const popup = context.waitForEvent('page');
   await page.getByTestId('open-link').first().click();
@@ -37,6 +41,26 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // The wrong move can be followed up: the built-in engine's reply is shown as evidence.
   await page.getByTestId('show-reply').click();
   await expect(page.getByTestId('engine-reply')).toContainText('the built-in engine continues', { timeout: 30_000 });
+  // ... on the board, not only as notation: it opens on the opponent's answer and steps back and on.
+  const missed = page.getByTestId('puzzle');
+  const asked = await missed.locator('.board').getAttribute('data-fen');
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '2');
+  await page.getByTestId('line-prev').click();
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
+  await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', asked!);
+  // The solution is played through the same way, and then the position can be played by hand:
+  // that second go is practice and changes nothing that was recorded.
+  await page.getByRole('button', { name: 'Show solution' }).click();
+  await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  const start = await missed.locator('.board').getAttribute('data-fen');
+  await page.getByTestId('line-next').click();
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
+  await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', start!);
+  await page.getByTestId('replay').click();
+  await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
+  await solvePuzzle(page);
+  await expect(page.getByTestId('replay-note')).toContainText('The first attempt stays recorded as missed');
+  await expect(missed).toHaveAttribute('data-outcome', 'fail');
 
   // Ending the day asks once.
   await page.getByTestId('end-block').click();

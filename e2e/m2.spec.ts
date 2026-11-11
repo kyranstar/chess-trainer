@@ -3,6 +3,9 @@ import { failPuzzle, openApp, solvePuzzle } from './helpers';
 
 test('baseline: samples unseen positions, can be paused and resumed, and never calls two positions a weakness', async ({ page }) => {
   await openApp(page);
+  // The baseline is optional and sits with the plan, one tap below the start button.
+  await expect(page.getByTestId('start-baseline')).toBeHidden();
+  await page.getByTestId('today-options').locator('summary').click();
   await expect(page.getByTestId('baseline-card')).toContainText('0 of');
   await page.getByTestId('start-baseline').click();
   const left = Number((await page.getByTestId('baseline-left').textContent())!.split(' ')[0]);
@@ -23,6 +26,7 @@ test('baseline: samples unseen positions, can be paused and resumed, and never c
 
   // Progress is derived from attempts, so leaving and returning resumes where it stopped.
   await page.goto('./#/today');
+  await page.getByTestId('today-options').locator('summary').click();
   await expect(page.getByTestId('start-baseline')).toHaveText('Continue the baseline');
   await page.getByTestId('start-baseline').click();
   // A position can carry several concept tags, so two positions remove at least two from the count.
@@ -69,3 +73,32 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   expect(backup.data.gameJournal).toHaveLength(1);
   expect(backup.data.gameJournal[0].turningPoint).toContain('knight on f6');
 });
+
+test('Today has one thing to do, and Progress opens on three answers with every other number one tap away', async ({ page }) => {
+  // Not through openApp: that helper opens "all the numbers" for the tests that read them.
+  await page.goto('./#/today');
+  await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
+  await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('start-session')).toHaveText('Start training: about 30 minutes');
+  await expect(page.getByTestId('start-mix')).toBeVisible();
+  // The plan, the other lengths and the optional baseline are folded away until asked for.
+  await expect(page.getByTestId('scoresheet')).toBeHidden();
+  await expect(page.getByTestId('baseline-card')).toBeHidden();
+  await page.getByTestId('today-options').locator('summary').click();
+  await expect(page.getByTestId('scoresheet')).toBeVisible();
+  await page.getByRole('button', { name: '20 min' }).click();
+  await expect(page.getByTestId('start-session')).toHaveText('Start training: about 20 minutes');
+
+  await page.goto('./#/progress');
+  await expect(page.getByTestId('card-next')).toBeVisible();
+  await expect(page.getByTestId('card-unseen')).toBeHidden();
+  await expect(page.getByTestId('card-ownmove')).toBeHidden();
+  await page.getByTestId('progress-all').locator('summary').click();
+  await expect(page.getByTestId('card-unseen')).toBeVisible();
+  await expect(page.getByTestId('backup-download')).toBeVisible();
+  // The choice is remembered on this device.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('progress.all'))).toBe('1');
+  await page.reload();
+  await expect(page.getByTestId('card-unseen')).toBeVisible();
+});
+

@@ -101,8 +101,8 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
         <dd>{Math.round(total / 60)} of {session.budgetMin} minutes</dd>
         <dt>New concept</dt>
         <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? (concept.assessable ? 'studied; its check comes on a later day' : 'studied') : 'started'}` : (learn?.notice ?? 'None today')}</dd>
-        <dt>Unseen positions</dt>
-        <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None attempted' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
+        <dt>New puzzles</dt>
+        <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None in this session' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
         <dt>Reviews</dt>
         <dd>{reviews.length === 0 ? 'None due' : `${reviews.filter((a) => a.outcome === 'success').length} of ${reviews.length} recalled`}</dd>
         {checks.length > 0 && (
@@ -176,21 +176,10 @@ export function Today({ learner }: { learner: Learner }) {
         <div className="actions">
           {/* Fixed places: the suggestion can change a moment after launch (a game fetched from
               Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
-          <button className={suggestion.kind === 'study' ? 'primary big' : ''} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>{suggestion.kind === 'study' ? `Start ${length}-minute session` : `Study for ${length} minutes instead`}</button>
+          <button className={suggestion.kind === 'study' ? 'primary big' : ''} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>{suggestion.kind === 'study' ? `Start training: about ${length} minutes` : `Train for ${length} minutes instead`}</button>
           <button className={suggestion.kind === 'play' ? 'primary big' : ''} data-testid="start-play" onClick={() => void start('play')}>{suggestion.kind === 'play' ? 'Start play day: one rapid game' : 'Make today a play day instead'}</button>
           <a className="button" data-testid="start-mix" href={href('practice/run', { mode: 'mix' })}>Just practise: no plan, the app picks</a>
         </div>
-        <div className="length-picker" role="group" aria-label="Session length">
-          {SESSION_LENGTHS.map((m) => (
-            <button key={m} className={m === length ? 'chip is-on' : 'chip'} aria-pressed={m === length} onClick={() => setLength(m)}>{m} min</button>
-          ))}
-        </div>
-        {!baseline.complete && packReady && (
-          <div className="return-card" data-testid="baseline-card">
-            <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> About {baseline.positionsLeft} unseen positions, no hints, at your own pace. It only replaces “untested” with a first, provisional reading.</p>
-            <div className="actions"><a className="button" data-testid="start-baseline" href={href('today/baseline')}>{baseline.sampled === 0 && learner.attempts.length === 0 ? 'Take the baseline first' : 'Continue the baseline'}</a></div>
-          </div>
-        )}
         {!packReady && <p className="note" data-testid="pack-missing">The practice positions are not installed on this device yet. Connect once to download them.</p>}
         <p className="definition-small" data-testid="offline-ready" data-ready={packReady && appCached === true}>
           {packReady && appCached === true
@@ -201,7 +190,23 @@ export function Today({ learner }: { learner: Learner }) {
                 ? 'Still storing the app on this phone for offline use. Keep it open with a connection for a moment before going underground.'
                 : 'The app is not fully stored on this phone yet; it needs a connection once.'}
         </p>
-        <Scoresheet session={preview} activeIndex={-1} />
+        {/* One thing to do on this screen: start. The length, the plan and the optional
+            baseline are a tap away for the day they are wanted. */}
+        <details className="today-options" data-testid="today-options">
+          <summary>Today’s plan and other lengths</summary>
+          <div className="length-picker" role="group" aria-label="Session length">
+            {SESSION_LENGTHS.map((m) => (
+              <button key={m} className={m === length ? 'chip is-on' : 'chip'} aria-pressed={m === length} onClick={() => setLength(m)}>{m} min</button>
+            ))}
+          </div>
+          <Scoresheet session={preview} activeIndex={-1} />
+          {!baseline.complete && packReady && (
+            <div className="return-card" data-testid="baseline-card">
+              <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> Optional. About {baseline.positionsLeft} unseen positions, no hints, at your own pace. It only replaces “untested” with a first, provisional reading.</p>
+              <div className="actions"><a className="button" data-testid="start-baseline" href={href('today/baseline')}>{baseline.sampled === 0 && learner.attempts.length === 0 ? 'Take the baseline' : 'Continue the baseline'}</a></div>
+            </div>
+          )}
+        </details>
       </div>
     );
   }
@@ -444,7 +449,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       <footer className="run-foot">
         {confirmEnd ? (
           <div className="actions" data-testid="end-confirm">
-            <p className="muted">{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? It cannot be reopened.'}</p>
+            <p className="muted">{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? What you did is saved. More training today goes through “Just practise”.'}</p>
             <button data-testid="end-confirm-yes" disabled={!armed} onClick={() => { setConfirmEnd(false); void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'); }}>End session</button>
             <button className="primary" data-testid="end-confirm-no" onClick={() => setConfirmEnd(false)}>Keep going</button>
           </div>

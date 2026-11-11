@@ -10,6 +10,7 @@ import { Board } from './Board';
 import { bestLineFor } from '../engine/interactive';
 import { lineSan } from '../games/analyse';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { useLineSteps } from './LineSteps';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -41,7 +42,9 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const [wrongSan, setWrongSan] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** The engine's answer to the learner's wrong move: evidence about this position, shown on request. */
-  const [reply, setReply] = useState<{ after: string; state: 'loading' | 'none' | 'shown'; line?: string; wp?: number } | null>(null);
+  const [reply, setReply] = useState<{ after: string; from: string; uci: string; state: 'loading' | 'none' | 'shown'; line?: string; pv?: string[] } | null>(null);
+  /** Playing the position again after seeing the solution: practice, never recorded a second time. */
+  const [replaying, setReplaying] = useState(false);
   useScreenChange(`${puzzle.id}|${phase}|${wrongSan ?? ''}`);
   const armed = useArmed();
   const startedAt = useRef(0);
@@ -56,6 +59,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     setOutcome(null);
     setWrongSan(null);
     setReply(null);
+    setReplaying(false);
     decided.current = false;
     const t = setTimeout(() => {
       setLastMove(initial.setupMove);
@@ -116,7 +120,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     const res = submitMove(run, uci);
     setMarks([]);
     if (res.verdict === 'wrong') {
-      setReply({ after: positionAfter(run.fen, uci), state: 'none' });
+      setReply({ after: positionAfter(run.fen, uci), from: run.fen, uci, state: 'none' });
       setWrongSan(sanOf(before, uci));
       setRun(res.run);
       setResetKey((k) => k + 1);
@@ -145,11 +149,12 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
 
   async function showReply() {
     if (!reply || reply.state === 'loading') return;
-    const after = reply.after;
-    setReply({ after, state: 'loading' });
+    const asked = reply;
+    const after = asked.after;
+    setReply({ ...asked, state: 'loading' });
     const best = await bestLineFor(after);
     // The learner may have moved on meanwhile; only fill in the request that is still on screen.
-    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { after, state: 'shown', line: lineSan(after, best.pv), wp: Math.round(100 - best.wp) } : { after, state: 'shown' }) : r));
+    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 5) } : { ...asked, state: 'shown' }) : r));
   }
 
   function hint() {
@@ -165,6 +170,18 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     void decide(run.hints > 0 ? 'assisted' : 'fail', run);
     setPhase('revealed');
     setMarks([expectedMove(run).slice(0, 2), expectedMove(run).slice(2, 4)]);
+  }
+
+  /** After the solution has been shown: the same position once more, by hand. */
+  function replay() {
+    setRun(initial);
+    setPhase('solving');
+    setLastMove(initial.setupMove);
+    setMarks([]);
+    setWrongSan(null);
+    setReply(null);
+    setReplaying(true);
+    setResetKey((k) => k + 1);
   }
 
   async function skip() {
@@ -189,13 +206,22 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   }, [phase, run]);
 
   const done = phase === 'solved' || phase === 'revealed';
+  // What is played through on the board: the solution once it has been shown, or the wrong
+  // move followed by the engine's answer to it.
+  const line = phase === 'revealed'
+    ? { from: run.fen, pv: remainingLine(run) }
+    : phase === 'solving' && wrongSan && reply?.state === 'shown' && reply.pv
+      ? { from: reply.from, pv: [reply.uci, ...reply.pv] }
+      : null;
+  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 0, startLabel: 'Play the solution' } : { initial: 2 });
+  const stepping = !!steps.pos && steps.step > 0;
   return (
     <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' ? expectedMove(run) : ''}>
       <header className="puzzle-head">
         {props.heading && <p className="kicker">{props.heading}</p>}
         <h2>{phase === 'setup' ? 'Opponent is moving' : `${solver === 'white' ? 'White' : 'Black'} to move`}</h2>
       </header>
-      <Board fen={phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy ? solver : null} lastMove={lastMove} marks={marks} onMove={onMove} resetKey={resetKey} />
+      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !stepping ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? [] : marks} onMove={onMove} resetKey={resetKey} />
 
       <div className="feedback" aria-live="polite">
         {phase === 'solving' && !wrongSan && !outcome && <p className="muted">Find the best move. Any checkmate also counts.</p>}
@@ -207,7 +233,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
             {reply?.state === 'shown' && (
               <p data-testid="engine-reply">
                 {reply.line
-                  ? `After ${wrongSan} the built-in engine continues ${reply.line} and then rates your side at ${reply.wp} out of 100. This is the engine’s line for this position, not an explanation.`
+                  ? `After ${wrongSan} the built-in engine continues ${reply.line}. It is on the board: step back and on through it. This is the engine’s line for this position, not an explanation.`
                   : 'The built-in engine did not answer on this device, so no reply can be shown.'}
               </p>
             )}
@@ -215,10 +241,11 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
         )}
         {phase === 'solved' && (
           <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
-            <strong>{outcome === 'success' ? 'Solved first try.' : 'Solved.'}</strong>
+            <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : 'Solved.'}</strong>
             {run.acceptedAlternative && <p>Your checkmate differs from the source game’s move and is equally correct.</p>}
-            {outcome === 'fail' && <p>Recorded as missed because the first move was wrong. It returns in your review queue.</p>}
-            {outcome === 'assisted' && <p>Recorded as assisted because a hint was used. It returns in your review queue.</p>}
+            {replaying && <p data-testid="replay-note">This go was practice. The first attempt stays recorded as {outcome === 'assisted' ? 'assisted' : 'missed'}; the position returns in your review queue.</p>}
+            {!replaying && outcome === 'fail' && <p>Recorded as missed because the first move was wrong. It returns in your review queue.</p>}
+            {!replaying && outcome === 'assisted' && <p>Recorded as assisted because a hint was used. It returns in your review queue.</p>}
           </div>
         )}
         {phase === 'revealed' && (
@@ -239,7 +266,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
       <div className="actions">
         {phase === 'solving' && (
           <>
-            {wrongSan && <button className="primary" disabled={!armed} onClick={() => setWrongSan(null)}>Try again</button>}
+            {wrongSan && <button className="primary" disabled={!armed} onClick={() => { steps.reset(); setWrongSan(null); }}>Try again</button>}
+            {wrongSan && steps.controls}
             {wrongSan && reply && reply.state !== 'shown' && <button data-testid="show-reply" disabled={reply.state === 'loading'} onClick={() => void showReply()}>{reply.state === 'loading' ? 'Asking the engine' : `What happens after ${wrongSan}?`}</button>}
             {allowHints && !wrongSan && <button onClick={hint} disabled={!armed || busy || marks.length > 0}>Show which piece</button>}
             {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show solution</button>}
@@ -247,6 +275,9 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
             {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={!armed || busy} onClick={() => void skip()}>Skip</button>}
           </>
         )}
+        {phase === 'revealed' && steps.controls}
+        {/* A check is a fixed set of first tries: no second go there. */}
+        {phase === 'revealed' && props.context !== 'check' && <button data-testid="replay" disabled={!armed} onClick={replay}>Now play it yourself</button>}
         {done && <button className="primary" data-testid="next" disabled={!armed} onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}
       </div>
     </section>

@@ -37,7 +37,8 @@ test('a whole study session under churn: apply (own-game question, puzzle), test
   await page.getByTestId('start-session').click();
   const run = page.getByTestId('session-run');
   await expect(run).toHaveAttribute('data-block', 'learn');
-  console.log('learn block concept:', await page.locator('.concept h1').textContent());
+  // The block opens on the lesson itself when one is stored on the device, else on the concept page.
+  await expect(page.locator('[data-testid=lesson], .concept').first()).toBeVisible();
   await page.getByTestId('end-block').click();
 
   // Practice: a question from the learner's own games.
@@ -299,7 +300,7 @@ test('session learn block: a lesson step with a move to find holds under churn a
   await page.getByTestId('start-session').click();
   const run = page.getByTestId('session-run');
   await expect(run).toHaveAttribute('data-block', 'learn');
-  await page.getByTestId('start-lesson').click();
+  // The lesson on the device opens with the block; there is no choice screen first.
   const lesson = page.getByTestId('lesson');
   const steps = Number(await lesson.getAttribute('data-steps'));
   const tryBox = page.getByTestId('lesson-try');

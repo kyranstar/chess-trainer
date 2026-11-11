@@ -211,6 +211,8 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
   await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing can take back at once.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
+  // What the engine does about the piece that can be taken is said, so the fact and the rating cannot seem to disagree.
+  await expect(page.getByTestId('own-move-loose-note')).toContainText(/The engine’s line (takes it|starts with a different move)/);
   await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
   // Judged plainly: giving a knight for a pawn is rated by the engine, with both numbers.
   expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));

@@ -105,7 +105,8 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
   await page.goto('./#/today');
   await page.getByTestId('start-session').click();
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'learn');
-  await expect(page.getByTestId('start-lesson')).toBeVisible();
+  // Starting the session opens the lesson itself, not a page of ways to study.
+  await expect(page.getByTestId('lesson')).toBeVisible();
   await page.getByTestId('end-block').click();
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'apply');
   const sense = page.getByTestId('sense-drill');

@@ -61,6 +61,16 @@ function IntervalBar({ m }: { m: RateMetric }) {
   );
 }
 
+/** Whether the long list of numbers is open: a convenience kept in this browser only. */
+const SHOW_ALL_KEY = 'progress.all';
+function readShowAll(): boolean {
+  try {
+    return localStorage.getItem(SHOW_ALL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function ProgressHome({ learner }: { learner: Learner }) {
   const [period, setPeriod] = useState<PeriodKey>('all');
   const from = since(period);
@@ -88,6 +98,16 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const recalled = recalls.filter((a) => a.outcome === 'success').length;
   const alt = (v: 'sound' | 'weaker' | 'unknown') => recalls.filter((a) => a.altVerdict === v).length;
 
+  const [showAll, setShowAll] = useState(readShowAll);
+  const rememberShowAll = (open: boolean) => {
+    setShowAll(open);
+    try {
+      localStorage.setItem(SHOW_ALL_KEY, open ? '1' : '0');
+    } catch {
+      // private mode: the choice simply is not remembered
+    }
+  };
+
   return (
     <div className="page" data-testid="progress-home">
       <h1>Progress</h1>
@@ -98,6 +118,16 @@ export function ProgressHome({ learner }: { learner: Learner }) {
       </div>
 
       <Headline attempts={learner.attempts} sinceDate={sinceDateOf(period)} since={from} periodLabel={periodLabel} />
+      <section className="card" data-testid="card-next">
+        <h2>What to do now</h2>
+        <p>The numbers above move only by playing games after training. The next session is on Today.</p>
+        <div className="actions"><a className="button primary" href={href('today')}>Go to today’s training</a></div>
+      </section>
+
+      {/* The default view answers three questions: fewer costly early mistakes? reflected in
+          the rating? what next? Every other number is kept, one tap away, and the choice is remembered. */}
+      <details className="all-numbers" data-testid="progress-all" open={showAll} onToggle={(e) => rememberShowAll((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>All the numbers, and your data</summary>
       <OwnMoveCard attempts={learner.attempts} since={from} sinceDate={sinceDateOf(period)} periodLabel={periodLabel} />
 
       <section className="card" data-testid="card-focus">
@@ -255,6 +285,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
       </section>
 
       <DataPanel learner={learner} />
+      </details>
     </div>
   );
 }

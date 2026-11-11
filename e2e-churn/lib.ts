@@ -44,6 +44,8 @@ export async function mockChessCom(page: Page, games: any[]): Promise<Mock> {
 }
 
 export async function openApp(page: Page, path = '#/today') {
+  // Progress folds most of its numbers away by default; these tests read them, so they are opened here.
+  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); } catch { /* not available */ } });
   await page.goto(`./${path}`);
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');

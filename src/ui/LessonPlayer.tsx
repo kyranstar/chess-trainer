@@ -137,9 +137,9 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
         <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
       </div>
       {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-      <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Play the move the text plays here.`}</p>
+      <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Find the move. The text’s own move, and what it says about it, come next.`}</p>
       <div className="feedback" aria-live="polite">
-        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown.</p></div>}
+        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown; the text’s reason follows it.</p></div>}
         {checking && <p className="muted">Checking your move with the engine</p>}
         {other && !finished && (
           <div className="verdict neutral" data-testid="lesson-other" data-kind={other.kind}>
@@ -227,7 +227,10 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
             </p>
             {lesson.notationNote && <p className="note">{lesson.notationNote}</p>}
             {lesson.review.ownerReview === 'pending' && (
-              <p className="note">This excerpt was selected when the app was built and checked mechanically (every paragraph matches the book; positions match its diagrams or moves; the moves you are asked to find were checked with Stockfish). You have not reviewed it yet.</p>
+              <details className="source-details" data-testid="lesson-provenance">
+                <summary>How this excerpt was checked</summary>
+                <p className="note">This excerpt was selected when the app was built and checked mechanically (every paragraph matches the book; positions match its diagrams or moves; the moves you are asked to find were checked with Stockfish). You have not reviewed it yet.</p>
+              </details>
             )}
           </>
         ) : (

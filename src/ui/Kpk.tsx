@@ -37,8 +37,21 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
   const played = useRef<string[]>([]);
   const started = useRef(Date.now());
 
+  /** A second go at the same start after a failure is practice: it is never recorded. */
+  const [retrying, setRetrying] = useState(false);
+  function retry() {
+    setRetrying(true);
+    setFen(start);
+    setLastMove(null);
+    setEnd(null);
+    setBusy(false);
+    setResetKey((k) => k + 1);
+    myMoves.current = 0;
+  }
+
   async function finish(ok: boolean, shown: boolean, text: string, detail?: string) {
     setEnd({ ok, text, detail });
+    if (retrying) return;
     const a = await recordAttempt(db, {
       sessionId, context, exerciseId: kpkId(goal, start), exerciseKind: 'endgame', contentVersion: KPK_VERSION,
       conceptId: 'endgame.opposition', themes: ['kpk', goal], rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current,
@@ -107,11 +120,13 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
           <div className={`verdict ${end.ok ? 'right' : 'neutral'}`} data-testid="kpk-verdict" data-ok={end.ok}>
             <strong>{end.text}</strong>
             {end.detail && <p>{end.detail}</p>}
+            {retrying && <p data-testid="kpk-retry-note">Second go: practice, not recorded. The first attempt stands.</p>}
           </div>
         )}
       </div>
       <div className="actions">
         {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show a move that keeps it</button>}
+        {end && !end.ok && context !== 'check' && <button data-testid="kpk-retry" disabled={!armed} onClick={retry}>Try this position again</button>}
         {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>
