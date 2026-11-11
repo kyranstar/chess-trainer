@@ -222,7 +222,16 @@ test('your move: play your own move in a position from your game and see exactly
   await page.getByTestId('line-next').click();
   await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-step', '1');
   await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', afterMine!);
-  await page.getByTestId('line-prev').click();
+  // ... and the replay stops where it is decided, marks the square and says what went: here the knight.
+  const stepper = page.getByTestId('own-move-line');
+  const length = Number(await stepper.getAttribute('data-length'));
+  for (let i = 1; i < length; i++) await page.getByTestId('line-next').click();
+  await expect(stepper).toHaveAttribute('data-step', String(length));
+  await expect(page.getByTestId('line-next')).toBeDisabled();
+  await expect(page.getByTestId('line-consequence')).toContainText('Knight taken on e5');
+  await expect(page.getByTestId('line-consequence')).toContainText('you come out 2 points behind');
+  for (let i = 0; i < length; i++) await page.getByTestId('line-prev').click();
+  await expect(page.getByTestId('line-consequence')).toHaveCount(0);
   // ... and the move taken back for another try, which is not recorded.
   await page.getByTestId('own-move-retry').click();
   await expect(drill).toHaveAttribute('data-phase', 'move');

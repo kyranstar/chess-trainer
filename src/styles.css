@@ -283,3 +283,4 @@ details.today-options > summary::-webkit-details-marker, details.all-numbers > s
 details.today-options > summary::before, details.all-numbers > summary::before, details.source-details > summary::before { content: '+'; display: inline-block; width: 1ch; text-decoration: none; }
 details[open].today-options > summary::before, details[open].all-numbers > summary::before, details[open].source-details > summary::before { content: '−'; }
 details.all-numbers[open] > * + *, details.today-options[open] > * + * { margin-top: 0.8rem; }
+.line-note { font-weight: 600; border-left: 4px solid var(--pencil); padding-left: 0.6rem; }

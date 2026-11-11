@@ -122,7 +122,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     const grade = gradeMove(f, rating, my.uci);
     const verdict = grade;
     setResult({
-      verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 6) : [],
+      verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 10) : [],
       loss: rating ? Math.round(rating.loss) : null, bestSan: best && bestUci ? sanOf(start, bestUci) : null, bestWp: best ? Math.round(best.wp) : null,
     });
     setPhase('done');
@@ -200,11 +200,11 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     const san = sanOf(pos, capture);
     const after = lineAt(facts.afterFen, [capture], 1).fen;
     const best = await bestLineFor(after, RATE_NODES);
-    setTaken({ state: 'shown', pv: [capture, ...(best?.pv.slice(0, 5) ?? [])], san });
+    setTaken({ state: 'shown', pv: [capture, ...(best?.pv.slice(0, 9) ?? [])], san });
   }
-  const line = phase === 'done' && facts && result ? (taken?.state === 'shown' ? { from: facts.afterFen, pv: taken.pv } : { from: facts.afterFen, pv: result.pv }) : null;
-  const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line' } : { initial: 0, startLabel: 'Play the engine’s line', testid: 'own-move-line' });
-  const shown = steps.pos && steps.step > 0 ? { fen: steps.pos.fen, last: steps.pos.last } : { fen, last: lastMove };
+  const line = phase === 'done' && facts && result ? (taken?.state === 'shown' ? { from: facts.afterFen, pv: taken.pv, before: item.fen } : { from: facts.afterFen, pv: result.pv, before: item.fen }) : null;
+  const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line', me: item.color, cap: 6 } : { initial: 0, startLabel: 'Play the engine’s line', testid: 'own-move-line', me: item.color, cap: 6 });
+  const shown = steps.pos && steps.step > 0 ? { fen: steps.pos.fen, last: steps.pos.last, marks: steps.marks } : { fen, last: lastMove, marks: [] as string[] };
   const passed = result ? outcomeOfGrade(result.verdict) === 'success' : false;
   const gameSan = sanOf(positionFromFen(item.fen), item.played);
   const title = phase === 'move' ? `${me} to move. Play your move.` : phase === 'predict' ? `You played ${mine?.san}. Now play the reply you had to reckon with.` : phase === 'checking' ? 'Checking' : '';
@@ -221,7 +221,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
           </p>
         )}
       </header>
-      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} onMove={onMove} />
+      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove} />
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
         {phase === 'done' && result && facts && mine && (
@@ -258,6 +258,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
               <p>{isPunishingReply(facts, named.uci) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
             )}
             {result.line && <p>After {mine.san} the built-in engine continues {result.line}.</p>}
+            {steps.note}
             <p className="definition-small">
               {result.verdict === 'mistake' || result.verdict === 'blunder' ? 'Recorded as a miss; it returns in your review queue.' : result.verdict === 'unrated' ? 'Not recorded as a pass or a miss.' : 'Recorded as a pass.'}
               {' '}Ratings are the built-in engine’s, a small one: under 5 points below its first choice is good, under 10 an inaccuracy, under 20 a mistake, more a blunder.

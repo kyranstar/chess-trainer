@@ -154,7 +154,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     setReply({ ...asked, state: 'loading' });
     const best = await bestLineFor(after);
     // The learner may have moved on meanwhile; only fill in the request that is still on screen.
-    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 5) } : { ...asked, state: 'shown' }) : r));
+    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 9) } : { ...asked, state: 'shown' }) : r));
   }
 
   function hint() {
@@ -213,7 +213,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     : phase === 'solving' && wrongSan && reply?.state === 'shown' && reply.pv
       ? { from: reply.from, pv: [reply.uci, ...reply.pv] }
       : null;
-  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 0, startLabel: 'Play the solution' } : { initial: 2 });
+  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 0, startLabel: 'Play the solution', me: initial.solver, stopThere: false } : { initial: 2, me: initial.solver, cap: 6 });
   const stepping = !!steps.pos && steps.step > 0;
   return (
     <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' ? expectedMove(run) : ''}>
@@ -221,7 +221,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
         {props.heading && <p className="kicker">{props.heading}</p>}
         <h2>{phase === 'setup' ? 'Opponent is moving' : `${solver === 'white' ? 'White' : 'Black'} to move`}</h2>
       </header>
-      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !stepping ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? [] : marks} onMove={onMove} resetKey={resetKey} />
+      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !stepping ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? steps.marks : marks} onMove={onMove} resetKey={resetKey} />
 
       <div className="feedback" aria-live="polite">
         {phase === 'solving' && !wrongSan && !outcome && <p className="muted">Find the best move. Any checkmate also counts.</p>}
@@ -237,6 +237,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
                   : 'The built-in engine did not answer on this device, so no reply can be shown.'}
               </p>
             )}
+            {steps.note}
           </div>
         )}
         {phase === 'solved' && (
@@ -251,6 +252,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
         {phase === 'revealed' && (
           <div className="verdict neutral" data-testid="verdict-revealed">
             <strong>Solution: {solutionSan}</strong>
+            {steps.note}
             <p>Recorded as missed. It returns in your review queue.</p>
           </div>
         )}

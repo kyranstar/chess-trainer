@@ -127,10 +127,10 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     const from = safety ? item.afterFen! : item.fen;
     const first = safety ? item.replyUci! : item.best!;
     const pv = ucisOfSanLine(from, (safety ? item.replyLine : item.bestLine) ?? '');
-    return { from, pv: pv[0] === first ? pv : [first] };
+    return { from, pv: pv[0] === first ? pv : [first], before: safety ? item.fen : undefined };
   }, [item, safety]);
   const keepMine = !safety && grade?.response === 'hit' && !!grade.alternative;
-  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Play the engine’s line' });
+  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Play the engine’s line', me: item.color });
   const onLine = phase === 'done' && steps.pos && !(keepMine && steps.step === 0);
   const question = safety ? `You are ${me}. Is ${item.proposedSan} safe to play?` : `${me} to move. Is there something to win here?`;
   const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
@@ -141,7 +141,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
         <h2>{phase === 'play' ? (safety ? 'Play the reply that punishes it' : 'Play it') : question}</h2>
         <p className="muted">From your game on {item.date}, move {Math.floor(item.ply / 2) + 1}. Many of these have nothing in them.</p>
       </header>
-      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} />
+      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} marks={onLine ? steps.marks : []} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} />
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Checking your move with the engine</p>}
         {grade && (
@@ -151,6 +151,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
             {item.truth && !safety && <p>The engine’s line is {item.bestLine} (about {Math.round(item.bestWp ?? 0)}% expected score).{grade.alternative ? ` Your move ${playedSan} also mates or wins material, by the engine’s check.` : ''}</p>}
             {!item.truth && safety && <p>The engine found no reply to {item.proposedSan} that mates or wins any material in a short line. That is all “safe” means here.</p>}
             {!item.truth && !safety && <p>The engine’s best line here neither mates nor wins any material in a short line.</p>}
+            {onLine && steps.note}
           </div>
         )}
       </div>
