@@ -15,6 +15,16 @@ import { SenseDrill, senseItemsFrom } from './Sense';
 import { pickSense, type SenseItem } from '../games/sense';
 import { CheckRunner, conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { type MoveItem, moveItems } from '../games/ownmove';
+import { paceFrom } from '../schedule/pace';
+import { OwnMoveDrill } from './OwnMove';
+
+/** A small stable hash for choosing among a few candidates by turn. */
+function hashOf(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h ^ (h >>> 15)) >>> 0;
+}
 
 const BLOCK_NAME: Record<BlockKind, string> = { review: 'Review', learn: 'Learn', apply: 'Practice', test: 'Test', play: 'Play', reflect: 'Reflect' };
 const mins = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -124,8 +134,8 @@ export function Today({ learner }: { learner: Learner }) {
   const history = useRecentSessions();
   const journal = useJournal();
   const myGames = useGames();
-  // Live games only: a move in a daily game is not a sitting at the board.
-  const playedDates = useMemo(() => (myGames ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'blitz' || g.timeClass === 'bullet').map((g) => g.endDate), [myGames]);
+  // Rapid games only: that is the kind of game the play day is for.
+  const playedDates = useMemo(() => (myGames ?? []).filter((g) => g.timeClass === 'rapid').map((g) => g.endDate), [myGames]);
   const suggestion = useMemo(() => suggestSessionKind(history, now, playedDates), [history, now, playedDates]);
   const starting = useRef(false);
   const baseline = useMemo(() => baselineProgress(learner.statuses), [learner.statuses]);
@@ -269,6 +279,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const [confirmEnd, setConfirmEnd] = useState(false);
   // The item for a turn is chosen once: recording its attempt must not swap it for another mid-question.
   const senseLatch = useRef<{ index: number; item: SenseItem | null } | null>(null);
+  const moveLatch = useRef<{ index: number; pick: { item: MoveItem; pace: number } | null } | null>(null);
   // Review items due when the block started; kept stable for the whole block.
   const dueAtStart = useRef<typeof dueNow | null>(null);
   if (block?.kind === 'review' && dueAtStart.current === null && learner.ready) dueAtStart.current = dueNow;
@@ -310,7 +321,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
   const nextTestItem = () => {
     // Always move on first, also when the block's time is up: otherwise the question just
     // answered would still be the current one when the next block starts, and be asked again.
-    senseShown.current.add(senseTurn?.id ?? '');
+    senseShown.current.add(senseTurn?.id ?? moveTurn?.item.id ?? '');
     setTestIndex((n) => n + 1);
     if (timeUp) {
       // Without this the next item would be on screen for an instant before the block changes.
@@ -319,8 +330,25 @@ export function SessionRun({ learner }: { learner: Learner }) {
     }
   };
   const leaving = leavingIdx === idx;
+  // Practice block: two of every three own-game turns are "Your move" (his own move in an
+  // ordinary position from his games), when such positions exist. Chosen once per turn.
+  const moveTurn: { item: MoveItem; pace: number } | null = (() => {
+    if (block.kind !== 'apply' || !games || leaving) return null;
+    if (testIndex % 2 === 1 && concept) return null;
+    if (moveLatch.current?.index === testIndex) return moveLatch.current.pick;
+    let pick: { item: MoveItem; pace: number } | null = null;
+    if (Math.floor(testIndex / 2) % 3 !== 2) {
+      const done = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId), ...senseShown.current]);
+      const left = moveItems(games).filter((m) => !done.has(m.id));
+      // Newest games first, with some variety among them.
+      const item = left.length ? left[left.length - 1 - (hashOf(`${session.id}|${testIndex}`) % Math.min(8, left.length))] : undefined;
+      if (item) pick = { item, pace: paceFrom(learner.attempts).pace };
+    }
+    moveLatch.current = { index: testIndex, pick };
+    return pick;
+  })();
   const senseTurn: SenseItem | null = (() => {
-    if ((block.kind !== 'test' && block.kind !== 'apply') || activeCheck || !games || leaving) return null;
+    if ((block.kind !== 'test' && block.kind !== 'apply') || activeCheck || !games || leaving || moveTurn) return null;
     // With no concept to practise, every turn of the practice block comes from the learner's games.
     if (testIndex % 2 === 1 && !(block.kind === 'apply' && !concept)) return null;
     const seen = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId), ...senseShown.current]);
@@ -361,10 +389,13 @@ export function SessionRun({ learner }: { learner: Learner }) {
       )}
 
       {leaving && <p className="muted" data-testid="leaving-block">Moving on</p>}
+      {block.kind === 'apply' && moveTurn && (
+        <OwnMoveDrill key={moveTurn.item.id} item={moveTurn.item} sessionId={session.id} context="apply" heading="Practice: your move" pace={moveTurn.pace} onRecorded={onAttempt} onDone={nextTestItem} />
+      )}
       {block.kind === 'apply' && senseTurn && (
         <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" heading="Practice: from your own games" onRecorded={onAttempt} onDone={nextTestItem} />
       )}
-      {block.kind === 'apply' && !leaving && !senseTurn && concept && pool && (
+      {block.kind === 'apply' && !leaving && !moveTurn && !senseTurn && concept && pool && (
         <PuzzleStream
           key={`apply-${concept.id}-${testIndex}`}
           limit={1}
@@ -374,7 +405,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
           onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
         />
       )}
-      {block.kind === 'apply' && !leaving && !senseTurn && !concept && (
+      {block.kind === 'apply' && !leaving && !moveTurn && !senseTurn && !concept && (
         <div className="empty" data-testid="practice-empty">
           <p>{games && games.length > 0 ? 'No unseen questions from your games are left for now. More appear as new games are fetched and analysed.' : block.reason}</p>
           <div className="actions"><button className="primary" onClick={() => void finish()}>Continue</button></div>

@@ -42,8 +42,8 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   await page.getByTestId('game-finished').click();
 
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'reflect');
-  await page.getByTestId('save-reflection').click();
-  await expect(page.getByRole('alert')).toContainText('Choose the result first');
+  // Nothing in the reflection is required (the game itself is fetched from Chess.com later);
+  // here it is filled in.
   await page.getByTestId('result-loss').click();
   await page.getByTestId('color-black').click();
   await page.getByTestId('turning-point').fill('Move 14: left the knight on f6 undefended.');

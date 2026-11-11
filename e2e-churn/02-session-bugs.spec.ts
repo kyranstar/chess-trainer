@@ -92,7 +92,7 @@ test('a game-sense question answered as practice time runs out is not asked agai
   await expect.poll(async () => (await store(page, 'attempts')).filter((a) => a.exerciseKind === 'sense').length).toBe(1);
 
   // The practice block's minutes run out while the verdict is being read; "Continue" then ends the block.
-  await page.clock.runFor(17 * 60_000);
+  await page.clock.runFor(23 * 60_000); // longer than the practice block (16 minutes, plus review minutes when nothing is due)
   await expect(page.getByTestId('time-up')).toBeVisible();
   await page.getByTestId('sense-next').click();
   await expect(run).toHaveAttribute('data-block', 'test');

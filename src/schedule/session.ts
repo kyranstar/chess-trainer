@@ -1,10 +1,10 @@
 /**
  * Deterministic daily session planner (v1).
  *
- * A study day is four blocks in a fixed order: review 5, learn 8, practice 11, test 6
- * minutes (scaled for other session lengths; v2, owner decision of 2026-11-10: the largest
- * block is practice, which mixes new positions on the concept with questions from the
- * learner's own games). Rules:
+ * A study day is four blocks in a fixed order: review 4, learn 6, practice 16, test 4
+ * minutes (scaled for other session lengths; v3, after a first-principles review: more than
+ * half the session is practice, led by the learner's own moves in positions from his own
+ * games). Rules:
  *  - review is hard-capped at its budget no matter how large the backlog is;
  *  - the learn block is always reserved when a concept is ready, and is never replaced by
  *    review;
@@ -16,8 +16,8 @@
 import type { BlockKind, SessionBlock, SessionRecord, StudyBlockKind } from '../db/types';
 import { awaitingCheck, type ConceptStatus, nextToLearn } from '../learn/curriculum';
 
-export const PLANNER_VERSION = 'planner-v2';
-export const BLOCK_MINUTES: Record<StudyBlockKind, number> = { review: 5, learn: 8, apply: 11, test: 6 };
+export const PLANNER_VERSION = 'planner-v3';
+export const BLOCK_MINUTES: Record<StudyBlockKind, number> = { review: 4, learn: 6, apply: 16, test: 4 };
 export const PLAY_MINUTES = { review: 5, play: 25, reflect: 5 };
 export const SESSION_LENGTHS = [10, 20, 30, 45, 60] as const;
 const ORDER: StudyBlockKind[] = ['review', 'learn', 'apply', 'test'];

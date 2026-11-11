@@ -266,6 +266,12 @@ export interface EarlyBlunders {
   previous: { games: number; withBlunder: number } | null;
   /** Games inside those two groups that are not measured yet. */
   windowPending: number;
+  /**
+   * Measured games that ended before the day training began, and from that day on. "Last 20
+   * against the 20 before" can be two groups from the same side of that day; this cannot.
+   */
+  beforeTraining: { games: number; withBlunder: number } | null;
+  sinceTraining: { games: number; withBlunder: number } | null;
   /** Eligible games still waiting for their measurement record; they are in neither count. */
   pending: number;
   /** Secondary: every such move (not only the first per game) per decision in the same move range. */
@@ -284,7 +290,7 @@ export const COMPARE_WINDOW = 20;
  * The game is the unit, so the Wilson interval is on games, not on moves. `recent` and
  * `previous` are the latest `window` games and the `window` before them, for a like-for-like look.
  */
-export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeClass; maxMove?: number; window?: number; sinceDate?: string }): EarlyBlunders {
+export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeClass; maxMove?: number; window?: number; sinceDate?: string; trainingStart?: string }): EarlyBlunders {
   const maxPly = (opts.maxMove ?? EARLY_MOVES) * 2;
   const window = opts.window ?? COMPARE_WINDOW;
   const eligible = select(games, { timeClass: opts.timeClass, sinceDate: opts.sinceDate }).filter((g) => g.rated !== false && g.moves.length > 0);
@@ -313,6 +319,8 @@ export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeCl
     recent: complete ? slice(inWindows.slice(window).map(flag)) : null,
     previous: complete ? slice(inWindows.slice(0, window).map(flag)) : null,
     windowPending: inWindows.filter((g) => !isMeasured(g)).length,
+    beforeTraining: opts.trainingStart ? slice(flagged.filter((x) => x.game.endDate < opts.trainingStart!)) : null,
+    sinceTraining: opts.trainingStart ? slice(flagged.filter((x) => x.game.endDate >= opts.trainingStart!)) : null,
     pending: eligible.length - n,
     moves: {
       events: pool.reduce((t, g) => t + targets(g).length, 0),

@@ -319,3 +319,18 @@ describe('how the clock is used in real games', () => {
     expect(timeUse([], 'rapid')).toMatchObject({ games: 0, medianEndShareLosses: null });
   });
 });
+
+describe('before and after training began', () => {
+  it('splits the measured games at the day training started, so the comparison is not two groups from the same side of it', async () => {
+    const db = fresh();
+    await importGames(db, text, 1);
+    const rapid = (await db.games.toArray()).filter((g) => g.timeClass === 'rapid').map((g) => withMeasure({ ...g, rated: true }));
+    const five = [0, 1, 2, 3, 0].map((k, i) => ({ ...rapid[k]!, id: `g${i}`, endDate: `2026-11-0${i + 1}` }));
+    const has = (g: (typeof five)[number]) => g.measure!.events.some((e) => !!e.target && e.ply < 40);
+    const m = earlyBlunderGames(five, { timeClass: 'rapid', trainingStart: '2026-11-04' });
+    expect(m.beforeTraining).toEqual({ games: 3, withBlunder: five.slice(0, 3).filter(has).length });
+    expect(m.sinceTraining).toEqual({ games: 2, withBlunder: five.slice(3).filter(has).length });
+    expect(earlyBlunderGames(five, { timeClass: 'rapid' }).beforeTraining).toBeNull();
+  });
+});
+

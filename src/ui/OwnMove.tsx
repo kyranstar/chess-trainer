@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDb, useFocusMode } from '../app/store';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { positionFromFen, sanOf } from '../chess/rules';
+import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
 import { bestLineFor } from '../engine/interactive';
@@ -34,7 +34,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
   const timedOut = useRef(false);
   const decisionMs = useRef(0);
   useEffect(() => {
-    if (pace <= 0 || phase !== 'move') return;
+    if (pace <= 0 || phase !== 'move' || retrying) return;
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       setLeft((x) => {
@@ -46,7 +46,11 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     return () => clearInterval(t);
   }, [pace, phase]);
   const [named, setNamed] = useState<{ uci: string; san: string } | null>(null);
-  const [result, setResult] = useState<{ verdict: MoveVerdict; line: string | null; wp: number | null } | null>(null);
+  const [result, setResult] = useState<{ verdict: MoveVerdict; line: string | null; wp: number | null; pv: string[] } | null>(null);
+  // After the answer the engine's line can be played through on the board, a move at a time.
+  const [step, setStep] = useState(0);
+  // A second try after seeing the facts is practice, not a result: it is never recorded.
+  const [retrying, setRetrying] = useState(false);
   const started = useRef(Date.now());
   const recorded = useRef(false);
   useScreenChange(`${item.id}|${phase}`);
@@ -76,7 +80,8 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
       evidence = { loss: Math.max(0, item.bestWp - (100 - line.wp)), swing: end.balance - material(positionFromFen(item.fen), item.color), settled: end.settled };
     }
     const verdict = gradeOwnMove(f, evidence);
-    setResult({ verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: line ? Math.round(100 - line.wp) : null });
+    setResult({ verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: line ? Math.round(100 - line.wp) : null, pv: line ? line.pv.slice(0, 6) : [] });
+    setStep(0);
     setPhase('done');
     if (recorded.current) return;
     recorded.current = true;
@@ -116,6 +121,28 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     }
   }
 
+  function retry() {
+    setRetrying(true);
+    setPhase('move');
+    setFen(item.fen);
+    setLastMove(null);
+    setMine(null);
+    setFacts(null);
+    setNamed(null);
+    setResult(null);
+    setStep(0);
+  }
+  // The position `step` moves into the engine's line (0 = right after the learner's move).
+  const shown = (() => {
+    if (phase !== 'done' || !facts || !result || step === 0) return { fen, last: lastMove };
+    try {
+      let pos = positionFromFen(facts.afterFen);
+      for (const u of result.pv.slice(0, step)) pos = applyUci(pos, u);
+      return { fen: fenOf(pos), last: result.pv[step - 1] ?? null };
+    } catch {
+      return { fen, last: lastMove };
+    }
+  })();
   const gameSan = sanOf(positionFromFen(item.fen), item.played);
   const title = phase === 'move' ? `${me} to move. Play your move.` : phase === 'predict' ? `You played ${mine?.san}. Now play the reply you had to reckon with.` : phase === 'checking' ? 'Checking' : '';
   return (
@@ -124,13 +151,14 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
         {heading && <p className="kicker">{heading}</p>}
         {title && <h2>{title}</h2>}
         <p className="muted">From your game on {item.date}, move {Math.floor(item.ply / 2) + 1}. An ordinary position: there may be nothing special in it.</p>
-        {pace > 0 && phase === 'move' && (
+        {retrying && phase !== 'done' && <p className="muted" data-testid="own-move-retry-note">Second try. This one is not recorded.</p>}
+        {pace > 0 && phase === 'move' && !retrying && (
           <p className={`move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
             {left > 0 ? `${Math.ceil(left)} s for this move` : `No move in ${pace} seconds. Play it now; it is recorded as not made in time.`}
           </p>
         )}
       </header>
-      <Board fen={fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={lastMove} onMove={onMove} />
+      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} onMove={onMove} />
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
         {phase === 'done' && result && facts && mine && (
@@ -160,6 +188,13 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
       </div>
       <div className="actions">
         {phase === 'predict' && facts && mine && <button data-testid="own-move-no-reply" disabled={!armed} onClick={() => void conclude(facts, mine, null)}>No particular reply</button>}
+        {phase === 'done' && result && result.pv.length > 0 && (
+          <span className="line-steps" data-testid="own-move-line" data-step={step}>
+            <button data-testid="line-prev" disabled={step === 0} onClick={() => setStep((x) => Math.max(0, x - 1))} aria-label="One move back in the engine’s line">Back</button>
+            <button data-testid="line-next" disabled={step >= result.pv.length} onClick={() => setStep((x) => Math.min(result.pv.length, x + 1))} aria-label="One move on in the engine’s line">{step === 0 ? 'Play the engine’s line' : 'On'}</button>
+          </span>
+        )}
+        {phase === 'done' && result && result.verdict !== 'clean' && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Take it back and try another move</button>}
         {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>

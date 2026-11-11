@@ -272,4 +272,4 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 /* "Your move" on the clock: plain, and red only once the time is up. */
 .move-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
 .move-clock.is-up { color: var(--flag); }
-
+.line-steps { display: inline-flex; gap: 0.4rem; }

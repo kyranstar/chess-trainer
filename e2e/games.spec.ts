@@ -63,7 +63,8 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(drill).toHaveAttribute('data-expected', 'h5f7');
   await playMove(page, 'h5e5');
   await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'false');
-  await expect(page.getByTestId('own-verdict')).toContainText('nothing is claimed about it');
+  // Another move is checked by the built-in engine before anything is recorded against it; this one loses the queen.
+  await expect(page.getByTestId('own-verdict')).toContainText('rates Qxe5+ clearly lower', { timeout: 30_000 });
   await page.getByTestId('own-next').click();
   await expect(page.getByTestId('own-done')).toBeVisible();
 
@@ -207,6 +208,19 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
   expect(['failed', 'unresolved']).toContain(await drill.getAttribute('data-verdict'));
+  // The consequence can be played through on the board ...
+  const afterMine = await drill.getAttribute('data-fen');
+  await page.getByTestId('line-next').click();
+  await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-step', '1');
+  await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', afterMine!);
+  await page.getByTestId('line-prev').click();
+  // ... and the move taken back for another try, which is not recorded.
+  await page.getByTestId('own-move-retry').click();
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  await expect(page.getByTestId('own-move-retry-note')).toBeVisible();
+  await playMove(page, 'a2a3');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
 
   // The next position: a quiet move, and no reply named.
   await page.getByTestId('own-move-next').click();

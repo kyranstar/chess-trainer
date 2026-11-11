@@ -33,7 +33,6 @@ export function ReflectBlock({ sessionId, onSaved }: { sessionId: string | null;
 
   const saving = useRef(false);
   async function save() {
-    if (!d.result) return setError('Choose the result first.');
     if (d.url && !/^https:\/\//.test(d.url)) return setError('The game link should start with https://');
     if (saving.current) return; // a second tap must not log the game twice
     saving.current = true;

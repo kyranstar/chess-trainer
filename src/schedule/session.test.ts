@@ -14,11 +14,11 @@ const plan = (events: LessonEvent[], over: Partial<Parameters<typeof planSession
   planSession({ id: 's1', now: T0, budgetMin: 30, statuses: conceptStatuses(CONCEPTS, events, []), dueCount: 3, online: true, ...over });
 
 describe('session plan', () => {
-  it('builds review, learn, practice, test in order with the 5/8/11/6 minute split: practice is the largest block', () => {
+  it('builds review, learn, practice, test in order with the 4/6/16/4 minute split: practice is more than half the session', () => {
     const s = plan([]);
     expect(s.blocks.map((b) => b.kind)).toEqual(['review', 'learn', 'apply', 'test']);
-    expect(s.blocks.map((b) => b.budgetSec / 60)).toEqual([5, 8, 11, 6]);
-    expect(BLOCK_MINUTES).toEqual({ review: 5, learn: 8, apply: 11, test: 6 });
+    expect(s.blocks.map((b) => b.budgetSec / 60)).toEqual([4, 6, 16, 4]);
+    expect(BLOCK_MINUTES).toEqual({ review: 4, learn: 6, apply: 16, test: 4 });
     expect(s.date).toBe(localDate(T0));
     expect(s.plannerVersion).toBe(PLANNER_VERSION);
     expect(s.blocks.every((b) => b.reason.length > 0)).toBe(true);
@@ -35,9 +35,9 @@ describe('session plan', () => {
     const s = plan([], { dueCount: 500 });
     const learn = s.blocks.find((b) => b.kind === 'learn')!;
     expect(learn.status).toBe('pending');
-    expect(learn.budgetSec).toBe(8 * 60);
+    expect(learn.budgetSec).toBe(6 * 60);
     expect(learn.conceptId).toBe('safety.hanging-pieces');
-    expect(s.blocks.find((b) => b.kind === 'review')!.budgetSec).toBe(5 * 60); // hard cap
+    expect(s.blocks.find((b) => b.kind === 'review')!.budgetSec).toBe(4 * 60); // hard cap
   });
 
   it('with nothing due, skips review and gives its minutes to practice', () => {
@@ -45,8 +45,8 @@ describe('session plan', () => {
     const review = s.blocks[0]!;
     expect(review.status).toBe('skipped');
     expect(review.budgetSec).toBe(0);
-    expect(s.blocks[2]!.budgetSec).toBe((11 + 5) * 60);
-    expect(s.blocks[3]!.budgetSec).toBe(6 * 60);
+    expect(s.blocks[2]!.budgetSec).toBe((16 + 4) * 60);
+    expect(s.blocks[3]!.budgetSec).toBe(4 * 60);
   });
 
   it('applies the concept being learned in the apply block', () => {
@@ -78,7 +78,7 @@ describe('session plan', () => {
     expect(learn.status).toBe('skipped');
     expect(learn.conceptId).toBeNull();
     expect(learn.notice).toMatch(/connection/);
-    expect(s.blocks[2]!.budgetSec).toBe((11 + 8) * 60);
+    expect(s.blocks[2]!.budgetSec).toBe((16 + 6) * 60);
     // apply goes to a concept that was studied and still awaits its check
     const taught = CONCEPTS.filter((c) => c.localLessons.length && c.assessment.kind !== 'none-yet').map((c) => c.id);
     expect(taught).toContain(s.blocks[2]!.conceptId);

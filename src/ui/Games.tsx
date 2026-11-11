@@ -15,6 +15,8 @@ import type { GameRecord, TimeClass } from '../games/types';
 import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { bestLineFor } from '../engine/interactive';
+import { localDate } from '../schedule/session';
 
 export function useGames(): GameRecord[] | undefined {
   const db = useDb();
@@ -247,18 +249,31 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
   const armed = useArmed();
   const [fen, setFen] = useState(event.fen);
   const [resetKey, setResetKey] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const [other, setOther] = useState<'worse' | 'not-faulted' | 'unchecked' | null>(null);
   const started = useRef(Date.now());
 
   async function record(uci: string | null, shown: boolean) {
     const pos = positionFromFen(event.fen);
     const ok = !!uci && sameMove(pos, uci, event.best);
+    // Another move is not a failure until something shows it is worse. The built-in engine is
+    // asked; within ten points of the stored best move, or with no answer, nothing is recorded
+    // against it.
+    let other: 'worse' | 'not-faulted' | 'unchecked' | null = null;
+    if (uci && !ok) {
+      setChecking(true);
+      const line = await bestLineFor(fenOf(applyUci(pos, uci)));
+      setChecking(false);
+      other = !line ? 'unchecked' : 100 - line.wp >= event.bestWp - 10 ? 'not-faulted' : 'worse';
+    }
+    setOther(other);
     setResult({ ok, playedSan: uci ? sanOf(pos, uci) : null, shown });
     setFen(fenOf(applyUci(pos, event.best)));
     setResetKey((k) => k + 1);
     await recordAttempt(db, {
       sessionId, context: 'review', exerciseId: drill.id, exerciseKind: 'own-game', contentVersion: game.analysisKey ?? 'unanalysed',
       conceptId: null, themes: [], rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current, firstMove: uci, played: uci ? [uci] : [],
-      mistakes: ok || shown ? 0 : 1, hints: shown ? 1 : 0, outcome: shown ? 'assisted' : ok ? 'success' : 'fail', acceptedAlternative: false,
+      mistakes: other === 'worse' ? 1 : 0, hints: shown ? 1 : 0, outcome: shown ? 'assisted' : ok ? 'success' : other === 'worse' ? 'fail' : 'skipped', acceptedAlternative: false,
     });
   }
 
@@ -269,13 +284,18 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
         <h2>{game.color === 'white' ? 'White' : 'Black'} to move</h2>
         <p className="muted">From your {game.timeClass} game on {game.endDate}, move {Math.floor(event.ply / 2) + 1}. The engine found one move here clearly better than the rest. Find it.</p>
       </header>
-      <Board fen={fen} orientation={game.color} movable={result ? null : game.color} lastMove={result ? event.best : null} onMove={(u) => void record(u, false)} resetKey={resetKey} />
+      <Board fen={fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={result ? event.best : null} onMove={(u) => void record(u, false)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
         {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>{event.bestSan}: the engine’s first choice.</strong><p>In the game you played {event.playedSan}.</p></div>}
         {result && !result.ok && (
           <div className="verdict neutral" data-testid="own-verdict" data-ok="false">
             <strong>The engine’s first choice is {event.bestLine}.</strong>
-            <p>{result.playedSan ? `${result.playedSan} was not evaluated for this position, so nothing is claimed about it beyond not being the first choice. ` : ''}Best move about {Math.round(event.bestWp)}% expected score, the second best {event.secondWp === null ? 'unknown' : `${Math.round(event.secondWp)}%`}. It comes back in your review queue.</p>
+            <p>
+              {result.playedSan && other === 'not-faulted' ? `The built-in engine’s check does not fault ${result.playedSan} either, so it is not scored. ` : ''}
+              {result.playedSan && other === 'unchecked' ? `${result.playedSan} could not be checked on this device, so it is not scored. ` : ''}
+              {result.playedSan && other === 'worse' ? `The built-in engine rates ${result.playedSan} clearly lower; it comes back in your review queue. ` : ''}
+              Best move about {Math.round(event.bestWp)}% expected score, the second best {event.secondWp === null ? 'unknown' : `${Math.round(event.secondWp)}%`}.
+            </p>
           </div>
         )}
       </div>
@@ -393,7 +413,10 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
   const live = useLiveRatings();
   if (!games) return null;
   const rapid = ratingSeries(games, 'rapid');
-  const early = earlyBlunderGames(games, { timeClass: 'rapid', sinceDate });
+  // Training began on the day of the first recorded attempt.
+  const firstTs = attempts.reduce((t, a) => Math.min(t, a.ts), Infinity);
+  const trainingStart = Number.isFinite(firstTs) ? localDate(firstTs) : undefined;
+  const early = earlyBlunderGames(games, { timeClass: 'rapid', sinceDate, trainingStart });
   const sense = senseStats(attempts, since);
   const s = sense['safe-or-not'];
   const c = sense['chance-or-not'];
@@ -414,6 +437,7 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
               <strong>{early.withBlunder} of {early.games}</strong> rapid games had a move in the first {EARLY_MOVES} that lost material or allowed mate ({formatPct(early.rate)}, plausible range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)}).
               {early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : early.windowPending > 0 ? ` The last ${COMPARE_WINDOW} games against the ${COMPARE_WINDOW} before will be shown once ${early.windowPending} of those games ${early.windowPending === 1 ? 'has' : 'have'} been measured.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`}
               {` All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.`}
+              {early.beforeTraining && early.sinceTraining ? ` Before you started training here (${trainingStart}): ${early.beforeTraining.withBlunder} of ${early.beforeTraining.games} games. Since: ${early.sinceTraining.withBlunder} of ${early.sinceTraining.games}.` : ''}
               {early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
             </>
           )}
