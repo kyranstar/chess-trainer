@@ -14,7 +14,7 @@ import { GameCards, Headline, useGames } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
 import { timeUse } from '../games/metrics';
-import { ownMoveSummary, PACE_DOWN, PACE_UP, PACE_WINDOW, paceFrom, PACES } from '../schedule/pace';
+import { conditionDifference, ownMoveSummary, TIMED_SECONDS } from '../schedule/pace';
 
 const DAY = 86_400_000;
 const PERIODS = [
@@ -379,34 +379,46 @@ function safeSan(fen: string, uci: string): string {
 function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: Attempt[]; since: number | undefined; sinceDate: string | undefined; periodLabel: string }) {
   const games = useGames();
   const s = ownMoveSummary(attempts, since);
-  const pace = paceFrom(attempts);
-  const established = s.clean + s.failed;
+  const passed = s.grades.best + s.grades.good + s.grades.inaccuracy;
+  const rated = passed + s.grades.mistake + s.grades.blunder;
+  const answered = rated + s.grades.unrated;
+  const diff = conditionDifference(s.timed, s.untimed);
+  const points = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(Math.round(100 * x))}`;
   const rapid = games ? timeUse(games, 'rapid', { sinceDate }) : null;
-  const iv = established ? wilson(s.clean, established) : null;
+  const iv = rated ? wilson(passed, rated) : null;
+  const line = (c: typeof s.timed) => {
+    const all = c.passed + c.failed + c.unrated;
+    return `${c.passed} of ${all} first looks passed${all ? ` (${formatPct(c.passed / all)})` : ''}${c.unrated ? `; ${c.unrated} of them could not be rated, so ${c.passed} of ${c.passed + c.failed} rated` : ''}`;
+  };
+  const rate = (b: { decisions: number; errors: number }) => `${b.errors} of ${b.decisions} moves${b.decisions ? ` (${(100 * b.errors / b.decisions).toFixed(1)}%)` : ''}`;
   return (
     <section className="card" data-testid="card-ownmove">
       <h2>Your own moves</h2>
-      {established + s.notScored + s.timeouts === 0 ? (
+      {answered === 0 ? (
         <p className="metric-empty">No “Your move” positions played yet. They are part of “Just practise” and have their own entry under Practice.</p>
       ) : (
         <>
           <p className="metric-line" data-testid="ownmove-clean">
-            <span className="metric-value">{s.clean} of {established}</span>
-            {iv && <span className="metric-pct">{formatPct(s.clean / established)}</span>}
-            <span className="metric-range">moves passed (rated best, good or an inaccuracy){iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
+            <span className="metric-value">{passed} of {rated}</span>
+            {iv && <span className="metric-pct">{formatPct(passed / rated)}</span>}
+            <span className="metric-range">rated moves passed (best, good or an inaccuracy){iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
           </p>
-          <p data-testid="ownmove-grades">Best {s.grades.best}, good {s.grades.good}, inaccuracies {s.grades.inaccuracy}, mistakes {s.grades.mistake}, blunders {s.grades.blunder}{s.grades.unrated ? `, not rated ${s.grades.unrated}` : ''}{s.timeouts ? `; ${s.timeouts} ${s.timeouts === 1 ? 'was' : 'were'} not made in time` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
+          <p data-testid="ownmove-grades">Best {s.grades.best}, good {s.grades.good}, inaccuracies {s.grades.inaccuracy}, mistakes {s.grades.mistake}, blunders {s.grades.blunder}{s.grades.unrated ? `, not rated ${s.grades.unrated}` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
+          <p data-testid="ownmove-pace">
+            With {TIMED_SECONDS} seconds on the clock: {line(s.timed)}{s.timed.late ? `; ${s.timed.late} ${s.timed.late === 1 ? 'was' : 'were'} made after the time ran out` : ''}. With no clock: {line(s.untimed)}.
+            {diff && ` Timed minus untimed: ${points(diff.diff)} points, plausible range ${points(diff.lo)} to ${points(diff.hi)}; a range that includes 0 shows no difference yet.`}
+            {s.interrupted > 0 && ` ${s.interrupted} ${s.interrupted === 1 ? 'answer is' : 'answers are'} left out of this comparison because the app left the screen while the move was being chosen.`}
+            {' '}About one position in three gets the clock, chosen by the position and not by how you are doing.
+          </p>
         </>
       )}
-      <p data-testid="ownmove-pace">
-        {pace.pace === 0 ? 'No clock yet.' : `Clock: ${pace.pace} seconds a move.`} Passed at this pace: {pace.atThisPace.clean} of {pace.atThisPace.n}. The clock tightens after {PACE_UP} passes in {PACE_WINDOW} (next: {PACES[Math.min(pace.index + 1, PACES.length - 1)]} seconds{pace.index === PACES.length - 1 ? ', the fastest' : ''}) and loosens again at {PACE_DOWN} or fewer. A ten-minute game allows about 15 seconds a move.
-      </p>
       {rapid && rapid.games > 0 && (
         <p data-testid="ownmove-time">
-          In your {rapid.games} measured rapid games: {rapid.errors.overHalfClock} of {rapid.errors.n} major errors were made with more than half the clock left{rapid.medianEndShareLosses !== null ? `; the games you lost ended with a median of ${Math.round(100 * rapid.medianEndShareLosses)}% of your time unused (${rapid.lossesOverHalfUnused} of ${rapid.losses} with more than half)` : ''}.
+          In your {rapid.games} measured rapid games, major errors came on {rate(rapid.overHalf)} begun with more than half the clock left, and on {rate(rapid.halfOrLess)} begun with half or less.
+          {rapid.losses > 0 && ` Of ${rapid.losses} lost games, ${rapid.lossesOnTime} ${rapid.lossesOnTime === 1 ? 'was' : 'were'} lost on time. Of the other ${rapid.losses - rapid.lossesOnTime}, ${rapid.lossesOverHalfUnused} had more than half the clock left after your last completed move.`}
         </p>
       )}
-      <p className="definition-small">Each move is rated by the built-in engine against its own first choice: under 5 points below is good, under 10 an inaccuracy, under 20 a mistake, more a blunder; allowing mate in one is always a blunder. The engine is a small one and can be wrong. {periodLabel}. The rapid figures are from your own games’ clocks and say whether time was actually short; they are not an explanation.</p>
+      <p className="definition-small">Each move is rated by the built-in engine against its own first choice: under 5 points below is good, under 10 an inaccuracy, under 20 a mistake, more a blunder; allowing mate in one is always a blunder. The engine is a small one and can be wrong. First looks at a position only; {periodLabel}. The rapid figures are from your own games’ clocks: the clock is recorded after each move you made, so time spent on a move you never completed is not in them. They are counts, not an explanation.</p>
     </section>
   );
 }

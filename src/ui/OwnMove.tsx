@@ -6,7 +6,8 @@ import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
 import { bestLineFor } from '../engine/interactive';
 import { DEVICE_NODES, lineSan } from '../games/analyse';
-import { describeFree, describeLoose, GRADE_LABEL, gradeMove, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
+import { describeFree, describeLoose, GRADE_LABEL, gradeMove, isPunishingReply, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
+import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 
 type Phase = 'move' | 'predict' | 'checking' | 'done';
@@ -27,26 +28,39 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
   const db = useDb();
   useFocusMode();
   const [phase, setPhase] = useState<Phase>('move');
+  const phaseRef = useRef<Phase>('move');
+  phaseRef.current = phase;
   const [fen, setFen] = useState(item.fen);
   const [lastMove, setLastMove] = useState<string | null>(null);
   const [mine, setMine] = useState<{ uci: string; san: string } | null>(null);
   const [facts, setFacts] = useState<MovePicture | null>(null);
   // The clock runs only while the move is being chosen, and only while the app is on screen.
+  const [retrying, setRetrying] = useState(false);
   const [left, setLeft] = useState(pace);
   const timedOut = useRef(false);
   const decisionMs = useRef(0);
+  const replyMs = useRef<number | null>(null);
+  // Time is measured, not counted in ticks: the milliseconds the app has been on screen in
+  // this phase. A slow tick cannot give extra time, and time in the background is not counted.
+  const visibleMs = useRef(0);
+  const lastTick = useRef(performance.now());
   useEffect(() => {
-    if (pace <= 0 || phase !== 'move' || retrying) return;
+    visibleMs.current = 0;
+    lastTick.current = performance.now();
+    if (phase !== 'move' && phase !== 'predict') return;
     const t = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      setLeft((x) => {
-        const next = Math.max(0, x - 0.25);
-        if (next === 0) timedOut.current = true;
-        return next;
-      });
+      const now = performance.now();
+      if (document.visibilityState === 'visible') visibleMs.current += now - lastTick.current;
+      lastTick.current = now;
+      if (phase === 'move' && pace > 0 && !retrying) {
+        const remaining = Math.max(0, pace - visibleMs.current / 1000);
+        if (remaining === 0) timedOut.current = true;
+        setLeft(remaining);
+      }
     }, 250);
     return () => clearInterval(t);
-  }, [pace, phase]);
+  }, [pace, phase, retrying]);
+  const elapsedInPhase = () => Math.round(visibleMs.current + (document.visibilityState === 'visible' ? performance.now() - lastTick.current : 0));
   const [named, setNamed] = useState<{ uci: string; san: string } | null>(null);
   const [result, setResult] = useState<{ verdict: MoveGrade; line: string | null; wp: number | null; pv: string[]; loss: number | null; bestSan: string | null; bestWp: number | null } | null>(null);
   // The engine's first choice for the position is searched for while the learner thinks.
@@ -55,26 +69,37 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
   // After the answer the engine's line can be played through on the board, a move at a time.
   const [step, setStep] = useState(0);
   // A second try after seeing the facts is practice, not a result: it is never recorded.
-  const [retrying, setRetrying] = useState(false);
-  const started = useRef(Date.now());
   const recorded = useRef(false);
   useScreenChange(`${item.id}|${phase}`);
   const armed = useArmed();
   const me = item.color === 'white' ? 'White' : 'Black';
   const opponent = item.color === 'white' ? 'black' : 'white';
 
-  // A position that was shown has been seen, answered or not.
+  // A position that was shown has been seen, answered or not. That is written down while it
+  // is still on screen (not on leaving: a reload or a closed app never gets that far), so the
+  // position can never come back later as a first look. The answer replaces this row.
+  const exposure = useRef<Promise<Attempt> | null>(null);
   useEffect(() => {
-    return () => {
-      if (recorded.current || Date.now() - started.current < MIN_SHOWN_MS) return;
-      recorded.current = true;
-      void recordAttempt(db, {
-        sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v1', conceptId: 'safety.threat-scan', themes: ['own-move', 'left'],
-        rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current, firstMove: null, played: [], mistakes: 0, hints: 0, outcome: 'skipped', acceptedAlternative: false,
+    const t = setTimeout(() => {
+      if (recorded.current || exposure.current) return;
+      exposure.current = recordAttempt(db, {
+        sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v3', conceptId: 'safety.threat-scan', themes: ['own-move', 'left'],
+        rating: null, ts: Date.now(), elapsedMs: MIN_SHOWN_MS, firstMove: null, played: [], mistakes: 0, hints: 0, outcome: 'skipped', acceptedAlternative: false,
       });
-    };
+    }, MIN_SHOWN_MS);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
+  // Hiding the page stops the clock but not the thinking: such an answer is practice and is
+  // kept out of the timed comparison.
+  const interrupted = useRef(false);
+  useEffect(() => {
+    const hidden = () => {
+      if (document.visibilityState !== 'visible' && phaseRef.current === 'move' && !recorded.current) interrupted.current = true;
+    };
+    document.addEventListener('visibilitychange', hidden);
+    return () => document.removeEventListener('visibilitychange', hidden);
+  }, []);
 
   async function conclude(f: MovePicture, my: { uci: string; san: string }, reply: { uci: string; san: string } | null) {
     setPhase('checking');
@@ -102,18 +127,22 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     if (recorded.current) return;
     recorded.current = true;
     const what = f.mateInOne ? 'mate' : f.loose.length ? 'loose' : 'none';
-    const sawIt = !reply ? 'no-reply-named' : reply.uci === f.mateInOne?.uci || f.loose.some((l) => reply.uci.startsWith(`${l.by.from}${l.square}`)) ? 'named-it' : 'named-another';
+    const sawIt = !reply ? 'no-reply-named' : isPunishingReply(f, reply.uci) ? 'named-it' : 'named-another';
+    // The answer takes the place of the "shown" row written while the position was on screen.
+    if (exposure.current) await db.attempts.delete((await exposure.current).uuid);
     const a = await recordAttempt(db, {
       sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v3', conceptId: 'safety.threat-scan',
       themes: [
         'own-move', verdict, what, sawIt, `pace:${pace}`,
-        ...(timedOut.current ? ['timeout'] : []),
+        ...(timedOut.current ? ['late'] : []),
+        ...(interrupted.current ? ['interrupted'] : []),
+        ...(replyMs.current !== null ? [`reply-ms:${replyMs.current}`] : []),
         ...(f.mateBefore || f.freeBefore.length ? [f.tookFree || my.uci === f.mateBefore?.uci ? 'free-taken' : 'free-left'] : []),
         ...(f.threatsBefore.length ? [f.dealtWith.length === f.threatsBefore.length ? 'threat-met' : 'threat-left'] : []),
       ],
       rating: null, ts: Date.now(), elapsedMs: decisionMs.current, firstMove: my.uci, played: reply ? [my.uci, reply.uci] : [my.uci], mistakes: outcomeOfGrade(grade) === 'fail' ? 1 : 0, hints: 0,
-      // A passing move made after the clock ran out is not a pass at this pace: it is not scored.
-      outcome: outcomeOfGrade(grade) === 'success' && timedOut.current ? 'skipped' : outcomeOfGrade(grade), acceptedAlternative: false,
+      // Running over the allowance does not change the rating; it is stored beside it ('late').
+      outcome: outcomeOfGrade(grade), acceptedAlternative: false,
     });
     onRecorded?.(a);
   }
@@ -122,7 +151,8 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     if (phase === 'move') {
       const my = { uci, san: sanOf(positionFromFen(item.fen), uci) };
       const f = movePicture(item.fen, uci);
-      decisionMs.current = Date.now() - started.current;
+      decisionMs.current = elapsedInPhase();
+      if (pace > 0 && !retrying && decisionMs.current > pace * 1000) timedOut.current = true;
       setMine(my);
       setFacts(f);
       setFen(f.afterFen);
@@ -131,6 +161,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
       if (positionFromFen(f.afterFen).isEnd()) void conclude(f, my, null);
       else setPhase('predict');
     } else if (phase === 'predict' && facts && mine) {
+      replyMs.current = elapsedInPhase();
       const reply = { uci, san: sanOf(positionFromFen(facts.afterFen), uci) };
       setNamed(reply);
       void conclude(facts, mine, reply);
@@ -170,7 +201,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
         {retrying && phase !== 'done' && <p className="muted" data-testid="own-move-retry-note">Second try. This one is not recorded.</p>}
         {pace > 0 && phase === 'move' && !retrying && (
           <p className={`move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
-            {left > 0 ? `${Math.ceil(left)} s for this move` : `No move in ${pace} seconds. Play it now; it is recorded as not made in time.`}
+            {left > 0 ? `${Math.ceil(left)} s for this move` : `${pace} seconds are up. Take the time you need; the move is rated as usual and noted as late.`}
           </p>
         )}
       </header>
@@ -179,9 +210,9 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
         {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
         {phase === 'done' && result && facts && mine && (
           <div className={`verdict ${result.verdict === 'best' || result.verdict === 'good' ? 'right' : result.verdict === 'mistake' || result.verdict === 'blunder' ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
-            <strong data-testid="own-move-grade">{GRADE_LABEL[result.verdict]}{timedOut.current ? ', not made in time' : ''}.</strong>
+            <strong data-testid="own-move-grade">{GRADE_LABEL[result.verdict]}{timedOut.current ? `, made after the ${pace} seconds` : ''}.</strong>
             <p data-testid="own-move-rating">
-              {facts.mateInOne
+              {facts.mateInOne && !facts.mateUnavoidable
                 ? `${mine.san} allows mate in one: ${facts.mateInOne.san}.`
                 : result.verdict === 'unrated'
                   ? `The built-in engine did not answer, so ${mine.san} is not rated.`
@@ -189,14 +220,14 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
                     ? `${mine.san} is the built-in engine’s first choice (about ${result.bestWp} out of 100 for you).`
                     : `The built-in engine rates ${mine.san} ${result.loss ?? 0} point${result.loss === 1 ? '' : 's'} below its first choice, ${result.bestSan}: ${result.wp} against ${result.bestWp} out of 100.`}
             </p>
-            {!facts.mateInOne && facts.loose.length === 0 && <p>After {mine.san} nothing of yours can be taken for nothing or by a cheaper piece, and there is no mate in one.</p>}
+            {facts.mateInOne && facts.mateUnavoidable && <p>Mate in one follows ({facts.mateInOne.san}), but every legal move allowed one.</p>}
+            {!facts.mateInOne && facts.loose.length === 0 && <p>After {mine.san} no piece of yours can be taken without an immediate recapture or by a cheaper piece, and there is no mate in one.</p>}
             {facts.loose.map((l) => <p key={l.square} data-testid="own-move-loose">{describeLoose(l)}{facts.threatsBefore.some((t) => t.square === l.square) ? ' It could already be taken before your move.' : ''}</p>)}
-            {facts.dealtWith.length > 0 && <p data-testid="own-move-met">Before your move {facts.dealtWith.length === 1 ? `your piece on ${facts.dealtWith[0]} could be taken` : `your pieces on ${facts.dealtWith.join(' and ')} could be taken`}; your move dealt with that.</p>}
+            {facts.dealtWith.length > 0 && <p data-testid="own-move-met">Before your move {facts.dealtWith.length === 1 ? `your piece on ${facts.dealtWith[0]} could be taken` : `your pieces on ${facts.dealtWith.join(' and ')} could be taken`}; after your move that capture is no longer there.</p>}
             {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">There was a mate in one: {facts.mateBefore.san}.</p>}
             {!facts.tookFree && !(facts.mateBefore && mine.uci === facts.mateBefore.uci) && facts.freeBefore.slice(0, 2).map((l) => <p key={`free-${l.square}`} data-testid="own-move-free">{describeFree(l)}</p>)}
-            {timedOut.current && <p>The move was not made within {pace} seconds.</p>}
             {named && (facts.mateInOne || facts.loose.length > 0) && (
-              <p>{named.uci === facts.mateInOne?.uci || facts.loose.some((l) => named.uci.startsWith(`${l.by.from}${l.square}`)) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
+              <p>{isPunishingReply(facts, named.uci) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
             )}
             {result.line && <p>After {mine.san} the built-in engine continues {result.line}.</p>}
             <p className="definition-small">
@@ -223,9 +254,8 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
 }
 
 /** "Your move" on its own: positions not yet tried, newest games first, each chosen once and kept. */
-export function OwnMoveRun({ items, done, pace, onFinished }: { items: MoveItem[] | null; done: Set<string>; pace: number; onFinished: () => void }) {
+export function OwnMoveRun({ items, done, pace, onFinished }: { items: MoveItem[] | null; done: Set<string>; /** A clock for every position, for trying one out; normally null. */ pace: number | null; onFinished: () => void }) {
   const [n, setN] = useState(0);
-  // The pace is fixed with the item: recording an answer may move the ladder, but not under a position on screen.
   const latch = useRef<{ n: number; item: MoveItem; pace: number } | null>(null);
   const shown = useRef(new Set<string>());
   if (!items) return <p className="muted">Loading your games</p>;
@@ -233,7 +263,7 @@ export function OwnMoveRun({ items, done, pace, onFinished }: { items: MoveItem[
     // Newest game first; within a game, in the order the positions arose.
     const next = items.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.gameId === b.gameId ? a.ply - b.ply : a.gameId < b.gameId ? -1 : 1)).find((m) => !done.has(m.id) && !shown.current.has(m.id));
     if (next) {
-      latch.current = { n, item: next, pace };
+      latch.current = { n, item: next, pace: pace ?? (isTimed(next.id) ? TIMED_SECONDS : 0) };
       shown.current.add(next.id);
     } else latch.current = null;
   }

@@ -300,22 +300,48 @@ describe('the headline compares fixed groups of games (outside reviewer, third p
 
 
 describe('how the clock is used in real games', () => {
-  it('reports clock left at the end of losses and how many major errors came with over half the clock left, with their denominators', () => {
-    const g = (id: string, result: 'win' | 'loss', decisions: [number, number, number | null][]) => ({
-      id, source: 'chess.com', url: null, date: '2026-11-01', endDate: '2026-11-01', endTime: null, timeControl: '600', timeClass: 'rapid', color: 'white', result,
-      termination: null, playerRating: 1, opponentRating: 1, opponent: 'x', moves: [], clocks: [1], analysis: null, importedAt: 0, updatedAt: 0, analysisKey: null, rated: true,
-      measure: { decisions, events: [], facts: [] }, measureKey: 'k',
-    }) as unknown as GameRecord;
+  const g = (id: string, result: 'win' | 'loss', decisions: [number, number, number | null][], termination: string | null = null) => ({
+    id, source: 'chess.com', url: null, date: '2026-11-01', endDate: '2026-11-01', endTime: null, timeControl: '600', timeClass: 'rapid', color: 'white', result,
+    termination, playerRating: 1, opponentRating: 1, opponent: 'x', moves: [], clocks: [1], analysis: null, importedAt: 0, updatedAt: 0, analysisKey: null, rated: true,
+    measure: { decisions, events: [], facts: [] }, measureKey: 'k',
+  }) as unknown as GameRecord;
+
+  it('reports the clock after the last completed move of losses, and error rates with over half the clock and with half or less, each with its denominator', () => {
     const t = timeUse([
-      g('a', 'loss', [[0, 0, 590], [2, 30, 560], [4, 25, 300], [6, 0, 290]]), // ends with 290 of 600 left; errors begun at 590 and 560 seconds
-      g('b', 'loss', [[0, 0, 500], [2, 40, 100], [4, 22, 20]]), // ends with 20 left; errors begun at 500 and 100
+      g('a', 'loss', [[0, 0, 590], [2, 30, 560], [4, 25, 300], [6, 0, 290]]), // last clock 290 of 600; errors begun at 590 and 560 seconds
+      g('b', 'loss', [[0, 0, 500], [2, 40, 100], [4, 22, 20]]), // last clock 20; errors begun at 500 and 100
       g('c', 'win', [[0, 0, 550]]),
     ], 'rapid');
     expect(t.games).toBe(3);
     expect(t.losses).toBe(2);
+    expect(t.lossesOnTime).toBe(0);
     expect(t.lossesOverHalfUnused).toBe(0);
     expect(t.medianEndShareLosses).toBeCloseTo((290 / 600 + 20 / 600) / 2, 5);
-    expect(t.errors).toEqual({ n: 4, overHalfClock: 3 });
+    // Decisions begun with more than 300 s: a(600, 590, 560), b(600, 500), c(600) = 6, three of them errors.
+    // With 300 s or less: a(300), b(100) = 2, one of them an error.
+    expect(t.overHalf).toEqual({ decisions: 6, errors: 3 });
+    expect(t.halfOrLess).toEqual({ decisions: 2, errors: 1 });
+  });
+
+  it('counts a game lost on time apart, and never as a game that ended with time in hand', () => {
+    const t = timeUse([
+      g('a', 'loss', [[0, 0, 590], [2, 0, 400]], 'x won on time'), // the last completed move left 400 s; the flag fell after that
+      g('b', 'loss', [[0, 0, 590], [2, 0, 380]], 'x won by resignation'),
+      g('c', 'loss', [[0, 0, 590], [2, 0, 360]], 'x won by checkmate'),
+    ], 'rapid');
+    expect(t.losses).toBe(3);
+    expect(t.lossesOnTime).toBe(1);
+    // A fallen flag and a clock after the last completed move are different observations: the
+    // median and the "more than half" count are over the losses that were not on time.
+    expect(t.lossesOverHalfUnused).toBe(2);
+    expect(t.medianEndShareLosses).toBeCloseTo(370 / 600, 5);
+  });
+
+  it('leaves out decisions whose clock is not known and says how many', () => {
+    const t = timeUse([g('a', 'win', [[0, 0, null], [2, 30, 500], [4, 0, 480]])], 'rapid');
+    // First decision begins at 600; the second has no clock before it; the third begins at 500.
+    expect(t.overHalf).toEqual({ decisions: 2, errors: 0 });
+    expect(t.clockUnknown).toBe(1);
     expect(timeUse([], 'rapid')).toMatchObject({ games: 0, medianEndShareLosses: null });
   });
 });

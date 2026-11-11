@@ -34,6 +34,15 @@ export interface MoveFacts {
   mateInOne: { uci: string; san: string } | null;
   /** Position after the learner's move, opponent to move. */
   afterFen: string;
+  /** Every capture (from+to) that takes one of the loose pieces on the terms above. */
+  captures: string[];
+  /** Every mating move the opponent has. */
+  mates: string[];
+}
+
+/** Whether a reply the learner named is one that matters: a mate, or a capture of a loose piece on those terms. */
+export function isPunishingReply(facts: MoveFacts, uci: string): boolean {
+  return facts.mates.includes(uci) || facts.mates.includes(uci.slice(0, 4)) || facts.captures.includes(uci.slice(0, 4));
 }
 
 type Pos = ReturnType<typeof positionFromFen>;
@@ -42,38 +51,52 @@ type Pos = ReturnType<typeof positionFromFen>;
  * Pieces of the side NOT to move that the side to move can capture and keep the gain
  * (nothing takes back, or the capturer is cheaper), and a mate in one for the side to move.
  */
-function scan(pos: Pos): { loose: Loose[]; mate: { uci: string; san: string } | null } {
+function scan(pos: Pos): { loose: Loose[]; mate: { uci: string; san: string } | null; captures: string[]; mates: string[] } {
   const victim: Color = pos.turn === 'white' ? 'black' : 'white';
   const found = new Map<string, Loose>();
+  const captures: string[] = [];
+  const mates: string[] = [];
   let mate: { uci: string; san: string } | null = null;
   for (const [from, tos] of legalDests(pos)) {
     for (const to of tos) {
       const move = needsPromotion(pos, from, to) ? `${from}${to}q` : `${from}${to}`;
       const next = applyUci(pos, move);
-      if (!mate && isCheckmate(next)) mate = { uci: move, san: sanOf(pos, move) };
-      const target = pos.board.get(parseSquare(to)!);
+      if (isCheckmate(next)) {
+        mates.push(move);
+        mate ??= { uci: move, san: sanOf(pos, move) };
+      }
       const capturer = pos.board.get(parseSquare(from)!);
-      if (!target || !capturer || target.color !== victim || target.role === 'king') continue;
-      // Can the capturing piece be taken back on that square? (Legal moves only: pins count.)
+      if (!capturer) continue;
+      // The piece taken stands on the destination square, except en passant: there it is the
+      // pawn beside the capturing pawn, on the capturer's rank and the destination's file.
+      let square = to;
+      let target = pos.board.get(parseSquare(to)!);
+      if (!target && capturer.role === 'pawn' && from[0] !== to[0]) {
+        square = `${to[0]}${from[1]}`;
+        target = pos.board.get(parseSquare(square)!);
+      }
+      if (!target || target.color !== victim || target.role === 'king') continue;
+      // Can the capturing piece be taken back at once on the square it lands on? (Legal moves only: pins count.)
       const recapture = [...legalDests(next).values()].some((dests) => dests.includes(to));
       const reason: Loose['reason'] | null = !recapture ? 'undefended' : VALUE[capturer.role as Role] < VALUE[target.role as Role] ? 'cheaper-attacker' : null;
       if (!reason) continue;
-      const entry: Loose = { square: to, piece: target.role as Role, by: { from, piece: capturer.role as Role }, reason };
-      const had = found.get(to);
+      captures.push(`${from}${to}`);
+      const entry: Loose = { square, piece: target.role as Role, by: { from, piece: capturer.role as Role }, reason };
+      const had = found.get(square);
       // One line per piece: "undefended" before "cheaper attacker", then the cheapest capturer.
       const better = !had || (had.reason !== 'undefended' && reason === 'undefended') || (had.reason === reason && VALUE[entry.by.piece] < VALUE[had.by.piece]);
-      if (better) found.set(to, entry);
+      if (better) found.set(square, entry);
     }
   }
   const loose = [...found.values()].sort((x, y) => VALUE[y.piece] - VALUE[x.piece] || (x.square < y.square ? -1 : 1));
-  return { loose, mate };
+  return { loose, mate, captures, mates };
 }
 
 /** Exact facts about the position after `uci` is played in `fen`. */
 export function looseAfter(fen: string, uci: string): MoveFacts {
   const after = applyUci(positionFromFen(fen), uci);
   const s = scan(after);
-  return { loose: s.loose, mateInOne: s.mate, afterFen: fenOf(after) };
+  return { loose: s.loose, mateInOne: s.mate, afterFen: fenOf(after), captures: s.captures, mates: s.mates };
 }
 
 /**
@@ -91,6 +114,18 @@ export interface MovePicture extends MoveFacts {
   tookFree: boolean;
   /** Squares of threatened pieces that are no longer loose after the move. */
   dealtWith: string[];
+  /** A mate in one is allowed, and every legal move allowed one: it was not this move's doing. */
+  mateUnavoidable: boolean;
+}
+
+function allMovesAllowMate(pos: Pos): boolean {
+  for (const [from, tos] of legalDests(pos)) {
+    for (const to of tos) {
+      const move = needsPromotion(pos, from, to) ? `${from}${to}q` : `${from}${to}`;
+      if (scan(applyUci(pos, move)).mate === null) return false;
+    }
+  }
+  return true;
 }
 
 export function movePicture(fen: string, uci: string): MovePicture {
@@ -113,7 +148,10 @@ export function movePicture(fen: string, uci: string): MovePicture {
     threatsBefore,
     freeBefore: mine.loose,
     mateBefore: mine.mate,
-    tookFree: mine.loose.some((l) => l.square === to),
+    // The capture actually played must be one of those that were free; taking the same piece
+    // with something that is then lost is not it.
+    tookFree: mine.captures.includes(`${from}${to}`),
+    mateUnavoidable: !!after.mateInOne && allMovesAllowMate(pos),
     dealtWith: threatsBefore.filter((t) => (t.square === from ? !stillLoose(to) : !stillLoose(t.square))).map((t) => t.square),
   };
 }
@@ -143,7 +181,8 @@ export const GRADE_BANDS = { good: 5, inaccuracy: 10, mistake: 20 };
  * engine answer a move is not rated.
  */
 export function gradeMove(facts: MovePicture, rating: MoveRating | null, uci: string): MoveGrade {
-  if (facts.mateInOne) return 'blunder';
+  // Allowing a mate in one is a blunder, unless every legal move allowed one.
+  if (facts.mateInOne && !facts.mateUnavoidable) return 'blunder';
   const missedMate = !!facts.mateBefore && uci !== facts.mateBefore.uci;
   if (!rating) return missedMate ? 'mistake' : 'unrated';
   if (rating.isBest && !missedMate) return 'best';
@@ -218,14 +257,14 @@ const NAME: Record<Role, string> = { pawn: 'pawn', knight: 'knight', bishop: 'bi
 /** One plain sentence per fact. These are statements about captures, not advice. */
 export function describeLoose(l: Loose): string {
   return l.reason === 'undefended'
-    ? `Your ${NAME[l.piece]} on ${l.square} can be taken by the ${NAME[l.by.piece]} on ${l.by.from}, and nothing takes back.`
+    ? `Your ${NAME[l.piece]} on ${l.square} can be taken by the ${NAME[l.by.piece]} on ${l.by.from}, and nothing can take back at once.`
     : `Your ${NAME[l.piece]} on ${l.square} can be taken by the ${NAME[l.by.piece]} on ${l.by.from}, a cheaper piece.`;
 }
 
 /** A capture the learner had and did not make. A fact about the position, not a verdict on his move. */
 export function describeFree(l: Loose): string {
   return l.reason === 'undefended'
-    ? `You could have taken the ${NAME[l.piece]} on ${l.square} with the ${NAME[l.by.piece]} on ${l.by.from}, and nothing takes back.`
+    ? `You could have taken the ${NAME[l.piece]} on ${l.square} with the ${NAME[l.by.piece]} on ${l.by.from}, and nothing could take back at once.`
     : `You could have taken the ${NAME[l.piece]} on ${l.square} with the ${NAME[l.by.piece]} on ${l.by.from}, a cheaper piece.`;
 }
 

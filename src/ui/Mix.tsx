@@ -7,7 +7,7 @@ import { type MoveItem, moveItems } from '../games/ownmove';
 import { pickSense, type SenseItem } from '../games/sense';
 import type { Attempt } from '../db/types';
 import { MIX_EXTRA_MINUTES, MIX_MINUTES, type MixKind, nextMixKind, reviewOrder, runSummary } from '../schedule/mix';
-import { paceFrom } from '../schedule/pace';
+import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { pickTestConcept, puzzleBacked } from '../schedule/session';
 import { OwnGameDrill, useGames } from './Games';
 import { OwnMoveDrill } from './OwnMove';
@@ -91,7 +91,7 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
     if (kind === 'review') t.review = dueLeft[0];
     if (kind === 'move') {
       t.move = move;
-      t.pace = paceFrom(learner.attempts).pace;
+      t.pace = move && isTimed(move.id) ? TIMED_SECONDS : 0;
     }
     if (kind === 'safe') t.sense = safe;
     if (kind === 'chance') t.sense = chance;

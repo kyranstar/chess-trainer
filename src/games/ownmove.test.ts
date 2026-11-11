@@ -41,7 +41,7 @@ describe('exact facts about a move the learner chose', () => {
 });
 
 describe('rating a move against the engine\'s best move (owner decision: judge harder, say it plainly)', () => {
-  const nothing = { loose: [], mateInOne: null, afterFen: '', threatsBefore: [], freeBefore: [], mateBefore: null, tookFree: false, dealtWith: [] };
+  const nothing = { loose: [], mateInOne: null, afterFen: '', captures: [], mates: [], threatsBefore: [], freeBefore: [], mateBefore: null, tookFree: false, dealtWith: [], mateUnavoidable: false };
   it('bands by how far below the engine\'s first choice the move is rated', () => {
     expect(gradeMove(nothing, { loss: 0, isBest: true }, 'e2e4')).toBe('best');
     expect(gradeMove(nothing, { loss: 3, isBest: false }, 'e2e4')).toBe('good');
@@ -119,5 +119,48 @@ describe('the three checks of one move, all from legal move generation', () => {
   it('when the learner is in check there is no "what was already threatened" beyond the check itself', () => {
     const p = movePicture('4k3/8/8/8/8/8/4r3/4K3 w - - 0 1', 'e1e2');
     expect(p.threatsBefore).toEqual([]);
+  });
+});
+
+import { isPunishingReply } from './ownmove';
+
+describe('cases from the outside reviewer (fourth pass)', () => {
+  it('a pawn that can be taken en passant is seen', () => {
+    const f = looseAfter('6k1/8/8/8/p7/8/1P6/6K1 w - - 0 1', 'b2b4');
+    expect(f.loose.map((l) => `${l.piece}@${l.square} by ${l.by.piece}@${l.by.from}`)).toEqual(['pawn@b4 by pawn@a4']);
+  });
+
+  it('"took the free piece" means the capture that was free, not any capture on that square', () => {
+    // Nxb3 wins a rook for nothing; Qxb3 takes the same rook but loses the queen to ...Rxb3.
+    const fen = '1r4k1/8/8/8/8/1r6/3N4/1Q4K1 w - - 0 1';
+    expect(movePicture(fen, 'd2b3').tookFree).toBe(true);
+    expect(movePicture(fen, 'b1b3').tookFree).toBe(false);
+  });
+
+  it('any reply that does the job counts as naming it: another capture of the loose piece, or another mate', () => {
+    // After Nc3-d5 the knight can be taken by the e6 pawn or the c6 pawn.
+    const f = looseAfter('4k3/8/2p1p3/8/8/2N5/8/6K1 w - - 0 1', 'c3d5');
+    expect(isPunishingReply(f, 'e6d5')).toBe(true);
+    expect(isPunishingReply(f, 'c6d5')).toBe(true);
+    expect(isPunishingReply(f, 'e8e7')).toBe(false);
+    // Two different mates in one on the back rank.
+    const m = looseAfter('3rr1k1/5ppp/8/8/8/8/P4PPP/6K1 w - - 0 1', 'a2a3');
+    expect(isPunishingReply(m, 'd8d1')).toBe(true);
+    expect(isPunishingReply(m, 'e8e1')).toBe(true);
+    expect(isPunishingReply(m, 'g8h8')).toBe(false);
+  });
+
+  it('when every legal move allows mate in one, allowing it is not an avoidable blunder', () => {
+    // White king h1, boxed in; whatever White plays, ...Qg2 is mate.
+    const fen = '6k1/8/8/8/8/5q1p/7P/7K w - - 0 1';
+    const p = movePicture(fen, 'h1g1');
+    expect(p.mateInOne).not.toBeNull();
+    expect(p.mateUnavoidable).toBe(true);
+    const rating = { loss: 0, isBest: true };
+    expect(gradeMove(p, rating, 'h1g1')).toBe('best'); // rated like any other move, not called a blunder
+    // An avoidable one is still a blunder.
+    const avoidable = movePicture('rnbqkbnr/pppp1ppp/8/4p3/8/5P2/PPPPP1PP/RNBQKBNR w KQkq - 0 2', 'g2g4');
+    expect(avoidable.mateUnavoidable).toBe(false);
+    expect(gradeMove(avoidable, { loss: 2, isBest: false }, 'g2g4')).toBe('blunder');
   });
 });

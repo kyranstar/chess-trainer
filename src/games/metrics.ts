@@ -334,11 +334,27 @@ export interface TimeUse {
   /** Games of the time control with clock data and a measurement record. */
   games: number;
   losses: number;
-  /** Median share of the starting time still on the clock when a lost game ended. */
+  /** Losses in which the learner's time ran out: a fallen flag, a different observation from a clock reading. */
+  lossesOnTime: number;
+  /**
+   * Of the losses that were not on time: the median share of the starting time on the clock
+   * after the learner's last completed move. The PGN records the clock after each move, not
+   * at the end of the game, so time spent on a final move that was never made is not in it.
+   */
   medianEndShareLosses: number | null;
+  /** Of the losses that were not on time: how many had over half the starting time left after the last completed move. */
   lossesOverHalfUnused: number;
-  /** Major errors (20+ points), and how many were begun with over half the starting time left. */
-  errors: { n: number; overHalfClock: number };
+  /** Decisions begun with over half the starting time left, and how many were major errors (20+ points). */
+  overHalf: { decisions: number; errors: number };
+  /** The same for decisions begun with half the starting time or less. */
+  halfOrLess: { decisions: number; errors: number };
+  /** Decisions left out because the clock before them is not recorded. */
+  clockUnknown: number;
+}
+
+/** Chess.com words a loss on time as "<winner> won on time". */
+function lostOnTime(g: GameRecord): boolean {
+  return g.result === 'loss' && /\bon time\b/i.test(g.termination ?? '');
 }
 
 /**
@@ -347,7 +363,7 @@ export interface TimeUse {
  * learner's previous move (the starting time for his first).
  */
 export function timeUse(games: GameRecord[], timeClass: TimeClass, f: { sinceDate?: string } = {}): TimeUse {
-  const out: TimeUse = { games: 0, losses: 0, medianEndShareLosses: null, lossesOverHalfUnused: 0, errors: { n: 0, overHalfClock: 0 } };
+  const out: TimeUse = { games: 0, losses: 0, lossesOnTime: 0, medianEndShareLosses: null, lossesOverHalfUnused: 0, overHalf: { decisions: 0, errors: 0 }, halfOrLess: { decisions: 0, errors: 0 }, clockUnknown: 0 };
   const ends: number[] = [];
   for (const g of select(games, { timeClass, sinceDate: f.sinceDate })) {
     const base = Number(g.timeControl.split('+')[0]);
@@ -357,18 +373,25 @@ export function timeUse(games: GameRecord[], timeClass: TimeClass, f: { sinceDat
     let before: number | null = base;
     let last: number | null = null;
     for (const [, loss, clock] of decisions) {
-      if (before !== null && loss >= 20) {
-        out.errors.n++;
-        if (before > base / 2) out.errors.overHalfClock++;
+      if (before === null) out.clockUnknown++;
+      else {
+        const bucket = before > base / 2 ? out.overHalf : out.halfOrLess;
+        bucket.decisions++;
+        if (loss >= 20) bucket.errors++;
       }
       before = clock;
       if (clock !== null) last = clock;
     }
-    if (g.result === 'loss' && last !== null) {
+    if (g.result !== 'loss') continue;
+    if (lostOnTime(g)) {
       out.losses++;
-      ends.push(last / base);
-      if (last > base / 2) out.lossesOverHalfUnused++;
+      out.lossesOnTime++;
+      continue;
     }
+    if (last === null) continue;
+    out.losses++;
+    ends.push(last / base);
+    if (last > base / 2) out.lossesOverHalfUnused++;
   }
   if (ends.length) {
     ends.sort((a, b) => a - b);

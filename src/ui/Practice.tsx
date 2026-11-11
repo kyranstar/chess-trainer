@@ -11,7 +11,6 @@ import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
 import { moveItems } from '../games/ownmove';
-import { paceFrom } from '../schedule/pace';
 import { MixRun } from './Mix';
 import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
@@ -136,8 +135,7 @@ function OwnMoveRunFromGames({ learner, paceOverride }: { learner: Learner; pace
   const items = useMemo(() => (games ? moveItems(games) : null), [games]);
   const done = useRef<Set<string> | null>(null);
   if (done.current === null && learner.ready) done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
-  const pace = paceOverride ?? paceFrom(learner.attempts).pace;
-  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} pace={pace} onFinished={() => go('practice')} />;
+  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} pace={paceOverride} onFinished={() => go('practice')} />;
 }
 
 export function PracticeRun({ route, learner }: { route: Route; learner: Learner }) {

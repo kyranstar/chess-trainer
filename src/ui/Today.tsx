@@ -16,7 +16,7 @@ import { pickSense, type SenseItem } from '../games/sense';
 import { CheckRunner, conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { type MoveItem, moveItems } from '../games/ownmove';
-import { paceFrom } from '../schedule/pace';
+import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { OwnMoveDrill } from './OwnMove';
 import { RunSummaryView } from './Mix';
 
@@ -345,7 +345,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       const left = moveItems(games).filter((m) => !done.has(m.id));
       // Newest games first, with some variety among them.
       const item = left.length ? left[left.length - 1 - (hashOf(`${session.id}|${testIndex}`) % Math.min(8, left.length))] : undefined;
-      if (item) pick = { item, pace: paceFrom(learner.attempts).pace };
+      if (item) pick = { item, pace: isTimed(item.id) ? TIMED_SECONDS : 0 };
     }
     moveLatch.current = { index: testIndex, pick };
     return pick;
