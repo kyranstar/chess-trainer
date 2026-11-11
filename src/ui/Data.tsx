@@ -1,10 +1,73 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState } from 'react';
 import { type Learner, useDb, usePack } from '../app/store';
 import { SOURCES } from '../content';
 import { backupFileName, exportBackup, importBackup, serializeBackup } from '../db/backup';
 import { getMeta, setMeta } from '../db/db';
 import { installPack } from '../db/pack';
+import { browserRemoteFetch, clearRemote, DEFAULT_REMOTE_REPO, REMOTE_REPO_KEY, REMOTE_STATE_KEY, remoteMessage, type RemoteState, setRemote, uploadBackup } from '../db/remote';
 import { GamesImport } from './Games';
+
+/**
+ * A copy of the backup in the learner's own private GitHub repository (ADR-048). Off until a
+ * repository and a token are entered here; the token stays on this device.
+ */
+function RemoteCopy() {
+  const db = useDb();
+  const repo = useLiveQuery(() => getMeta<string>(db, REMOTE_REPO_KEY), [db]);
+  const state = useLiveQuery(() => getMeta<RemoteState>(db, REMOTE_STATE_KEY), [db]);
+  const [repoField, setRepoField] = useState(DEFAULT_REMOTE_REPO);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  async function send() {
+    setBusy(true);
+    const r = await uploadBackup(db, browserRemoteFetch, Date.now());
+    setNote({ kind: r.ok ? 'ok' : 'error', text: remoteMessage(r) });
+    setBusy(false);
+  }
+  async function start() {
+    try {
+      await setRemote(db, repoField, token);
+      setToken('');
+      await send();
+    } catch (e) {
+      setNote({ kind: 'error', text: (e as Error).message });
+    }
+  }
+  async function stop() {
+    await clearRemote(db);
+    setNote({ kind: 'ok', text: 'Stopped. The token has been removed from this device; what was already sent stays in the repository.' });
+  }
+
+  return (
+    <section className="card" data-testid="card-remote" data-on={!!repo}>
+      <h2>Private copy for review</h2>
+      {repo ? (
+        <>
+          <p data-testid="remote-status">This device sends its backup to your private repository <strong>{repo}</strong> whenever your practice data has changed and there is a connection. {state ? `Last sent ${new Date(state.at).toLocaleString()} (${(state.bytes / 1024).toFixed(0)} KB).` : 'Nothing has been sent yet.'}</p>
+          <div className="actions">
+            <button className="primary" data-testid="remote-send" disabled={busy} onClick={() => void send()}>{busy ? 'Sending' : 'Send now'}</button>
+            <button data-testid="remote-stop" disabled={busy} onClick={() => void stop()}>Stop and forget the token</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>Off. With a private GitHub repository of your own and a token for it, this device puts its backup file there whenever your practice data changes. That is a copy outside this phone, and it lets your practice be reviewed from your computer without exporting a file. The token is kept on this device only and is sent to GitHub alone.</p>
+          <label className="field">Repository (owner/name)
+            <input data-testid="remote-repo" value={repoField} onChange={(e) => setRepoField(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="yourname/chess-trainer-data" />
+          </label>
+          <label className="field">Token for that repository (Contents: read and write)
+            <input data-testid="remote-token" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          </label>
+          <div className="actions"><button className="primary" data-testid="remote-start" disabled={busy || !token.trim() || !repoField.trim()} onClick={() => void start()}>Start sending</button></div>
+        </>
+      )}
+      {note && <p className={`note ${note.kind === 'error' ? 'is-error' : 'is-ok'}`} role="status" data-testid="remote-note">{note.text}</p>}
+    </section>
+  );
+}
 
 /** Backup, restore, storage durability, installed content and licences. */
 export function DataPanel({ learner }: { learner: Learner }) {
@@ -86,6 +149,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
     }
   }
 
+  const remoteRepo = useLiveQuery(() => getMeta<string>(db, REMOTE_REPO_KEY), [db]);
   const canShare = typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File(['x'], 'x.json', { type: 'application/json' })] });
   const m = pack?.manifest;
 
@@ -94,7 +158,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
       <section className="card" data-testid="card-data">
         <h2>Your data</h2>
         <p>
-          Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. Nothing is uploaded. The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
+          Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. {remoteRepo ? `A copy of the backup is sent to your private repository ${remoteRepo} (set up below); nothing else is uploaded.` : 'Nothing is uploaded.'} The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
           {' '}Progress lives on this device only; a backup file is the way to keep a copy or to move it to another device.
         </p>
         <p className="definition-small" data-testid="last-backup">
@@ -116,6 +180,8 @@ export function DataPanel({ learner }: { learner: Learner }) {
           <a className="button" data-testid="open-device-check" href="#/progress/device-check">Check this device</a>
         </div>
       </section>
+
+      <RemoteCopy />
 
       <GamesImport />
 

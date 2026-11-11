@@ -1,7 +1,7 @@
 import { Component, type ReactNode, useEffect, useState } from 'react';
 import { href, useRoute } from './app/router';
 import { DbContext, useLearner, useOnline, usePack } from './app/store';
-import { useAutoSync } from './app/useAutoSync';
+import { useAutoSync, useRemoteCopy } from './app/useAutoSync';
 import { openDb, ensureReviewPolicy } from './db/db';
 import { installPack, packStatus } from './db/pack';
 import { ConceptPage, LearnHome } from './ui/Learn';
@@ -50,6 +50,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
   const [packError, setPackError] = useState<string | null>(null);
   const pack = usePack();
   useAutoSync(db);
+  useRemoteCopy(db);
   // An app update can change which missed positions are kept in review; old history follows the new rules.
   useEffect(() => {
     void ensureReviewPolicy(db);

@@ -4,6 +4,7 @@ import { browserEngine, type UciEngine } from '../engine/uci';
 import { DEVICE_NODES } from '../games/analyse';
 import { analysePending, type AnalyseProgress, needsMeasure, syncIfDue } from '../games/autosync';
 import { browserFetch, type SyncReport } from '../games/chesscom';
+import { browserRemoteFetch, uploadIfChanged } from '../db/remote';
 import { refreshRepertoire } from '../openings/auto';
 
 export interface SyncState {
@@ -111,6 +112,35 @@ export function useAutoSync(db: TrainerDB): void {
     return () => {
       document.removeEventListener('visibilitychange', kick);
       window.removeEventListener('online', kick);
+    };
+  }, []);
+}
+
+/**
+ * Keeps the private copy up to date where the learner has set one up (src/db/remote.ts):
+ * checked when the app comes to the front, when a connection returns, and once a minute while
+ * it is open. Does nothing, and contacts nobody, on a device where it is not set up.
+ */
+export function useRemoteCopy(db: TrainerDB): void {
+  const dbRef = useRef(db);
+  dbRef.current = db;
+  useEffect(() => {
+    let running = false;
+    const tick = () => {
+      if (running || document.visibilityState !== 'visible' || !navigator.onLine) return;
+      running = true;
+      void uploadIfChanged(dbRef.current, browserRemoteFetch, Date.now()).finally(() => {
+        running = false;
+      });
+    };
+    tick();
+    const timer = setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('online', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('online', tick);
     };
   }, []);
 }

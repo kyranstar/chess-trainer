@@ -19,13 +19,15 @@ cd "$ROOT"
 [ -z "$(git status --porcelain)" ] || { echo "Commit your changes first: the source snapshot is taken from HEAD." >&2; exit 1; }
 # Optional personal defaults for the published build, kept out of git (data/ is ignored):
 #   data/deploy.env:  CHESSCOM_USERNAME=<your public Chess.com handle>
+#                     REVIEW_REPO=<owner/name of your private repository for backup copies> (optional;
+#                     only fills in the field under "Private copy for review"; no token is ever built in)
 # With it the installed app starts fetching that player's public games by itself; without
 # it the handle is typed once in the app. The handle ends up in the public bundle.
 [ -f "$ROOT/data/deploy.env" ] && . "$ROOT/data/deploy.env"
 rm -rf "$OUT" && mkdir -p "$OUT"
 # Built straight into data/deploy so dist/ (which the tests serve) never holds a personalised build.
 npx tsc --noEmit
-VITE_CHESSCOM_USERNAME="${CHESSCOM_USERNAME:-}" npx vite build --outDir "$OUT" --emptyOutDir
+VITE_CHESSCOM_USERNAME="${CHESSCOM_USERNAME:-}" VITE_REVIEW_REPO="${REVIEW_REPO:-}" npx vite build --outDir "$OUT" --emptyOutDir
 git archive --format=tar.gz --prefix=chess-trainer/ -o "$OUT/source.tar.gz" HEAD
 touch "$OUT/.nojekyll"
 cat > "$OUT/README.md" <<TXT
