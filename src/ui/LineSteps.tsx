@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import type { Color } from '../chess/rules';
 import { consequenceOf, lineAt } from '../chess/line';
 
@@ -10,15 +10,28 @@ export interface Line {
   before?: string;
 }
 
+/** Time between two moves of a line that plays itself: long enough to see each move land. */
+export const STEP_MS = 650;
+
+const stillMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
 /**
  * A line played through on the board, a move at a time: what a mistake leads to, or how the
  * solution goes, seen on the board instead of read as notation. One control for every exercise.
+ *
+ * The line plays itself, one move every STEP_MS, from the position the learner is looking at:
+ * to `initial` when the exercise shows a consequence unasked, and to the end when the play
+ * button is tapped. The two arrows step by hand, and stop a replay that is running.
  *
  * The replay stops where the line is decided (the piece that goes, the mate) and marks it,
  * when that can be told from the moves; otherwise the first `cap` moves are shown and nothing
  * is claimed. See consequenceOf in src/chess/line.ts.
  */
 export function useLineSteps(line: Line | null, opts: {
+  /**
+   * How far the line plays by itself when it appears; 0 waits for the play button. A line
+   * whose outcome can be told plays on to that point whatever the number.
+   */
   initial?: number; startLabel?: string; testid?: string;
   /** The learner's colour: needed to say who came out ahead. Without it nothing is marked. */
   me?: Color;
@@ -39,19 +52,37 @@ export function useLineSteps(line: Line | null, opts: {
 } {
   const key = line ? `${line.before ?? ''}|${line.from}|${line.pv.join(' ')}` : '';
   const decided = useMemo(() => (line && opts.me ? consequenceOf(line.from, line.pv, opts.me, line.before) : null), [key, opts.me]); // eslint-disable-line react-hooks/exhaustive-deps
-  const shownTo = !line ? 0 : decided && opts.stopThere !== false ? decided.ply : Math.min(line.pv.length, opts.cap ?? line.pv.length);
-  const n = shownTo;
-  const initial = Math.min(opts.initial ?? 0, n);
-  const [state, setState] = useState({ key, step: initial });
+  const n = !line ? 0 : decided && opts.stopThere !== false ? decided.ply : Math.min(line.pv.length, opts.cap ?? line.pv.length);
+  // Shown unasked, a line plays to where it is decided; one that is not decided stops after `initial` moves.
+  const initial = (opts.initial ?? 0) === 0 ? 0 : decided && opts.stopThere !== false ? n : Math.min(opts.initial!, n);
+  // A line that appears unasked starts on its first move at once and plays on from there.
+  const fresh = () => (stillMotion() ? { key, step: initial, target: initial } : { key, step: Math.min(1, initial), target: initial });
+  const [state, setState] = useState(fresh);
   // A new line starts at its own first step at once, not one render late.
-  const step = state.key === key ? Math.min(state.step, n) : initial;
+  const cur = state.key === key ? state : fresh();
+  const step = Math.min(cur.step, n);
+  const target = Math.min(cur.target, n);
+  const playing = step < target;
+  useEffect(() => {
+    if (!playing) return;
+    const t = setTimeout(() => setState({ key, step: step + 1, target }), STEP_MS);
+    return () => clearTimeout(t);
+  }, [key, step, target, playing]);
   const pos = useMemo(() => (line ? lineAt(line.from, line.pv, step) : null), [key, step]); // eslint-disable-line react-hooks/exhaustive-deps
-  const go = (to: number) => setState({ key, step: Math.max(0, Math.min(n, to)) });
+  /** By hand: go there and stop any replay. */
+  const go = (to: number) => {
+    const s = Math.max(0, Math.min(n, to));
+    setState({ key, step: s, target: s });
+  };
+  const play = () => setState(stillMotion() ? { key, step: n, target: n } : { key, step: Math.min(n, step + 1), target: n });
   const onIt = !!decided && step === decided.ply;
   const controls = n > 0 ? (
-    <span className="line-steps" data-testid={opts.testid ?? 'line-steps'} data-step={step} data-length={n}>
-      <button data-testid="line-prev" disabled={step === 0} onClick={() => go(step - 1)} aria-label="One move back in the line">Back</button>
-      <button data-testid="line-next" disabled={step >= n} onClick={() => go(step + 1)} aria-label="One move on in the line">{step === 0 ? opts.startLabel ?? 'Play the line' : 'On'}</button>
+    <span className="line-steps" data-testid={opts.testid ?? 'line-steps'} data-step={step} data-length={n} data-playing={playing}>
+      <button className="step" data-testid="line-prev" disabled={step === 0} onClick={() => go(step - 1)} aria-label="One move back in the line">‹</button>
+      {step === 0
+        ? <button data-testid="line-next" onClick={play} aria-label="Play the line on the board">▶ {opts.startLabel ?? 'Play the line'}</button>
+        : <button className="step" data-testid="line-next" disabled={step >= n} onClick={() => go(step + 1)} aria-label="One move on in the line">›</button>}
+      {step > 0 && <span className="line-count" aria-hidden>{step} / {n}</span>}
     </span>
   ) : null;
   const note = onIt ? <p className="line-note" data-testid="line-consequence">{decided!.text}</p> : null;

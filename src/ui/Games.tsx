@@ -18,6 +18,7 @@ import { useArmed, useScreenChange } from '../app/tapGuard';
 import { bestLineFor } from '../engine/interactive';
 import { ucisOfSanLine } from '../chess/line';
 import { useLineSteps } from './LineSteps';
+import { Ask, gameRef, useRunNote } from './Stage';
 import { localDate } from '../schedule/session';
 
 export function useGames(): GameRecord[] | undefined {
@@ -242,7 +243,7 @@ export function GameEventView({ gameId, ply }: { gameId: string; ply: number }) 
 }
 
 /** One position from the learner's own game where the engine found a single clearly best move. */
-export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: DrillPosition; sessionId: string | null; heading?: string; onDone: () => void }) {
+export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPosition; sessionId: string | null; onDone: () => void }) {
   const db = useDb();
   useFocusMode();
   const { game, event } = drill;
@@ -304,22 +305,22 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
     return pv[0] && sameMove(positionFromFen(event.fen), pv[0], event.best) ? pv : [event.best];
   })();
   const line = !result ? null : view === 'mine' && mine ? { from: event.fen, pv: [mine.uci, ...mine.pv] } : { from: event.fen, pv: bestPv };
-  const steps = useLineSteps(line, view === 'mine' ? { initial: 2, me: game.color, cap: 6 } : { initial: 1, me: game.color, stopThere: false, startLabel: 'Play the engine’s line' });
+  const steps = useLineSteps(line, view === 'mine' ? { initial: 2, me: game.color, cap: 6 } : { initial: 1, me: game.color, stopThere: false, startLabel: 'Best line' });
 
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        <h2>{game.color === 'white' ? 'White' : 'Black'} to move</h2>
-        <p className="muted">From your {game.timeClass} game on {game.endDate}, move {Math.floor(event.ply / 2) + 1}. The engine found one move here clearly better than the rest. Find it.</p>
-      </header>
-      {retrying && !result && <p className="muted" data-testid="own-retry-note">Second go: not recorded.</p>}
-      <Board fen={steps.pos ? steps.pos.fen : fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={steps.pos ? steps.pos.last : null} marks={steps.marks} onMove={(u) => void record(u, false)} resetKey={resetKey} />
-      <div className="feedback" aria-live="polite">
+      <Board fen={steps.pos ? steps.pos.fen : fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={steps.pos ? steps.pos.last : null} marks={steps.marks} onMove={(u) => void record(u, false)} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : other === 'worse' ? 'wrong' : 'none'}:${drill.id}:${retrying}` : null} />
+      <div className="say" aria-live="polite">
+        {!result && (
+          <Ask
+            title={`${game.color === 'white' ? 'White' : 'Black'} to move`}
+            meta={checking ? 'Checking your move with the engine' : retrying ? <span data-testid="own-retry-note">Second go: not recorded.</span> : `One move is clearly best. ${gameRef(game.endDate, event.ply, game.timeClass)}.`}
+          />
+        )}
         {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>Correct: {event.bestSan}.</strong><p>In the game you played {event.playedSan}.</p></div>}
         {result && !result.ok && (
-          <div className="verdict neutral" data-testid="own-verdict" data-ok="false">
-            <strong>Best: {event.bestLine}</strong>
+          <div className={`verdict ${other === 'worse' ? 'wrong' : 'neutral'}`} data-testid="own-verdict" data-ok="false">
+            <strong>Best: {event.bestSan}.</strong>
             {result.playedSan && other === 'worse' && <p>{result.playedSan} is {worseBy ?? 'many'} points worse.</p>}
             {result.playedSan && other === 'not-faulted' && <p>{result.playedSan} is about as good: not scored.</p>}
             {result.playedSan && other === 'unchecked' && <p>{result.playedSan} could not be checked: not scored.</p>}
@@ -328,16 +329,16 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
           </div>
         )}
       </div>
-      <div className="actions">
+      <div className="actions dock">
         {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
         {result && steps.controls}
         {result && !result.ok && mine && mine.pv.length > 0 && (
           view === 'best'
-            ? <button data-testid="own-see-mine" onClick={() => setView('mine')}>What happens after {result.playedSan}</button>
-            : <button data-testid="own-see-best" onClick={() => setView('best')}>The engine’s line</button>
+            ? <button data-testid="own-see-mine" onClick={() => setView('mine')}>After {result.playedSan}</button>
+            : <button data-testid="own-see-best" onClick={() => setView('best')}>Best line</button>
         )}
-        {result && !result.ok && <button data-testid="own-retry" disabled={!armed} onClick={retry}>Try it again</button>}
-        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={onDone}>Continue</button>}
+        {result && !result.ok && <button data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
+        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={onDone}>Next</button>}
       </div>
     </section>
   );
@@ -356,6 +357,7 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
     const dueIds = new Set(due.map((d) => d.itemId));
     queue.current = drillPositions(games).filter((d) => !queued.has(d.id) || dueIds.has(d.id));
   }
+  useRunNote(queue.current && queue.current.length - i > 0 ? `${queue.current.length - i} left` : null);
   if (!queue.current) return <p className="muted">Loading</p>;
   const drill = queue.current[i];
   if (!drill) {
@@ -366,7 +368,7 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
       </div>
     );
   }
-  return <OwnGameDrill key={drill.id} drill={drill} sessionId={null} heading={`Your games, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
+  return <OwnGameDrill key={drill.id} drill={drill} sessionId={null} onDone={() => setI(i + 1)} />;
 }
 
 const SYNC_TEXT: Record<string, string> = {
@@ -470,11 +472,9 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
         <dd data-testid="headline-early">
           {early.games === 0 ? (early.pending > 0 ? `${early.pending} rapid games are waiting to be measured on this device` : 'No rapid games yet') : (
             <>
-              <strong>{early.withBlunder} of {early.games}</strong> rapid games had a move in the first {EARLY_MOVES} that lost material or allowed mate ({formatPct(early.rate)}, plausible range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)}).
-              {early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : early.windowPending > 0 ? ` The last ${COMPARE_WINDOW} games against the ${COMPARE_WINDOW} before will be shown once ${early.windowPending} of those games ${early.windowPending === 1 ? 'has' : 'have'} been measured.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`}
-              {` All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.`}
-              {early.beforeTraining && early.sinceTraining ? ` Before you started training here (${trainingStart}): ${early.beforeTraining.withBlunder} of ${early.beforeTraining.games} games. Since: ${early.sinceTraining.withBlunder} of ${early.sinceTraining.games}.` : ''}
-              {early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
+              <strong>{early.withBlunder} of {early.games}</strong> rapid games ({formatPct(early.rate)}, range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)})
+              <span className="metric-sub">lost material or allowed mate in the first {EARLY_MOVES} moves</span>
+              <span className="metric-sub" data-testid="headline-compare">{(early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : early.windowPending > 0 ? ` The last ${COMPARE_WINDOW} games against the ${COMPARE_WINDOW} before will be shown once ${early.windowPending} of those games ${early.windowPending === 1 ? 'has' : 'have'} been measured.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`).trim()}</span>
             </>
           )}
         </dd>
@@ -482,15 +482,23 @@ export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts
         <dd data-testid="headline-sense">
           {s.detected.n + s.quiet.n + c.detected.n + c.quiet.n === 0 ? 'No questions from your own games answered yet' : (
             <>
-              Unsafe moves spotted: {s.noticed.successes} of {s.noticed.n} ({pct(s.noticed.rate)}); false alarms on safe moves: {s.quiet.n - s.quiet.successes} of {s.quiet.n}.
-              {' '}Chances spotted: {c.noticed.successes} of {c.noticed.n} ({pct(c.noticed.rate)}); false alarms: {c.quiet.n - c.quiet.successes} of {c.quiet.n}.
+              <span className="metric-sub">Unsafe moves spotted: {s.noticed.successes} of {s.noticed.n} ({pct(s.noticed.rate)}); false alarms: {s.quiet.n - s.quiet.successes} of {s.quiet.n}.</span>
+              <span className="metric-sub">Chances spotted: {c.noticed.successes} of {c.noticed.n} ({pct(c.noticed.rate)}); false alarms: {c.quiet.n - c.quiet.successes} of {c.quiet.n}.</span>
             </>
           )}
         </dd>
       </dl>
-      <p className="definition-small">
-        These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so the numbers stay comparable over time. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
-      </p>
+      <details className="source-details" data-testid="headline-how">
+        <summary>How these are measured</summary>
+        <p className="definition-small" data-testid="headline-more">
+          {early.games > 0 ? `All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.` : ''}
+          {early.beforeTraining && early.sinceTraining ? ` Before you started training here (${trainingStart}): ${early.beforeTraining.withBlunder} of ${early.beforeTraining.games} games. Since: ${early.sinceTraining.withBlunder} of ${early.sinceTraining.games}.` : ''}
+          {early.games > 0 && early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
+        </p>
+        <p className="definition-small">
+          These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so the numbers stay comparable over time. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
+        </p>
+      </details>
       {early.withBlunder > 0 && <a href={href('progress/game-events', { kind: 'early', period: 'all' })} data-testid="view-early">View the {early.withBlunder} games’ positions</a>}
     </section>
   );

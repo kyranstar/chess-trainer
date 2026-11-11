@@ -61,14 +61,25 @@ function IntervalBar({ m }: { m: RateMetric }) {
   );
 }
 
-/** Whether the long list of numbers is open: a convenience kept in this browser only. */
+/** Whether a folded section (the long list of numbers, the data and backup) is open: a convenience kept in this browser only. */
 const SHOW_ALL_KEY = 'progress.all';
-function readShowAll(): boolean {
-  try {
-    return localStorage.getItem(SHOW_ALL_KEY) === '1';
-  } catch {
-    return false;
-  }
+const SHOW_DATA_KEY = 'progress.data';
+function useRememberedFold(key: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  return [open, (next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(key, next ? '1' : '0');
+    } catch {
+      // private mode: the choice simply is not remembered
+    }
+  }];
 }
 
 export function ProgressHome({ learner }: { learner: Learner }) {
@@ -98,15 +109,8 @@ export function ProgressHome({ learner }: { learner: Learner }) {
   const recalled = recalls.filter((a) => a.outcome === 'success').length;
   const alt = (v: 'sound' | 'weaker' | 'unknown') => recalls.filter((a) => a.altVerdict === v).length;
 
-  const [showAll, setShowAll] = useState(readShowAll);
-  const rememberShowAll = (open: boolean) => {
-    setShowAll(open);
-    try {
-      localStorage.setItem(SHOW_ALL_KEY, open ? '1' : '0');
-    } catch {
-      // private mode: the choice simply is not remembered
-    }
-  };
+  const [showAll, rememberShowAll] = useRememberedFold(SHOW_ALL_KEY);
+  const [showData, rememberShowData] = useRememberedFold(SHOW_DATA_KEY);
 
   return (
     <div className="page" data-testid="progress-home">
@@ -118,16 +122,11 @@ export function ProgressHome({ learner }: { learner: Learner }) {
       </div>
 
       <Headline attempts={learner.attempts} sinceDate={sinceDateOf(period)} since={from} periodLabel={periodLabel} />
-      <section className="card" data-testid="card-next">
-        <h2>What to do now</h2>
-        <p>The numbers above move only by playing games after training. The next session is on Today.</p>
-        <div className="actions"><a className="button primary" href={href('today')}>Go to today’s training</a></div>
-      </section>
 
       {/* The default view answers three questions: fewer costly early mistakes? reflected in
           the rating? what next? Every other number is kept, one tap away, and the choice is remembered. */}
       <details className="all-numbers" data-testid="progress-all" open={showAll} onToggle={(e) => rememberShowAll((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary>All the numbers, and your data</summary>
+        <summary>All the numbers</summary>
       <OwnMoveCard attempts={learner.attempts} since={from} sinceDate={sinceDateOf(period)} periodLabel={periodLabel} />
 
       <section className="card" data-testid="card-focus">
@@ -284,7 +283,11 @@ export function ProgressHome({ learner }: { learner: Learner }) {
         <p className="definition-small">Used only to choose how hard practice positions are. Starts at 1200 and moves after each unseen position. It is not a playing-strength rating.</p>
       </section>
 
-      <DataPanel learner={learner} />
+      </details>
+      {/* Backup and restore are one tap from the top, not under every number. */}
+      <details className="all-numbers" data-testid="progress-data" open={showData} onToggle={(e) => rememberShowData((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>Your data and backup</summary>
+        <DataPanel learner={learner} />
       </details>
     </div>
   );

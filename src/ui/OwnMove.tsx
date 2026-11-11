@@ -11,6 +11,7 @@ import { describeFree, describeLoose, freeTag, gradeMove, isPunishingReply, loos
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 import { useLineSteps } from './LineSteps';
+import { Ask, gameRef } from './Stage';
 
 type Phase = 'move' | 'predict' | 'checking' | 'done';
 /** Both searches behind a rating use the same budget as the game analysis on this device. */
@@ -22,8 +23,8 @@ const MIN_SHOWN_MS = 1000;
  * had to reckon with. The app answers with exact facts about captures and mate in one, and
  * the engine's line as evidence. See src/games/ownmove.ts for what is and is not scored.
  */
-export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRecorded, onDone }: {
-  item: MoveItem; sessionId: string | null; context: AttemptContext; heading?: string; onRecorded?: (a: Attempt) => void; onDone: () => void;
+export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, onDone }: {
+  item: MoveItem; sessionId: string | null; context: AttemptContext; onRecorded?: (a: Attempt) => void; onDone: () => void;
   /** Seconds allowed for choosing the move (see src/schedule/pace.ts); 0 = no clock. */
   pace?: number;
 }) {
@@ -212,7 +213,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     setTaken({ state: 'shown', pv: [capture, ...(best?.pv.slice(0, 9) ?? [])], san });
   }
   const line = phase === 'done' && facts && result ? (taken?.state === 'shown' ? { from: facts.afterFen, pv: taken.pv, before: item.fen } : { from: facts.afterFen, pv: result.pv, before: item.fen }) : null;
-  const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line', me: item.color, cap: 6 } : { initial: 0, startLabel: 'Play the engine’s line', testid: 'own-move-line', me: item.color, cap: 6 });
+  const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line', me: item.color, cap: 6 } : { initial: 0, startLabel: 'Engine’s line', testid: 'own-move-line', me: item.color, cap: 6 });
   const shown = steps.pos && steps.step > 0 ? { fen: steps.pos.fen, last: steps.pos.last, marks: steps.marks } : { fen, last: lastMove, marks: [] as string[] };
   const passed = result ? outcomeOfGrade(result.verdict) === 'success' : false;
   const looseWords = result && facts && facts.loose.length > 0 && !facts.mateInOne && result.verdict !== 'unrated' ? looseNote({ passed, engineTakes, captureCost: result.captureCost }) : null;
@@ -225,25 +226,28 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     }
   })();
   const gameSan = sanOf(positionFromFen(item.fen), item.played);
-  const title = phase === 'move' ? `${me} to move. Play your move.` : phase === 'predict' ? `You played ${mine?.san}. Now play the reply you had to reckon with.` : phase === 'checking' ? 'Checking' : '';
+  const them = item.color === 'white' ? 'Black' : 'White';
+  const source = gameRef(item.date, item.ply);
+  const good = result?.verdict === 'best' || result?.verdict === 'good';
+  const bad = result?.verdict === 'mistake' || result?.verdict === 'blunder';
   return (
     <section className="puzzle" data-testid="own-move" data-phase={phase} data-verdict={result?.verdict ?? ''} data-fen={fen}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        {title && <h2>{title}</h2>}
-        <p className="muted">From your game on {item.date}, move {Math.floor(item.ply / 2) + 1}. An ordinary position: there may be nothing special in it.</p>
-        {retrying && phase !== 'done' && <p className="muted" data-testid="own-move-retry-note">Second try. This one is not recorded.</p>}
-        {pace > 0 && phase === 'move' && !retrying && (
-          <p className={`move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
-            {left > 0 ? `${Math.ceil(left)} s for this move` : `${pace} seconds are up. Take the time you need; the move is rated as usual and noted as late.`}
-          </p>
+      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove} flash={phase === 'done' && result ? `${good ? 'right' : bad ? 'wrong' : 'none'}:${item.id}:${retrying}` : null} />
+      <div className="say" aria-live="polite">
+        {phase === 'move' && (
+          <Ask title={`${me} to move`} meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : `Play your own move. ${source}.`}>
+            {pace > 0 && !retrying && (
+              <p className={`ask-meta move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
+                {left > 0 ? `${Math.ceil(left)} s for this move` : `Over ${pace} s: take your time, it is noted as late.`}
+              </p>
+            )}
+          </Ask>
         )}
-      </header>
-      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove} />
-      <div className="feedback" aria-live="polite">
-        {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
+        {(phase === 'predict' || phase === 'checking') && (
+          <Ask title={`${them}’s reply to ${mine?.san}?`} meta={phase === 'checking' ? 'Checking your move' : 'Play the reply you had to reckon with.'} />
+        )}
         {phase === 'done' && result && facts && mine && (
-          <div className={`verdict ${result.verdict === 'best' || result.verdict === 'good' ? 'right' : result.verdict === 'mistake' || result.verdict === 'blunder' ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
+          <div className={`verdict ${good ? 'right' : bad ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
             <strong data-testid="own-move-grade">{moveHeadline({ grade: result.verdict, san: mine.san, bestSan: result.bestSan, loss: result.loss, mateAllowed: facts.mateInOne && !facts.mateUnavoidable ? facts.mateInOne.san : null, late: timedOut.current ? pace : null })}</strong>
             {facts.mateInOne && facts.mateUnavoidable && <p>Every move allowed mate in one ({facts.mateInOne.san}).</p>}
             {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">You had mate in one: {facts.mateBefore.san}.</p>}
@@ -264,16 +268,16 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
           </div>
         )}
       </div>
-      <div className="actions">
+      <div className="actions dock">
         {phase === 'predict' && facts && mine && <button data-testid="own-move-no-reply" disabled={!armed} onClick={() => void conclude(facts, mine, null)}>No particular reply</button>}
         {phase === 'done' && steps.controls}
         {phase === 'done' && result && capture && !engineTakes && facts && facts.loose.length > 0 && (
           taken?.state === 'shown'
-            ? <button data-testid="own-move-engine-line" onClick={() => setTaken(null)}>Back to the engine’s line</button>
+            ? <button data-testid="own-move-engine-line" onClick={() => setTaken(null)}>Engine’s line</button>
             : <button data-testid="own-move-if-taken" disabled={taken?.state === 'loading'} onClick={() => void showTaken()}>{taken?.state === 'loading' ? 'Asking the engine' : 'If it is taken'}</button>
         )}
-        {phase === 'done' && result && result.verdict !== 'best' && result.verdict !== 'good' && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Take it back and try another move</button>}
-        {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={onDone}>Continue</button>}
+        {phase === 'done' && result && !good && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Try another move</button>}
+        {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={onDone}>Next</button>}
       </div>
     </section>
   );
@@ -302,5 +306,5 @@ export function OwnMoveRun({ items, done, pace, onFinished }: { items: MoveItem[
       </div>
     );
   }
-  return <OwnMoveDrill key={item.id} item={item} sessionId={null} context="practice" heading="Your move" pace={latch.current!.pace} onDone={() => setN((x) => x + 1)} />;
+  return <OwnMoveDrill key={item.id} item={item} sessionId={null} context="practice" pace={latch.current!.pace} onDone={() => setN((x) => x + 1)} />;
 }

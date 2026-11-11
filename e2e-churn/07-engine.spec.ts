@@ -9,14 +9,13 @@ test('the engine check of the learner\'s own move still answers while background
   await setUsername(page);
   await waitMeasured(page, 20);
 
-  // A wrong puzzle move, then "What happens after ...?"
+  // A wrong puzzle move: the engine's answer to it is asked for at once.
   await page.goto('./#/practice/run?concept=mate.in-one');
   await failPuzzle(page);
   let t0 = Date.now();
-  await page.getByTestId('show-reply').click();
   await expect(page.getByTestId('engine-reply')).toBeVisible({ timeout: 30_000 });
   console.log(`puzzle engine reply after ${Date.now() - t0} ms:`, (await page.getByTestId('engine-reply').textContent())!.slice(0, 80));
-  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/);
+  await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/);
 
   // An unsafe move from an own game, answered with a reply other than the stored one.
   await page.goto('./#/practice/run?mode=sense');

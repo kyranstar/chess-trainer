@@ -39,7 +39,7 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
 
   // 1. Win it: best play queens the pawn; the verdict comes from the table.
   await expect(drill).toHaveAttribute('data-goal', 'win');
-  await expect(drill).toContainText('Best play queens in');
+  await expect(drill).toContainText('Best play needs');
   await playPerfectly(page);
   await expect(page.getByTestId('kpk-verdict')).toHaveAttribute('data-ok', 'true');
   await expect(page.getByTestId('kpk-verdict')).toContainText('queened safely');
@@ -87,7 +87,7 @@ test('the opposition is demonstrated by playing five unseen endings correctly, n
   await expect(page.getByTestId('concept-evidence')).toHaveText('Untested');
   await page.getByTestId('start-check').click();
   for (let i = 0; i < 5; i++) {
-    await expect(page.getByTestId('kpk-drill')).toContainText(`${i + 1} of 5`);
+    await expect(page.getByTestId('run-note')).toHaveText(`Check ${i + 1} of 5`);
     await expect(page.getByRole('button', { name: 'Show a move that keeps it' })).toHaveCount(0);
     await playPerfectly(page);
     await page.getByTestId('kpk-next').click();

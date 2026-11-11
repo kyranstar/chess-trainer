@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type Learner, useDueReviews, useNow, usePool } from '../app/store';
 import type { Concept } from '../content/types';
 import type { ReviewState } from '../db/types';
@@ -14,25 +14,32 @@ import { OwnMoveDrill } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { SenseDrill, senseItemsFrom } from './Sense';
 
-/** How a stretch of practice went, one plain line per kind of item that came up. */
-export function RunSummaryView({ attempts }: { attempts: Attempt[] }) {
+/** How a stretch of practice went, one plain line per kind of item that came up (rows for a `dl`). */
+export function RunSummaryRows({ attempts, omit = [] }: { attempts: Attempt[]; omit?: ('puzzles' | 'reviews')[] }) {
   const s = runSummary(attempts);
   const m = s.moves;
   const moves = m.best + m.good + m.inaccuracy + m.mistake + m.blunder + m.unrated;
   const part = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '');
   const grades = [part(m.best, 'best', 'best'), part(m.good, 'good', 'good'), part(m.inaccuracy, 'inaccuracy', 'inaccuracies'), part(m.mistake, 'mistake', 'mistakes'), part(m.blunder, 'blunder', 'blunders'), part(m.unrated, 'not rated', 'not rated')].filter(Boolean).join(', ');
-  if (s.scored + moves === 0) return <p className="metric-empty" data-testid="run-summary">Nothing answered yet.</p>;
+  if (s.scored + moves === 0) return null;
   return (
-    <dl className="facts" data-testid="run-summary">
+    <>
       <dt>Overall</dt>
       <dd data-testid="run-overall"><strong>{s.passed} of {s.scored}</strong> passed</dd>
       {moves > 0 && (<><dt>Your moves</dt><dd data-testid="run-moves">{grades}</dd></>)}
-      {s.questions.n > 0 && (<><dt>Questions from your games</dt><dd>{s.questions.right} of {s.questions.n} right</dd></>)}
-      {s.missed.n > 0 && (<><dt>Moves you missed in games</dt><dd>{s.missed.right} of {s.missed.n} found</dd></>)}
-      {s.puzzles.n > 0 && (<><dt>New positions</dt><dd>{s.puzzles.right} of {s.puzzles.n} first try</dd></>)}
-      {s.reviews.n > 0 && (<><dt>Due again</dt><dd>{s.reviews.right} of {s.reviews.n} recalled</dd></>)}
-    </dl>
+      {s.questions.n > 0 && (<><dt>Own-game questions</dt><dd>{s.questions.right} of {s.questions.n} right</dd></>)}
+      {s.missed.n > 0 && (<><dt>Missed moves</dt><dd>{s.missed.right} of {s.missed.n} found</dd></>)}
+      {!omit.includes('puzzles') && s.puzzles.n > 0 && (<><dt>New positions</dt><dd>{s.puzzles.right} of {s.puzzles.n} first try</dd></>)}
+      {!omit.includes('reviews') && s.reviews.n > 0 && (<><dt>Due again</dt><dd>{s.reviews.right} of {s.reviews.n} recalled</dd></>)}
+    </>
   );
+}
+
+export function RunSummaryView({ attempts }: { attempts: Attempt[] }) {
+  const s = runSummary(attempts);
+  const m = s.moves;
+  if (s.scored + m.best + m.good + m.inaccuracy + m.mistake + m.blunder + m.unrated === 0) return <p className="metric-empty" data-testid="run-summary">Nothing answered yet.</p>;
+  return <dl className="facts" data-testid="run-summary"><RunSummaryRows attempts={attempts} /></dl>;
 }
 
 interface Turn {
@@ -52,7 +59,13 @@ interface Turn {
  * to be looked at for what it is. Each turn's item is chosen once and kept, whatever changes
  * underneath (games being analysed, attempts being recorded).
  */
-export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: () => void }) {
+export function MixRun({ learner, onFinished, looking, onLooked, onCount }: {
+  learner: Learner; onFinished: () => void;
+  /** The run bar's count was tapped: show the summary so far. */
+  looking: boolean; onLooked: () => void;
+  /** Tells the run bar how many items are done. */
+  onCount: (n: number) => void;
+}) {
   const pool = usePool();
   const games = useGames();
   const now = useNow();
@@ -66,8 +79,8 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
   // A natural end: after MIX_MINUTES the run stops at the end of an item and offers a few more.
   const until = useRef(Date.now() + MIX_MINUTES * 60_000);
   const [paused, setPaused] = useState(false);
-  const [looking, setLooking] = useState(false);
   const startedAt = useRef(Date.now());
+  useEffect(() => onCount(n), [n, onCount]);
   if (!pool || !learner.ready || games === undefined) return <p className="muted">Loading</p>;
 
   if (turn.current?.n !== n) {
@@ -108,7 +121,6 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
     if (Date.now() >= until.current) setPaused(true);
     setN((x) => x + 1);
   };
-  const heading = n === 0 ? 'Practice' : `Practice, ${n} done`;
 
   // Everything recorded since this run began, whatever kind of item it was.
   const mine = learner.attempts.filter((a) => a.ts >= startedAt.current && a.sessionId === null);
@@ -118,7 +130,7 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
         <h2>So far: {n} done</h2>
         <RunSummaryView attempts={mine} />
         <div className="actions">
-          <button className="primary" data-testid="mix-resume" onClick={() => setLooking(false)}>Keep going</button>
+          <button className="primary" data-testid="mix-resume" onClick={onLooked}>Keep going</button>
           <button data-testid="mix-stop" onClick={onFinished}>Stop here</button>
         </div>
       </div>
@@ -129,7 +141,6 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
       <div className="empty" data-testid="mix-pause">
         <h2>{n} done</h2>
         <RunSummaryView attempts={mine} />
-        <p>That is the planned practice time. Stop here, or go on for {MIX_EXTRA_MINUTES} more minutes.</p>
         <div className="actions">
           <button className="primary" data-testid="mix-stop" onClick={onFinished}>Stop here</button>
           <button data-testid="mix-more" onClick={() => { until.current = Date.now() + MIX_EXTRA_MINUTES * 60_000; setPaused(false); }}>{MIX_EXTRA_MINUTES} more minutes</button>
@@ -146,16 +157,15 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
     );
   }
   return (
-    <div data-testid="mix-run" data-turn={n} data-kind={t.kind}>
-      {t.kind === 'review' && <ReviewRunner key={`mix-${n}`} due={[t.review!]} sessionId={null} heading={heading} single onFinished={next} />}
-      {t.kind === 'move' && <OwnMoveDrill key={`mix-${n}`} item={t.move!} sessionId={null} context="practice" heading={heading} pace={t.pace ?? 0} onDone={next} />}
-      {(t.kind === 'safe' || t.kind === 'chance') && <SenseDrill key={`mix-${n}`} item={t.sense!} sessionId={null} context="practice" heading={heading} onDone={next} />}
-      {t.kind === 'missed' && <OwnGameDrill key={`mix-${n}`} drill={t.drill!} sessionId={null} heading={heading} onDone={next} />}
+    <div className="fill" data-testid="mix-run" data-turn={n} data-kind={t.kind}>
+      {t.kind === 'review' && <ReviewRunner key={`mix-${n}`} due={[t.review!]} sessionId={null} single onFinished={next} />}
+      {t.kind === 'move' && <OwnMoveDrill key={`mix-${n}`} item={t.move!} sessionId={null} context="practice" pace={t.pace ?? 0} onDone={next} />}
+      {(t.kind === 'safe' || t.kind === 'chance') && <SenseDrill key={`mix-${n}`} item={t.sense!} sessionId={null} context="practice" onDone={next} />}
+      {t.kind === 'missed' && <OwnGameDrill key={`mix-${n}`} drill={t.drill!} sessionId={null} onDone={next} />}
       {t.kind === 'puzzle' && (
         <PuzzleStream key={`mix-${n}`} limit={1} pick={conceptPicker(pool.puzzles, t.concept!, learner.level.level, `mix|${run.current}|${n}`)}
-          context="practice" conceptId={t.concept!.id} sessionId={null} allowHints={false} seen={learner.seen} heading={heading} onFinished={next} />
+          context="practice" conceptId={t.concept!.id} sessionId={null} allowHints={false} seen={learner.seen} onFinished={next} />
       )}
-      <footer className="run-foot"><button className="quiet" data-testid="mix-how" onClick={() => setLooking(true)}>How is it going?</button></footer>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { Attempt } from '../db/types';
 import { distanceKpk, evaluateMove, fastestWin, HOLD_MOVES, keepingMoves, KPK_DRILLS, KPK_VERSION, type KpkOutcome, learnerColor, opponentReply, outcomeAfter, WIN_MOVE_CAP } from '../endgames/kpk';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { Ask } from './Stage';
 
 export type KpkGoal = 'win' | 'hold';
 export const kpkId = (goal: KpkGoal, fen: string) => `kpk:${goal}:${fen}`;
@@ -19,8 +20,8 @@ const OUTCOME_TEXT: Record<KpkOutcome, string> = {
 };
 
 /** One king-and-pawn ending played out against the exact table. */
-export function KpkDrill({ start, goal, sessionId, heading, context = 'practice', allowShow = true, onRecorded, onDone }: {
-  start: string; goal: KpkGoal; sessionId: string | null; heading?: string; context?: 'practice' | 'check' | 'review'; allowShow?: boolean; onRecorded?: (a: Attempt) => void; onDone: () => void;
+export function KpkDrill({ start, goal, sessionId, context = 'practice', allowShow = true, onRecorded, onDone }: {
+  start: string; goal: KpkGoal; sessionId: string | null; context?: 'practice' | 'check' | 'review'; allowShow?: boolean; onRecorded?: (a: Attempt) => void; onDone: () => void;
 }) {
   const db = useDb();
   useFocusMode();
@@ -106,16 +107,14 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
   const dist = goal === 'win' && !end ? distanceKpk(fen) : null;
   return (
     <section className="puzzle" data-testid="kpk-drill" data-goal={goal} data-fen={fen} data-done={!!end} data-keeping={end || busy ? '' : keepingMoves(fen).join(' ')} data-fastest={end || busy || goal !== 'win' ? '' : fastestWin(fen) ?? ''}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        <h2>{goal === 'win' ? `${me === 'white' ? 'White' : 'Black'} to play and win` : `${me === 'white' ? 'White' : 'Black'} to play and hold the draw`}</h2>
-        <p className="muted">
-          {goal === 'win' ? 'Queen the pawn against the best defence. Every move is checked against the exact table of this ending.' : `Keep the draw for ${HOLD_MOVES} moves against the most testing tries. Every move is checked against the exact table of this ending.`}
-          {dist ? ` Best play queens in ${Math.ceil(dist / 2)} moves from here.` : ''}
-        </p>
-      </header>
-      <Board fen={fen} orientation={me} movable={end || busy ? null : me} lastMove={lastMove} onMove={onMove} resetKey={resetKey} />
-      <div className="feedback" aria-live="polite">
+      <Board fen={fen} orientation={me} movable={end || busy ? null : me} lastMove={lastMove} onMove={onMove} resetKey={resetKey} flash={end ? `${end.ok ? 'right' : 'wrong'}:${start}:${retrying}` : null} />
+      <div className="say" aria-live="polite">
+        {!end && (
+          <Ask
+            title={goal === 'win' ? `${me === 'white' ? 'White' : 'Black'} to play and win` : `${me === 'white' ? 'White' : 'Black'} to play and hold the draw`}
+            meta={retrying ? 'Second go: not recorded.' : goal === 'win' ? `Queen the pawn against the best defence.${dist ? ` Best play needs ${Math.ceil(dist / 2)} moves.` : ''}` : `Keep the draw for ${HOLD_MOVES} moves.`}
+          />
+        )}
         {end && (
           <div className={`verdict ${end.ok ? 'right' : 'neutral'}`} data-testid="kpk-verdict" data-ok={end.ok}>
             <strong>{end.text}</strong>
@@ -124,10 +123,10 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
           </div>
         )}
       </div>
-      <div className="actions">
+      <div className="actions dock">
         {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show a move that keeps it</button>}
-        {end && !end.ok && context !== 'check' && <button data-testid="kpk-retry" disabled={!armed} onClick={retry}>Try this position again</button>}
-        {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={onDone}>Continue</button>}
+        {end && !end.ok && context !== 'check' && <button data-testid="kpk-retry" disabled={!armed} onClick={retry}>Try again</button>}
+        {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={onDone}>Next</button>}
       </div>
     </section>
   );
@@ -152,7 +151,7 @@ export function KpkRun({ learner, onFinished }: { learner: Learner; onFinished: 
       </div>
     );
   }
-  return <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} heading="King and pawn against king" onDone={() => setN(n + 1)} />;
+  return <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} onDone={() => setN(n + 1)} />;
 }
 
 /** Unseen starts for a check: three to win, two to hold, in the table's fixed order. */

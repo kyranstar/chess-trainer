@@ -45,7 +45,7 @@ export async function mockChessCom(page: Page, games: any[]): Promise<Mock> {
 
 export async function openApp(page: Page, path = '#/today') {
   // Progress folds most of its numbers away by default; these tests read them, so they are opened here.
-  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); } catch { /* not available */ } });
+  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); localStorage.setItem('progress.data', '1'); } catch { /* not available */ } });
   await page.goto(`./${path}`);
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
@@ -102,9 +102,9 @@ export async function snapshot(page: Page) {
     const holder = q('[data-testid=sense-drill],[data-testid=puzzle],[data-testid=own-drill],[data-testid=kpk-drill],[data-testid=opening-drill],[data-testid=lesson-try],[data-testid=gap-builder]');
     return {
       holder: holder?.getAttribute('data-testid') ?? null,
-      kicker: q('.puzzle-head .kicker')?.textContent ?? null,
+      kicker: q('[data-testid=run-note]')?.textContent ?? null,
       h2: q('.puzzle h2, .lesson h2, .concept h1')?.textContent ?? null,
-      sub: q('.puzzle-head .muted')?.textContent ?? null,
+      sub: q('.say .ask-meta')?.textContent ?? null,
       fen: attr('.board', 'data-fen'),
       orientation: attr('.board', 'data-orientation'),
       expected: holder?.getAttribute('data-expected') ?? null,
@@ -137,6 +137,9 @@ export async function flipOffOn(page: Page) {
  * swap that lasts one frame is caught too). `watched(page)` returns the states seen, in order.
  */
 export async function watch(page: Page) {
+  // A line that is playing itself on the board (ADR-051) is motion the app intends: watching
+  // starts once it has come to rest, and from then on nothing may move.
+  await page.waitForFunction(() => !document.querySelector('[data-playing=true]'));
   await page.evaluate(() => {
     const w = window as any;
     w.__states?.obs?.disconnect();
@@ -145,7 +148,7 @@ export async function watch(page: Page) {
       const holder = q('[data-testid=sense-drill],[data-testid=puzzle],[data-testid=own-drill],[data-testid=kpk-drill],[data-testid=opening-drill],[data-testid=lesson-try],[data-testid=gap-builder],[data-testid=check-result],[data-testid=reflect-block],[data-testid=play-block],.empty');
       return JSON.stringify({
         holder: holder?.getAttribute('data-testid') ?? (holder ? 'empty:' + holder.textContent : null),
-        kicker: q('.puzzle-head .kicker')?.textContent ?? null,
+        kicker: q('[data-testid=run-note]')?.textContent ?? null,
         h2: q('.puzzle h2')?.textContent ?? null,
         fen: q('.board')?.getAttribute('data-fen') ?? null,
         expected: holder?.getAttribute('data-expected') ?? null,

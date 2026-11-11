@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { go, href } from '../app/router';
 import { type Learner, useDb, useOnline } from '../app/store';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from '../content';
 import type { Concept, LessonLink } from '../content/types';
 import { recordLessonEvent } from '../db/db';
-import { CHECK, type ConceptStatus, KPK_CHECK, needsRefresh } from '../learn/curriculum';
+import { CHECK, type ConceptStatus, KPK_CHECK, needsRefresh, nextToLearn } from '../learn/curriculum';
 import { formatPct } from '../metrics/metrics';
 import { LessonPlayer } from './LessonPlayer';
 import { CheckRunner } from './runners';
+import { RunFrame } from './Stage';
 
 const STAGE_LABEL: Record<ConceptStatus['stage'], string> = {
   new: 'Not started',
@@ -40,15 +41,18 @@ export function LearnHome({ learner }: { learner: Learner }) {
     taught: learner.statuses.filter((s) => s.stage === 'taught').length,
     offline: learner.statuses.filter((s) => s.offlineLesson).length,
   };
+  // Where the curriculum stands: the first concept, in its order, that is open and not yet studied.
+  // The same choice the daily session makes, so "next" means one thing in the app.
+  const next = nextToLearn(learner.statuses, { online }).pick;
   return (
     <div className="page" data-testid="learn-home">
       <h1>Learn</h1>
-      <p className="lede">
-        {CONCEPTS.length} concepts in prerequisite order. {counts.demonstrated} demonstrated on unseen positions, {counts.taught} studied and awaiting a check.
+      <p className="muted small" data-testid="learn-counts">
+        {counts.demonstrated} of {CONCEPTS.length} demonstrated, {counts.taught} studied and awaiting a check. {counts.offline} have a lesson on this device; the rest need a connection{online ? '' : ' (you are offline now)'}.
       </p>
-      <p className="note">
-        {counts.offline} concept{counts.offline === 1 ? ' has' : 's have'} a lesson stored on this device. The rest link to lessons on Lichess, Chess.com or Chessreps, which need a connection{online ? '' : ' (you are offline now)'}.
-      </p>
+      {next && (
+        <a className="button primary big" data-testid="learn-next" href={href(`learn/${next.concept.id}`)}>Next: {next.concept.title}</a>
+      )}
       {areas.map((area) => (
         <section key={area} className="concept-group">
           <h2>{area}</h2>
@@ -59,9 +63,12 @@ export function LearnHome({ learner }: { learner: Learner }) {
                   <span className={`stage-mark stage-${s.stage}`} aria-hidden />
                   <span className="concept-name">{s.concept.title}</span>
                   <span className="concept-meta">
-                    {stageText(s)}
-                    {!s.prereqsMet && s.stage === 'new' ? `; first: ${s.unmetPrereqs.map((p) => CONCEPT_BY_ID.get(p)?.title).join(', ')}` : ''}
-                    {s.offlineLesson ? '; lesson on device' : s.hasAnyLesson ? '; online lesson' : '; no lesson found yet'}
+                    {/* The dot already says "not started"; the words are for what it cannot say. */}
+                    {[
+                      s.stage === 'new' ? '' : stageText(s),
+                      !s.prereqsMet && s.stage === 'new' ? `After ${s.unmetPrereqs.map((p) => CONCEPT_BY_ID.get(p)?.title).join(', ')}` : '',
+                      s.offlineLesson ? 'Lesson on device' : s.hasAnyLesson ? 'Online lesson' : 'No lesson yet',
+                    ].filter(Boolean).join(' · ')}
                   </span>
                 </a>
               </li>
@@ -92,12 +99,18 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   const openedBefore = learner.events.some((e) => e.conceptId === concept.id && e.type === 'link-opened');
   const def = concept.descriptionTheme ? THEMES[concept.descriptionTheme] : undefined;
 
+  // On the concept's own page a lesson or a check gets the same frame as any other run: the
+  // way back in the bar, the count beside it, the buttons pinned to the bottom.
+  const overview = () => setMode({ kind: 'overview' });
+  const framed = (title: string, inner: ReactNode) => (embedded ? inner : (
+    <RunFrame testid="concept-run" back={{ href: href(`learn/${concept.id}`), label: 'Concept', onClick: overview }} title={title}>{inner}</RunFrame>
+  ));
   if (mode.kind === 'lesson') {
     const lesson = LESSON_BY_ID.get(mode.id)!;
-    return <LessonPlayer lesson={lesson} sessionId={sessionId} onFinished={() => { setMode({ kind: 'overview' }); onTaught?.(); }} onExit={() => setMode({ kind: 'overview' })} />;
+    return framed('Lesson', <LessonPlayer lesson={lesson} sessionId={sessionId} showExit={!!embedded} onFinished={() => { overview(); onTaught?.(); }} onExit={overview} />);
   }
   if (mode.kind === 'check') {
-    return <CheckRunner concept={concept} learner={learner} sessionId={sessionId} onDone={() => setMode({ kind: 'overview' })} />;
+    return framed('', <CheckRunner concept={concept} learner={learner} sessionId={sessionId} onDone={overview} />);
   }
 
   async function open(l: LessonLink) {
@@ -110,13 +123,14 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
     onTaught?.();
   }
 
-  return (
+  const page = (inner: ReactNode) => (embedded ? inner : <div className="page"><a className="back" href={href('learn')}>All concepts</a>{inner}</div>);
+  return page(
     <div className="concept" data-testid="concept" data-concept={concept.id} data-stage={status.stage}>
       {!embedded && <p className="kicker">{concept.area}</p>}
       <h1>{concept.title}</h1>
       {def && (
         <p className="definition">
-          {def.description} <span className="muted">(Lichess theme definition, CC0)</span>
+          {def.description}
         </p>
       )}
       <dl className="facts">
@@ -139,7 +153,6 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
           </>
         )}
       </dl>
-      {!status.prereqsMet && <p className="note">The curriculum puts other concepts first, but nothing is locked: you can study or pre-test this now.</p>}
 
       {concept.localLessons.length > 0 && (
         <section>
@@ -150,7 +163,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
             return (
               <div className="resource" key={id}>
                 <p className="resource-title">{l.title}</p>
-                <p className="muted">{src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes. Works offline.</p>
+                <p className="muted">{src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes.</p>
                 <button className="primary" data-testid="start-lesson" onClick={() => setMode({ kind: 'lesson', id })}>
                   {status.taughtVia === 'local-lesson' ? 'Read again' : 'Start lesson'}
                 </button>
@@ -163,7 +176,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
       {concept.links.length > 0 && (
         <section>
           <h2>Lessons elsewhere</h2>
-          <p className="muted">These open in another site or app. This app cannot see what you do there, so you mark a lesson finished yourself and then show it here on new positions.</p>
+          <p className="muted small">These open on another site. Mark a lesson finished yourself when you come back.</p>
           {!online && <p className="note" data-testid="offline-links">You are offline. These lessons need a connection.</p>}
           {concept.links.map((l) => (
             <div className="resource" key={l.url}>
@@ -173,7 +186,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
               </p>
               <a className="button" href={l.url} target="_blank" rel="noreferrer" data-testid="open-link" onClick={() => void open(l)}>Open on {providerName(l)}</a>
               {l.fallbackUrl && l.fallbackUrl !== l.url && (
-                <p className="definition-small">This exact link has not been opened and checked. If it fails, <a href={l.fallbackUrl} target="_blank" rel="noreferrer" onClick={() => void open(l)}>open the {l.sourceId === 'lichess-practice' ? 'study' : 'course page'}</a> instead.</p>
+                <p className="definition-small">If the link fails: <a href={l.fallbackUrl} target="_blank" rel="noreferrer" onClick={() => void open(l)}>the {l.sourceId === 'lichess-practice' ? 'study' : 'course page'}</a>.</p>
               )}
             </div>
           ))}
@@ -195,8 +208,8 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
           <>
             <p className="muted">
               {concept.assessment.kind === 'kpk-playout'
-                ? `${KPK_CHECK.size} king-and-pawn endings you have never seen, played out against perfect play with no help. ${KPK_CHECK.pass} must be kept correct on every move. Passing without the lesson skips it.`
-                : `${CHECK.size} positions you have never seen, no hints. ${CHECK.pass} first-try solves pass. Passing without the lesson skips it.`}
+                ? `${KPK_CHECK.size} unseen endings against perfect play, no help. ${KPK_CHECK.pass} correct pass.`
+                : `${CHECK.size} unseen positions, no hints. ${CHECK.pass} first-try solves pass.`}
             </p>
             {status.lastCheck && <p data-testid="last-check">Last check: {status.lastCheck.passed ? 'passed' : 'not passed'}{status.lastCheck.total ? ` (${status.lastCheck.correct} of ${status.lastCheck.total})` : ''}.</p>}
             <div className="actions">
@@ -208,20 +221,15 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
             </div>
           </>
         ) : (
-          <p className="note">{concept.assessment.kind === 'none-yet' && concept.assessment.reason ? concept.assessment.reason : 'No independent check exists for this concept yet.'} Until one exists it is never reported as demonstrated.</p>
+          <p className="note">No check exists for this concept yet, so it is never reported as demonstrated.</p>
         )}
       </section>
-    </div>
+    </div>,
   );
 }
 
 export function ConceptPage({ id, learner }: { id: string; learner: Learner }) {
   const concept = CONCEPT_BY_ID.get(id);
   if (!concept) return <div className="page"><h1>Concept not found</h1><a href={href('learn')}>Back to Learn</a></div>;
-  return (
-    <div className="page">
-      <a className="back" href={href('learn')}>All concepts</a>
-      <ConceptStudy concept={concept} learner={learner} sessionId={null} />
-    </div>
-  );
+  return <ConceptStudy concept={concept} learner={learner} sessionId={null} />;
 }

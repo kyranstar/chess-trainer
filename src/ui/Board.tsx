@@ -20,7 +20,12 @@ export interface BoardProps {
   /** Bump to force the board back to `fen` after a rejected move. */
   resetKey?: number;
   label?: string;
+  /** A brief signal on the board itself: `right:<n>` or `wrong:<n>`; a new value plays it again. */
+  flash?: string | null;
 }
+
+/** Asks the board on screen to turn round (sent by the run bar). */
+export const FLIP_EVENT = 'trainer:flip-board';
 
 const PROMOTION: { role: 'q' | 'r' | 'b' | 'n'; name: string; glyph: string }[] = [
   { role: 'q', name: 'Queen', glyph: '♛' },
@@ -29,8 +34,9 @@ const PROMOTION: { role: 'q' | 'r' | 'b' | 'n'; name: string; glyph: string }[] 
   { role: 'n', name: 'Knight', glyph: '♞' },
 ];
 
-export function Board({ fen, orientation, movable, lastMove, marks, arrow, onMove, resetKey = 0, label }: BoardProps) {
+export function Board({ fen, orientation, movable, lastMove, marks, arrow, onMove, resetKey = 0, label, flash }: BoardProps) {
   const el = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
   const api = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
@@ -44,7 +50,7 @@ export function Board({ fen, orientation, movable, lastMove, marks, arrow, onMov
 
   useEffect(() => {
     if (!el.current) return;
-    api.current = Chessground(el.current, { coordinates: true, animation: { enabled: !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, duration: 180 }, premovable: { enabled: false }, drawable: { enabled: false, visible: true } });
+    api.current = Chessground(el.current, { coordinates: true, animation: { enabled: !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, duration: 240 }, premovable: { enabled: false }, drawable: { enabled: false, visible: true } });
     return () => {
       api.current?.destroy();
       api.current = null;
@@ -83,12 +89,30 @@ export function Board({ fen, orientation, movable, lastMove, marks, arrow, onMov
     cg.set(config);
   }, [fen, shown, movable, lastMove, marks, arrow, pos, resetKey, redraw]);
 
+  // A run page has its flip control in the bar at the top, not under each board.
+  useEffect(() => {
+    const flip = () => setFlipped((f) => !f);
+    window.addEventListener(FLIP_EVENT, flip);
+    return () => window.removeEventListener(FLIP_EVENT, flip);
+  }, []);
+
+  useEffect(() => {
+    const box = wrap.current;
+    if (!flash || !box) return;
+    const cls = `flash-${flash.split(':')[0]}`;
+    box.classList.remove('flash-right', 'flash-wrong');
+    void box.offsetWidth; // restart the animation when the same signal is given twice
+    box.classList.add(cls);
+    const t = setTimeout(() => box.classList.remove(cls), 700);
+    return () => clearTimeout(t);
+  }, [flash]);
+
   return (
     // Chessground remembers where the board is on screen and only re-measures on scroll or
     // resize. When something above the board appears or disappears (a notice, the offline
     // strip) the board moves without either, and a tap would land on the wrong square. So
     // the board is measured again at the start of every touch, before Chessground sees it.
-    <div className="board-wrap" onTouchStartCapture={remeasure} onMouseDownCapture={remeasure} onPointerDownCapture={remeasure}>
+    <div className="board-wrap" ref={wrap} onTouchStartCapture={remeasure} onMouseDownCapture={remeasure} onPointerDownCapture={remeasure}>
       <div className="board" ref={el} role="img" aria-label={label ?? `Chess board, ${pos.turn} to move`} data-fen={fen} data-turn={pos.turn} data-orientation={shown} data-movable={movable && movable === pos.turn ? movable : 'none'} />
       {promo && (
         <div className="promo" role="dialog" aria-label="Choose promotion piece">

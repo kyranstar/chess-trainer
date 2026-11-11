@@ -19,6 +19,7 @@ import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { SenseDrill, senseItemById } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
+import { Ask, useRunNote } from './Stage';
 
 export type Picker = (exclude: Set<string>, index: number) => Puzzle | null;
 
@@ -29,7 +30,10 @@ export function PuzzleStream(props: {
   conceptId: string | null | ((p: Puzzle) => string | null);
   sessionId: string | null;
   allowHints: boolean;
-  heading?: string | ((p: Puzzle) => string);
+  /** What the positions are about, when that is meant to be known (the concept being practised). */
+  heading?: string;
+  /** A count for the run bar, given the number of positions finished so far. */
+  note?: (done: number) => string;
   seen: Set<string>;
   /** Stop offering more (time is up); the current position can still be finished. */
   stop?: boolean;
@@ -44,6 +48,7 @@ export function PuzzleStream(props: {
   const [current, setCurrent] = useState<Puzzle | null | undefined>(undefined);
   const propsRef = useRef(props);
   propsRef.current = props;
+  useRunNote(props.note && current ? props.note(count) : null);
 
   function next(n: number) {
     const p = propsRef.current;
@@ -74,7 +79,6 @@ export function PuzzleStream(props: {
     );
   }
   const conceptId = typeof props.conceptId === 'function' ? props.conceptId(current) : props.conceptId;
-  const heading = typeof props.heading === 'function' ? props.heading(current) : props.heading;
   return (
     <PuzzlePlayer
       key={current.id}
@@ -84,7 +88,7 @@ export function PuzzleStream(props: {
       sessionId={props.sessionId}
       packVersion={pool.version}
       allowHints={props.allowHints}
-      heading={heading}
+      heading={props.heading}
       onRecorded={props.onAttempt}
       nextLabel={props.nextLabel}
       onNext={() => {
@@ -110,6 +114,7 @@ function KpkCheckRunner({ concept, learner, sessionId, onDone }: { concept: Conc
   const attempts = useRef<Attempt[]>([]);
   const [i, setI] = useState(0);
   const [result, setResult] = useState<ReturnType<typeof gradeCheck> | null>(null);
+  useRunNote(result ? null : `Check ${Math.min(i + 1, KPK_CHECK.size)} of ${KPK_CHECK.size}`);
   const set = useMemo(
     () => kpkCheckSet(new Set(learner.attempts.filter((a) => a.exerciseKind === 'endgame').map((a) => a.exerciseId)), KPK_CHECK.size),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,10 +133,9 @@ function KpkCheckRunner({ concept, learner, sessionId, onDone }: { concept: Conc
     return (
       <div className="check-result" data-testid="check-result" data-passed={result.passed}>
         <p className="kicker">Check: {concept.title}</p>
-        <h2>{result.correct} of {result.total} played out correctly</h2>
-        <p>{result.passed ? `Passed (needs ${KPK_CHECK.pass} of ${KPK_CHECK.size}). This concept now counts as demonstrated.` : `Not passed yet (needs ${KPK_CHECK.pass} of ${KPK_CHECK.size}). You can retake it with new starts.`}</p>
-        <p className="muted">Each start counts only if every move kept the theoretical result against perfect play, with no help. Five starts is a small sample: treat it as a gate, not a measurement.</p>
-        <div className="actions"><button className="primary" data-testid="check-done" onClick={() => onDone(result.passed)}>Continue</button></div>
+        <h2>{result.passed ? 'Passed' : 'Not passed yet'}: {result.correct} of {result.total} played out correctly</h2>
+        <p>{result.passed ? 'This concept now counts as demonstrated.' : `It needs ${KPK_CHECK.pass} of ${KPK_CHECK.size}. You can retake it with new starts.`}</p>
+        <div className="actions dock"><button className="primary" data-testid="check-done" onClick={() => onDone(result.passed)}>Continue</button></div>
       </div>
     );
   }
@@ -139,7 +143,6 @@ function KpkCheckRunner({ concept, learner, sessionId, onDone }: { concept: Conc
   return (
     <KpkDrill
       key={`${item.goal}:${item.start}`} start={item.start} goal={item.goal} sessionId={sessionId} context="check" allowShow={false}
-      heading={`Check: ${concept.title}, ${i + 1} of ${KPK_CHECK.size}`}
       onRecorded={(a) => attempts.current.push(a)}
       onDone={() => {
         if (i + 1 < KPK_CHECK.size) return setI(i + 1);
@@ -224,12 +227,11 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
     return (
       <div className="check-result" data-testid="check-result" data-passed={result.passed}>
         <p className="kicker">Check: {concept.title}</p>
-        <h2>{result.correct} of {result.total} solved first try</h2>
+        <h2>{result.passed ? 'Passed' : 'Not passed yet'}: {result.correct} of {result.total} solved first try</h2>
         <p>{result.passed
-          ? `Passed (needs ${CHECK.pass} of ${CHECK.size}). This concept now counts as demonstrated on unseen positions.`
-          : `Not passed yet (needs ${CHECK.pass} of ${CHECK.size}). The missed positions are in your review queue, and you can retake the check with new positions.`}</p>
-        <p className="muted">Positions were rated {CHECK.band.lo}–{CHECK.band.hi - 1} on the Lichess puzzle scale, with no hints. Five positions is a small sample: treat it as a gate, not a measurement.</p>
-        <div className="actions"><button className="primary" data-testid="check-done" onClick={() => onDone(result.passed)}>Continue</button></div>
+          ? 'This concept now counts as demonstrated on unseen positions.'
+          : `It needs ${CHECK.pass} of ${CHECK.size}. The missed positions are in your review queue; the check can be retaken with new positions.`}</p>
+        <div className="actions dock"><button className="primary" data-testid="check-done" onClick={() => onDone(result.passed)}>Continue</button></div>
       </div>
     );
   }
@@ -242,7 +244,7 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
       sessionId={sessionId}
       allowHints={false}
       seen={new Set()}
-      heading={carried.current.length > 0 ? `Check: ${CHECK.size} unseen positions, no hints (${carried.current.length} already answered)` : `Check: ${CHECK.size} unseen positions, no hints`}
+      note={(done) => `Check ${Math.min(carried.current!.length + done + 1, CHECK.size)} of ${CHECK.size}`}
       onAttempt={(a) => attempts.current.push(a)}
       onFinished={grade}
     />
@@ -250,11 +252,9 @@ function PuzzleCheckRunner({ concept, learner, sessionId, onDone }: { concept: C
 }
 
 /** Works through review items that are due, oldest first. */
-export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, heading, single }: {
+export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, single }: {
   due: ReviewState[]; sessionId: string | null; stop?: boolean; onAttempt?: (a: Attempt) => void; onFinished: (reason: 'done' | 'stopped') => void;
-  /** Shown instead of "Review, n due" (one-button practice does not say what kind of item this is). */
-  heading?: string;
-  /** Finish straight after the last item, without the "queue cleared" screen. */
+  /** One item inside one-button practice: no count is shown (it does not say what kind of item this is), and no "queue cleared" screen. */
   single?: boolean;
 }) {
   const pool = usePool();
@@ -267,6 +267,8 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, head
   const queue = useRef(reviewOrder(due).map((d) => d.itemId));
   const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition; move?: MoveItem } | null>(null);
   const [i, setI] = useState(0);
+  const leftNow = queue.current.length - i;
+  useRunNote(single || leftNow <= 0 ? null : `${leftNow} left`);
   if (!pool) return <p className="muted">Loading positions</p>;
 
   const advance = () => {
@@ -283,13 +285,12 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, head
       </div>
     );
   }
-  const left = queue.current.length - i;
   if (itemId.startsWith('lichess:')) {
     const puzzle = pool.byId.get(itemId.slice(8));
     if (!puzzle) return <RetiredItem onNext={advance} />;
     return (
       <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
-        allowHints={false} heading={heading ?? `Review, ${left} due`} onRecorded={onAttempt} onNext={advance} />
+        allowHints={false} onRecorded={onAttempt} onNext={advance} />
     );
   }
   if (itemId.startsWith('sense:')) {
@@ -299,41 +300,38 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, head
     if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
     const item = held.current.sense;
     if (!item) return <RetiredItem onNext={advance} />;
-    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" heading={heading ?? `Review, ${left} due`} onDone={advance} />;
+    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" onDone={advance} />;
   }
   if (itemId.startsWith('move:')) {
     if (!games) return <p className="muted">Loading your games</p>;
     if (held.current?.id !== itemId) held.current = { id: itemId, move: moveItems(games, { fromMove: 1, toMove: 200 }).find((m) => m.id === itemId) };
     const move = held.current.move;
     if (!move) return <RetiredItem onNext={advance} />;
-    return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" heading={heading ?? `Review, ${left} due`} onRecorded={onAttempt} onDone={advance} />;
+    return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" onRecorded={onAttempt} onDone={advance} />;
   }
   if (itemId.startsWith('kpk:')) {
     const [, goal, ...rest] = itemId.split(':');
-    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
+    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} onDone={advance} />;
   }
   if (itemId.startsWith('game:')) {
     if (!games) return <p className="muted">Loading your games</p>;
     if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
     const drill = held.current.drill;
     if (!drill) return <RetiredItem onNext={advance} />;
-    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
+    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} onDone={advance} />;
   }
   if (itemId.startsWith('opening:')) {
     const entry = repertoire.find((e) => drillId(e) === itemId);
     if (!entry) return <RetiredItem onNext={advance} />;
-    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} heading={heading ?? `Review, ${left} due`} onDone={advance} />;
+    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} onDone={advance} />;
   }
   const [, lessonId, stepNo] = itemId.split(':');
   const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
   const step = lesson?.steps[Number(stepNo) - 1];
   if (!lesson || !step || step.type !== 'try') return <RetiredItem onNext={advance} />;
   return (
-    <section className="puzzle">
-      <header className="puzzle-head">
-        <p className="kicker">{heading ?? `Review, ${left} due`}</p>
-        <h2>{CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title}</h2>
-      </header>
+    <section className="lesson-review">
+      <Ask title={CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title} />
       <LessonTry key={itemId} lesson={lesson} stepIndex={Number(stepNo) - 1} step={step} hideBefore sessionId={sessionId} context="review" onDone={advance} />
     </section>
   );

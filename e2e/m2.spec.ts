@@ -74,12 +74,12 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   expect(backup.data.gameJournal[0].turningPoint).toContain('knight on f6');
 });
 
-test('Today has one thing to do, and Progress opens on three answers with every other number one tap away', async ({ page }) => {
+test('Today has one thing to do, and Progress opens on the headline with every other number and the backup one tap away', async ({ page }) => {
   // Not through openApp: that helper opens "all the numbers" for the tests that read them.
   await page.goto('./#/today');
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
-  await expect(page.getByTestId('start-session')).toHaveText('Start training: about 30 minutes');
+  await expect(page.getByTestId('start-session')).toHaveText('Start training · 30 min');
   await expect(page.getByTestId('start-mix')).toBeVisible();
   // The plan, the other lengths and the optional baseline are folded away until asked for.
   await expect(page.getByTestId('scoresheet')).toBeHidden();
@@ -87,14 +87,17 @@ test('Today has one thing to do, and Progress opens on three answers with every 
   await page.getByTestId('today-options').locator('summary').click();
   await expect(page.getByTestId('scoresheet')).toBeVisible();
   await page.getByRole('button', { name: '20 min' }).click();
-  await expect(page.getByTestId('start-session')).toHaveText('Start training: about 20 minutes');
+  await expect(page.getByTestId('start-session')).toHaveText('Start training · 20 min');
 
   await page.goto('./#/progress');
-  await expect(page.getByTestId('card-next')).toBeVisible();
+  await expect(page.getByTestId('card-headline')).toBeVisible();
   await expect(page.getByTestId('card-unseen')).toBeHidden();
   await expect(page.getByTestId('card-ownmove')).toBeHidden();
   await page.getByTestId('progress-all').locator('summary').click();
   await expect(page.getByTestId('card-unseen')).toBeVisible();
+  // The backup has its own fold, one tap from the top.
+  await expect(page.getByTestId('backup-download')).toBeHidden();
+  await page.getByTestId('progress-data').locator('summary').click();
   await expect(page.getByTestId('backup-download')).toBeVisible();
   // The choice is remembered on this device.
   await expect.poll(() => page.evaluate(() => localStorage.getItem('progress.all'))).toBe('1');

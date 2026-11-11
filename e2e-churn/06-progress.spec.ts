@@ -78,7 +78,7 @@ test('own-game question: "See it in the game" after answering', async ({ page })
     const kind = await drill.getAttribute('data-kind');
     await page.getByTestId('sense-no').click();
     await expect(page.getByTestId('sense-verdict')).toBeVisible();
-    const link = page.getByRole('link', { name: 'See it in the game' });
+    const link = page.getByRole('link', { name: 'In the game' });
     if (truth !== 'true') {
       // Nothing was there, so there is no position to show and no link that would lead nowhere.
       await expect(link).toHaveCount(0);

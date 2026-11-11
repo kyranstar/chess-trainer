@@ -13,6 +13,7 @@ import type { Doubtful } from '../openings/fromGames';
 import { entriesFromPgn, repertoireToPgn } from '../openings/pgn';
 import { classifyMove, type Decision, drillId, makeEntry, type MoveEvidence, type OpeningBook, type RepertoireEntry, type Side, SOUND_MARGIN, walkRepertoire } from '../openings/repertoire';
 import { Board } from './Board';
+import { Ask, useRunNote } from './Stage';
 
 let bookCache: OpeningBook | null | undefined;
 
@@ -87,8 +88,8 @@ function EvidenceText({ ev, san }: { ev: MoveEvidence; san: string }) {
 }
 
 /** Recall of one repertoire move. Disclosed recall mode: only the chosen move counts as recalled. */
-export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: {
-  entry: RepertoireEntry; book: OpeningBook | null | undefined; band: number; sessionId: string | null; heading?: string; onDone: () => void;
+export function OpeningDrill({ entry, book, band, sessionId, onDone }: {
+  entry: RepertoireEntry; book: OpeningBook | null | undefined; band: number; sessionId: string | null; onDone: () => void;
 }) {
   const db = useDb();
   useFocusMode();
@@ -126,13 +127,9 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
 
   return (
     <section className="puzzle" data-testid="opening-drill" data-expected={result ? '' : entry.uci} data-done={!!result}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        <h2>Your move as {entry.side === 'white' ? 'White' : 'Black'}</h2>
-        <p className="muted">After {pathText(entry.path)}. Recall mode: only the repertoire move counts for the review schedule.{entry.source ? ` This one is ${sourceLabel(entry)}.` : ''}</p>
-      </header>
-      <Board fen={fen} orientation={entry.side} movable={result ? null : entry.side} lastMove={result ? entry.uci : null} onMove={(u) => void record(u, false)} resetKey={resetKey} />
-      <div className="feedback" aria-live="polite">
+      <Board fen={fen} orientation={entry.side} movable={result ? null : entry.side} lastMove={result ? entry.uci : null} onMove={(u) => void record(u, false)} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : 'none'}:${entry.id}` : null} />
+      <div className="say" aria-live="polite">
+        {!result && <Ask title={`Your move as ${entry.side === 'white' ? 'White' : 'Black'}`} meta={`After ${pathText(entry.path)}.${entry.source ? ` It is ${sourceLabel(entry)}.` : ''}`} />}
         {result?.ok && <div className="verdict right" data-testid="drill-verdict" data-ok="true"><strong>{entry.san}: recalled.</strong></div>}
         {result && !result.ok && (
           <div className="verdict neutral" data-testid="drill-verdict" data-ok="false" data-alt={result.ev?.verdict ?? ''}>
@@ -145,12 +142,12 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
           </div>
         )}
       </div>
-      <div className="actions">
+      <div className="actions dock">
         {!result && <button onClick={() => void record(null, true)}>Show my move</button>}
         {result && !result.ok && !adopted && entry.source && result.playedSan && result.ev?.verdict === 'sound' && (
-          <button data-testid="drill-adopt" onClick={() => void adopt()}>Make {result.playedSan} my move here</button>
+          <button data-testid="drill-adopt" onClick={() => void adopt()}>Make {result.playedSan} my move</button>
         )}
-        {result && <button className="primary" data-testid="drill-next" onClick={onDone}>Continue</button>}
+        {result && <button className="primary" data-testid="drill-next" onClick={onDone}>Next</button>}
       </div>
     </section>
   );
@@ -161,7 +158,7 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
  * know what the course teaches, so it does not drill this move: it asks once whether it is his
  * move. His answer (a tap, or a different move played on the board) is what gets recalled later.
  */
-function ConfirmMove({ entry, book, band, heading, onDone }: { entry: RepertoireEntry; book: OpeningBook | null | undefined; band: number; heading?: string; onDone: () => void }) {
+function ConfirmMove({ entry, book, band, onDone }: { entry: RepertoireEntry; book: OpeningBook | null | undefined; band: number; onDone: () => void }) {
   const db = useDb();
   useFocusMode();
   const course = courseFor(entry.side, entry.path)!;
@@ -181,23 +178,20 @@ function ConfirmMove({ entry, book, band, heading, onDone }: { entry: Repertoire
 
   return (
     <section className="puzzle" data-testid="opening-confirm" data-inferred={entry.uci}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        <h2>Is {entry.san} your move here?</h2>
-        <p className="muted">
-          After {pathText(entry.path)}. This opening is covered by your course {course.title} on {course.provider}.{' '}
-          {entry.source === 'own-games' ? `In your games you play ${entry.san} here${entry.games ? ` (${entry.games.played} of ${entry.games.reached})` : ''}.` : `${entry.san} was a suggestion.`}{' '}
-          The app does not know what the course teaches. If the course plays a different move, play that move on the board.
-        </p>
-      </header>
       <Board fen={choice ? fenOf(applyUci(pos, choice)) : entry.fen} orientation={entry.side} movable={choice ? null : entry.side} lastMove={choice} onMove={setChoice} resetKey={resetKey} />
-      <div className="feedback">{choice && !same && ev && <EvidenceText ev={ev} san={sanOf(pos, choice)} />}</div>
-      <div className="actions">
-        {!choice && <button className="primary" data-testid="confirm-yes" disabled={!armed} onClick={() => void save(entry.uci)}>Yes, {entry.san} is my move</button>}
-        {choice && <button className="primary" data-testid="confirm-other" disabled={!armed} onClick={() => void save(choice)}>{same ? `Yes, ${entry.san} is my move` : `Make ${sanOf(pos, choice)} my move here`}</button>}
+      <div className="say">
+        <Ask
+          title={`Is ${entry.san} your move here?`}
+          meta={`After ${pathText(entry.path)}. ${entry.source === 'own-games' ? `You play it in your games${entry.games ? ` (${entry.games.played} of ${entry.games.reached})` : ''}.` : 'It was a suggestion.'} If your course ${course.title} plays another move, play that one on the board.`}
+        />
+        {choice && !same && ev && <EvidenceText ev={ev} san={sanOf(pos, choice)} />}
+      </div>
+      <div className="actions dock">
         {choice && <button disabled={!armed} onClick={() => { setChoice(null); setResetKey((k) => k + 1); }}>Take it back</button>}
         <a className="button" data-testid="confirm-course" href={course.url} target="_blank" rel="noreferrer">Open the course</a>
-        <button className="quiet" data-testid="confirm-later" disabled={!armed} onClick={onDone}>Ask me later</button>
+        <button className="quiet" data-testid="confirm-later" disabled={!armed} onClick={onDone}>Later</button>
+        {!choice && <button className="primary" data-testid="confirm-yes" disabled={!armed} onClick={() => void save(entry.uci)}>Yes, {entry.san} is my move</button>}
+        {choice && <button className="primary" data-testid="confirm-other" disabled={!armed} onClick={() => void save(choice)}>{same ? `Yes, ${entry.san} is my move` : `Make ${sanOf(pos, choice)} my move`}</button>}
       </div>
     </section>
   );
@@ -221,7 +215,7 @@ function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision;
   return (
     <section className="puzzle" data-testid="gap-builder" data-path={gap.path.join(' ')} data-reach={gap.reach.toFixed(4)}>
       <h2>What do you play here?</h2>
-      <p className="muted">After {pathText(gap.path)}. With your repertoire so far, {formatPct(gap.reach)} of games at this level reach this position. {course ? `This opening is covered by your course ${course.title}: look the position up there and play its move here. The app suggests nothing of its own in this opening.` : 'Play the move you want to play here on the board.'}</p>
+      <p className="muted">After {pathText(gap.path)}; {formatPct(gap.reach)} of games at this level reach it. {course ? `Covered by your course ${course.title}: play its move here.` : 'Play your move on the board.'}</p>
       {course && <p><a className="button" data-testid="gap-course" href={course.url} target="_blank" rel="noreferrer">Open {course.title} on {course.provider}</a></p>}
       <Board fen={shownFen} orientation={side} movable={choice ? null : side} lastMove={choice} onMove={setChoice} resetKey={resetKey} />
       <div className="feedback">{choice && ev && <EvidenceText ev={ev} san={sanOf(pos, choice)} />}</div>
@@ -232,7 +226,7 @@ function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision;
             <button onClick={() => { setChoice(null); setResetKey((k) => k + 1); }}>Choose another</button>
           </>
         ) : (
-          <button className="quiet" data-testid="skip-gap" onClick={onSkip}>Skip this position for now</button>
+          <button className="quiet" data-testid="skip-gap" onClick={onSkip}>Skip this position</button>
         )}
       </div>
     </section>
@@ -319,7 +313,39 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
     <div className="page" data-testid="openings-home">
       <a className="back" href={href('practice')}>Practice</a>
       <h1>Opening repertoire</h1>
-      <p className="lede">One set of answers. In the openings your courses cover, the course decides: the app suggests nothing there and asks you to confirm a move before it is recalled. Elsewhere your moves are read from your own games, and common positions with no move get a suggestion from open game data and an engine check.</p>
+      <div className="length-picker" role="group" aria-label="Side">
+        {(['white', 'black'] as Side[]).map((s) => (
+          <button key={s} className={s === prefs.side ? 'chip is-on' : 'chip'} aria-pressed={s === prefs.side} data-testid={`side-${s}`} onClick={() => { prefs.setSide(s); setSkip(0); }}>As {s === 'white' ? 'White' : 'Black'}</button>
+        ))}
+      </div>
+      <section className="card" data-testid="recall-card">
+        <p><strong>{mine.length} move{mine.length === 1 ? '' : 's'}</strong> as {prefs.side === 'white' ? 'White' : 'Black'}; {toRecall.length} to recall now.</p>
+        {(count('own-games') > 0 || count('suggested') > 0) && <p className="muted small" data-testid="repertoire-sources">{count('own-games')} from your games, {count('suggested')} suggested, {count(undefined)} confirmed by you.{mine.filter(needsConfirming).length > 0 ? ` ${mine.filter(needsConfirming).length} in your courses’ openings are asked about, not tested, until you confirm them.` : ''}</p>}
+        {toRecall.length > 0 && <div className="actions"><a className="button primary" data-testid="start-recall" href={href('practice/run', { mode: 'openings', side: prefs.side })}>Recall {toRecall.length} move{toRecall.length === 1 ? '' : 's'}</a></div>}
+      </section>
+      {left.length > 0 && (
+        <section className="card" data-testid="left-card">
+          <h2>Where recent games left your repertoire</h2>
+          <ul className="attempt-list">
+            {left.map((x) => (
+              <li key={x.gameId} data-testid="left-row">
+                {x.date}: after {pathText(x.path)} you played {x.playedSan}; your move is {x.mineSan}.{' '}
+                {x.course && <a href={x.course.url} target="_blank" rel="noreferrer">Review it in {x.course.title}</a>}
+              </li>
+            ))}
+          </ul>
+          <p className="definition-small">Only moves you recorded or confirmed yourself count here. The first such move of each game, newest first.</p>
+        </section>
+      )}
+      {gap ? (
+        // Keyed by position: a new position must start with no pending choice from the last one.
+        <GapBuilder key={`${prefs.side}|${gap.positionKey}`} gap={gap} side={prefs.side} book={book} band={prefs.band} onSaved={() => { held.current = null; setSkip(0); }} onSkip={() => { held.current = null; setSkip((s) => (s + 1) % Math.max(1, walk.gaps.length)); }} />
+      ) : (
+        <p className="note">Every position the data reaches has an answer recorded.</p>
+      )}
+      <details className="source-details" data-testid="openings-more">
+        <summary>Courses, coverage and files</summary>
+        <p className="definition-small">One set of answers. In the openings your courses cover, the course decides: the app suggests nothing there and asks you to confirm a move before it is recalled. Elsewhere your moves are read from your own games, and common positions with no move get a suggestion from open game data and an engine check.</p>
       <section className="card" data-testid="courses-card">
         <h2>Your courses</h2>
         <ul className="attempt-list">
@@ -336,26 +362,6 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
         </ul>
         <p className="definition-small" data-testid="course-note">The courses stay on Chessreps: its terms do not allow their lines to be copied or collected, so the app does not know them. It learns a course move from you, when you confirm it or play it on the board here, and then holds you to it.</p>
       </section>
-      {left.length > 0 && (
-        <section className="card" data-testid="left-card">
-          <h2>Where recent games left your repertoire</h2>
-          <ul className="attempt-list">
-            {left.map((x) => (
-              <li key={x.gameId} data-testid="left-row">
-                {x.date}: after {pathText(x.path)} you played {x.playedSan}; your move is {x.mineSan}.{' '}
-                {x.course && <a href={x.course.url} target="_blank" rel="noreferrer">Review it in {x.course.title}</a>}
-              </li>
-            ))}
-          </ul>
-          <p className="definition-small">Only moves you recorded or confirmed yourself count here. The first such move of each game, newest first.</p>
-        </section>
-      )}
-
-      <div className="length-picker" role="group" aria-label="Side">
-        {(['white', 'black'] as Side[]).map((s) => (
-          <button key={s} className={s === prefs.side ? 'chip is-on' : 'chip'} aria-pressed={s === prefs.side} data-testid={`side-${s}`} onClick={() => { prefs.setSide(s); setSkip(0); }}>As {s === 'white' ? 'White' : 'Black'}</button>
-        ))}
-      </div>
       <fieldset className="choice">
         <legend>Opponents rated (Lichess scale)</legend>
         <div className="length-picker">
@@ -364,7 +370,6 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
           ))}
         </div>
       </fieldset>
-
       <section className="card" data-testid="coverage">
         <h2>How far your repertoire reaches</h2>
         <table className="concept-table">
@@ -384,21 +389,6 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
           Share of games in which you have a recorded answer at each of your moves, following your own choices and weighting the opponent’s replies by how often players rated {bandLabel(book, prefs.band)} on Lichess play them. Data: {m.games.used.toLocaleString()} rated blitz, rapid and classical games from the start of {m.source.month} (CC0). “Outside the data” means the statistics stop or the reply is too rare to be listed. It measures what is recorded, not what you remember at the board.
         </p>
       </section>
-
-      {gap ? (
-        // Keyed by position: a new position must start with no pending choice from the last one.
-        <GapBuilder key={`${prefs.side}|${gap.positionKey}`} gap={gap} side={prefs.side} book={book} band={prefs.band} onSaved={() => { held.current = null; setSkip(0); }} onSkip={() => { held.current = null; setSkip((s) => (s + 1) % Math.max(1, walk.gaps.length)); }} />
-      ) : (
-        <p className="note">Every position the data reaches has an answer recorded.</p>
-      )}
-
-      <section className="card" data-testid="recall-card">
-        <h2>Recall</h2>
-        <p>{mine.length} move{mine.length === 1 ? '' : 's'} recorded as {prefs.side === 'white' ? 'White' : 'Black'}; {toRecall.length} to recall now (new or due).</p>
-        {(count('own-games') > 0 || count('suggested') > 0) && <p className="muted" data-testid="repertoire-sources">{count('own-games')} read from your games, {count('suggested')} suggested, {count(undefined)} recorded or confirmed by you.{mine.filter(needsConfirming).length > 0 ? ` ${mine.filter(needsConfirming).length} in your courses’ openings wait for your confirmation; recall asks about those first-hand instead of testing them.` : ''}</p>}
-        {toRecall.length > 0 && <div className="actions"><a className="button primary" data-testid="start-recall" href={href('practice/run', { mode: 'openings', side: prefs.side })}>Recall {toRecall.length} move{toRecall.length === 1 ? '' : 's'}</a></div>}
-      </section>
-
       <section className="card" data-testid="pgn-card">
         <h2>Your own PGN</h2>
         <p className="muted">If you keep your lines in a PGN file that you wrote yourself, it can be read in: every move for {prefs.side === 'white' ? 'White' : 'Black'} in the main lines and variations becomes a recorded move. Do not import files copied out of a paid course.</p>
@@ -409,7 +399,6 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
         </div>
         {pgnMessage && <p className={`note ${pgnMessage.kind === 'error' ? 'is-error' : 'is-ok'}`} role="status" data-testid="pgn-message">{pgnMessage.text}</p>}
       </section>
-
       {doubtful.filter((d) => d.side === prefs.side).length > 0 && (
         <section className="card" data-testid="doubtful-card">
           <h2>Habits not taken over</h2>
@@ -421,23 +410,30 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
           </ul>
         </section>
       )}
-
+      </details>
       {mine.length > 0 && (
-        <section className="concept-group">
-          <h2>Your recorded moves</h2>
+        <details className="source-details" data-testid="openings-moves">
+          <summary>Your moves ({mine.length})</summary>
           <ul className="attempt-list">
             {mine.slice().sort((a, b) => a.path.length - b.path.length || (pathText(a.path) < pathText(b.path) ? -1 : 1)).map((e) => (
               <li key={e.id}>
                 <span className="journal-row" data-testid="repertoire-row">
                   <span className="concept-name">{pathText([...e.path, e.san])}</span>
-                  <span className="concept-meta" data-source={e.source ?? 'hand'}>after {pathText(e.path)}, you play {e.san}; {sourceLabel(e)}</span>
-                  <button className="quiet" onClick={() => void declineEntry(db, e).then(() => refreshRepertoire(db))} aria-label={`Remove ${e.san} after ${pathText(e.path)}`}>Remove and choose again</button>
+                  <span className="concept-meta" data-source={e.source ?? 'hand'}>{sourceLabel(e)}</span>
+                  <button className="quiet" onClick={() => void declineEntry(db, e).then(() => refreshRepertoire(db))} aria-label={`Remove ${e.san} after ${pathText(e.path)}`}>Remove</button>
                 </span>
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
+
+
+
+
+
+
+
     </div>
   );
 }
@@ -457,6 +453,7 @@ export function OpeningRecallRun({ learner, side, onFinished }: { learner: Learn
     queue.current = entries.filter((e) => e.side === side && (!queued.has(drillId(e)) || dueIds.has(drillId(e)))).sort((a, b) => a.path.length - b.path.length);
   }
   const entry = queue.current?.[i];
+  useRunNote(queue.current && entry ? `${queue.current.length - i} left` : null);
   if (!queue.current) return <p className="muted">Loading</p>;
   if (!entry) {
     return (
@@ -466,6 +463,6 @@ export function OpeningRecallRun({ learner, side, onFinished }: { learner: Learn
       </div>
     );
   }
-  if (needsConfirming(entry)) return <ConfirmMove key={entry.id} entry={entry} book={book} band={prefs.band} heading={`Your course decides here, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
-  return <OpeningDrill key={entry.id} entry={entry} book={book} band={prefs.band} sessionId={null} heading={`Recall, ${queue.current.length - i} left`} onDone={() => setI(i + 1)} />;
+  if (needsConfirming(entry)) return <ConfirmMove key={entry.id} entry={entry} book={book} band={prefs.band} onDone={() => setI(i + 1)} />;
+  return <OpeningDrill key={entry.id} entry={entry} book={book} band={prefs.band} sessionId={null} onDone={() => setI(i + 1)} />;
 }

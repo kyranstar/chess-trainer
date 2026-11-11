@@ -11,7 +11,7 @@ test('after one online visit the app runs with no network: launch, practise, per
   });
   // The app says so itself, so the learner knows when it is safe to go underground.
   await expect(page.getByTestId('offline-ready')).toHaveAttribute('data-ready', 'true');
-  await expect(page.getByTestId('offline-ready')).toContainText('work with no connection');
+  await expect(page.getByTestId('offline-ready')).toContainText('works with no connection');
 
   const requests: string[] = [];
   await context.setOffline(true);
@@ -110,15 +110,14 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
   await page.getByTestId('end-block').click();
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'apply');
   const sense = page.getByTestId('sense-drill');
-  await expect(sense).toContainText('Practice: from your own games');
+  await expect(sense).toContainText('Your game,');
   await page.getByTestId('sense-no').click();
   await expect(page.getByTestId('sense-verdict')).toBeVisible(); // the answer is followed by the engine's stored line
   await page.getByTestId('sense-next').click();
 
   // Then a puzzle on a concept; the built-in engine answers a wrong move without any network.
-  await expect(page.getByTestId('puzzle')).toContainText('Practice:');
+  await expect(page.getByTestId('puzzle')).toContainText('Find the best move.');
   await failPuzzle(page);
-  await page.getByTestId('show-reply').click();
-  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/, { timeout: 30_000 });
+  await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/, { timeout: 30_000 });
 });
 

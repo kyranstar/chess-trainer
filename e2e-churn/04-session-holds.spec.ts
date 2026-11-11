@@ -71,7 +71,7 @@ test('a whole study session under churn: apply (own-game question, puzzle), test
 
   // Test: the check for yesterday's lesson comes first.
   await expect(run).toHaveAttribute('data-block', 'test');
-  await expect(puzzle).toContainText('Check: 5 unseen positions, no hints');
+  await expect(page.getByTestId('run-note')).toHaveText('Check 1 of 5');
   for (let i = 0; i < 2; i++) {
     await solvePuzzle(page);
     await page.getByTestId('next').click();
@@ -353,11 +353,11 @@ test('session learn block: a lesson step with a move to find holds under churn a
   await expect(kpk).toHaveAttribute('data-keeping', /.+/);
   await playMove(page, (await kpk.getAttribute('data-keeping'))!.split(' ')[0]!);
   await expect(kpk).toHaveAttribute('data-keeping', /.+/);
-  const kicker = await page.locator('.puzzle-head .kicker').textContent();
+  const kicker = await page.getByTestId('run-note').textContent();
   await watch(page);
   const c = await everything(page);
   expect(c.after).toBeGreaterThan(c.before + 3);
   expect(c.after).toBeLessThan(c.total);
   await still(page, 'endgame check mid play-out');
-  expect(await page.locator('.puzzle-head .kicker').textContent()).toBe(kicker);
+  expect(await page.getByTestId('run-note').textContent()).toBe(kicker);
 });

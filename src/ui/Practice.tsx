@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { go, href, type Route } from '../app/router';
 import { type Learner, useDueReviews, useNow, usePack, usePool } from '../app/store';
 import { CONCEPT_BY_ID, conceptOpenings, conceptThemes, THEMES } from '../content';
@@ -14,6 +14,7 @@ import { moveItems } from '../games/ownmove';
 import { MixRun } from './Mix';
 import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
+import { RunFrame } from './Stage';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
 
@@ -58,7 +59,11 @@ export function PracticeHome({ learner }: { learner: Learner }) {
       </a>
     </li>
   );
-  const metaFor = (id: string, n: number, k: number) => `${remaining.get(id) ?? 0} unseen left; ${n === 0 ? 'untested' : `${k} of ${n} unseen solved first try`}`;
+  // The count of positions left is only worth saying when it is running low.
+  const metaFor = (id: string, n: number, k: number) => {
+    const left = remaining.get(id) ?? 0;
+    return `${n === 0 ? 'Untested' : `${k} of ${n} solved first try`}${left < 50 ? `; ${left} unseen left` : ''}`;
+  };
 
   return (
     <div className="page" data-testid="practice-home">
@@ -67,23 +72,22 @@ export function PracticeHome({ learner }: { learner: Learner }) {
       <div className="actions">
         <a className="button primary big" data-testid="practice-mix" href={href('practice/run', { mode: 'mix' })}>Just practise</a>
       </div>
-      <p className="lede">One button: the app picks what comes next from what you missed before, your own games and new positions, and does not say which it is. Or choose something yourself below. Everything is recorded the same way: first tries on unseen positions count as evidence, repeats do not.</p>
+      <p className="muted small">The app picks: what is due again, your own games, new positions. Or choose below.</p>
 
       <section className="concept-group">
         <h2>From your own games</h2>
         <ul className="concept-list">
-          {row('move', 'Your move', games === undefined ? 'Loading' : `Play your own move in ordinary positions from your games (moves 10 to 19), then see what can be taken: ${moveCount} position${moveCount === 1 ? '' : 's'}`, { mode: 'move' })}
-          {row('sense', 'Is it safe? Is there something to win?', senseLeft === null ? 'Loading' : senseLeft > 0 ? `Real positions from your games with nothing announced: ${senseLeft} with something in them still unseen, mixed with as many that have nothing` : 'Appears once your games have been fetched and analysed (Progress, Your games)', { mode: 'sense' })}
-          {row('own', 'Find the move you missed', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where one move was clearly best and you played another` : 'Appears once your games have been fetched and analysed', { mode: 'own' })}
+          {row('move', 'Your move', games === undefined ? 'Loading' : `Ordinary positions from your games: play your move, see what it allows. ${moveCount} position${moveCount === 1 ? '' : 's'}`, { mode: 'move' })}
+          {row('sense', 'Is it safe? Is there something to win?', senseLeft === null ? 'Loading' : senseLeft > 0 ? `${senseLeft} unseen with something in them, mixed with as many that have nothing` : 'Appears once your games have been fetched and analysed', { mode: 'sense' })}
+          {row('own', 'Find the move you missed', games === undefined ? 'Loading' : games.length > 0 ? `${ownDrills} position${ownDrills === 1 ? '' : 's'} where one move was clearly best` : 'Appears once your games have been fetched and analysed', { mode: 'own' })}
         </ul>
       </section>
 
       <section className="concept-group">
-        <h2>Missed positions</h2>
+        <h2>Missed before</h2>
         <ul className="concept-list">
           {row('review', 'Review what is due', `${due.length} due now, ${learner.reviews.length} in the queue`, { mode: 'review' })}
         </ul>
-
       </section>
 
       <section className="concept-group">
@@ -102,11 +106,10 @@ export function PracticeHome({ learner }: { learner: Learner }) {
           <li>
             <a href={href('practice/openings')} data-testid="practice-openings">
               <span className="concept-name">Opening repertoire</span>
-              <span className="concept-meta">Record the moves you play, most common positions first, and recall them on a schedule</span>
+              <span className="concept-meta">The moves you play, recalled on a schedule</span>
             </a>
           </li>
         </ul>
-        <p className="muted small">The tactics above are positions from real games that began with your openings.</p>
       </section>
 
       <section className="concept-group">
@@ -115,15 +118,14 @@ export function PracticeHome({ learner }: { learner: Learner }) {
           {endgames.map((s) => row(s.concept.id, s.concept.title, metaFor(s.concept.id, s.evidence.n, s.evidence.successes), { concept: s.concept.id }))}
         </ul>
         <ul className="concept-list">
-          {row('kpk', 'King and pawn against king, exact', `${KPK_DRILLS.win.length + KPK_DRILLS.hold.length - kpkSeen} unseen starts; win it or hold it against perfect play, every move checked against the full table of the ending`, { mode: 'kpk' })}
+          {row('kpk', 'King and pawn against king', `Win it or hold it against perfect play. ${KPK_DRILLS.win.length + KPK_DRILLS.hold.length - kpkSeen} unseen starts`, { mode: 'kpk' })}
         </ul>
-        <p className="muted small">The first group is endgame positions from real games. Other theoretical endings (rook endings, basic mates) are not built yet.</p>
       </section>
 
       <section className="concept-group">
         <h2>Calculation</h2>
         <ul className="concept-list">
-          {row('theme-long', 'Three-move solutions', `${remaining.get('theme:long') ?? 0} unseen left. ${THEMES.long?.description ?? ''}`, { theme: 'long' })}
+          {row('theme-long', 'Three-move solutions', THEMES.long?.description ?? '', { theme: 'long' })}
         </ul>
       </section>
     </div>
@@ -148,17 +150,17 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
   const theme = route.query.get('theme');
   const concept = conceptId ? CONCEPT_BY_ID.get(conceptId) : undefined;
   const seed = `practice|${new Date(now).toDateString()}`;
+  const [looking, setLooking] = useState(false);
+  const [mixCount, setMixCount] = useState(0);
   if (!pool || !learner.ready) return <div className="page"><p className="muted">Loading positions</p></div>;
   if (mode === 'review' && dueAtStart.current === null) dueAtStart.current = due;
 
+  // The bar says where "back" goes; a title is added only when it says something more.
+  const title = mode === 'review' ? 'Review' : mode === 'openings' ? 'Recall' : mode === 'own' ? 'Missed moves' : mode === 'kpk' ? 'King and pawn' : mode === 'sense' ? 'Your games' : mode === 'move' ? 'Your move' : mode === 'mix' ? '' : concept?.title ?? (theme ? THEMES[theme]?.name : '');
   return (
-    <div className="page run" data-testid="practice-run">
-      <header className="run-bar">
-        <a className="back" href={href('practice')}>Practice</a>
-        <p className="run-title">{mode === 'review' ? 'Review' : mode === 'openings' ? 'Repertoire recall' : mode === 'own' ? 'Your games' : mode === 'kpk' ? 'Endgame' : mode === 'sense' ? 'Your games' : mode === 'mix' ? 'Practice' : mode === 'move' ? 'Your move' : concept?.title ?? (theme ? THEMES[theme]?.name : 'Practice')}</p>
-        <span />
-      </header>
-      {mode === 'mix' && <MixRun learner={learner} onFinished={() => go('practice')} />}
+    <RunFrame testid="practice-run" back={mode === 'openings' ? { href: href('practice/openings'), label: 'Repertoire' } : { href: href('practice'), label: 'Practice' }} title={title}
+      side={mode === 'mix' ? <button className="quiet" data-testid="mix-how" aria-label="How is it going?" onClick={() => setLooking(true)}>{mixCount} done</button> : undefined}>
+      {mode === 'mix' && <MixRun learner={learner} onFinished={() => go('practice')} looking={looking} onLooked={() => setLooking(false)} onCount={setMixCount} />}
       {mode === 'move' && <OwnMoveRunFromGames learner={learner} paceOverride={route.query.get('pace') ? Number(route.query.get('pace')) : null} />}
       {mode === 'sense' && <SenseRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
@@ -174,6 +176,6 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
           pick={(exclude, i) => selectPuzzles(pool.puzzles, { themes: [theme], target: learner.level.level - 100, count: 1, exclude, seed: `${seed}|${i}` })[0] ?? null}
           onFinished={() => go('practice')} />
       )}
-    </div>
+    </RunFrame>
   );
 }

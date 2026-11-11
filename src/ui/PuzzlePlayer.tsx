@@ -11,6 +11,7 @@ import { bestLineFor } from '../engine/interactive';
 import { lineSan } from '../games/analyse';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { useLineSteps } from './LineSteps';
+import { Ask } from './Stage';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -19,7 +20,7 @@ export interface PuzzlePlayerProps {
   sessionId: string | null;
   packVersion: string;
   allowHints: boolean;
-  /** Heading shown above the board, e.g. "Review" or the concept title. */
+  /** What the position is about, when that is meant to be known (the concept being practised). */
   heading?: string;
   onRecorded?: (a: Attempt) => void;
   onNext: () => void;
@@ -41,7 +42,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [wrongSan, setWrongSan] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /** The engine's answer to the learner's wrong move: evidence about this position, shown on request. */
+  const [flash, setFlash] = useState<string | null>(null);
+  /** The engine's answer to the learner's wrong move: evidence about this position, played on the board as soon as it is known. */
   const [reply, setReply] = useState<{ after: string; from: string; uci: string; state: 'loading' | 'none' | 'shown'; line?: string; pv?: string[] } | null>(null);
   /** Playing the position again after seeing the solution: practice, never recorded a second time. */
   const [replaying, setReplaying] = useState(false);
@@ -60,6 +62,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     setWrongSan(null);
     setReply(null);
     setReplaying(false);
+    setFlash(null);
     decided.current = false;
     const t = setTimeout(() => {
       setLastMove(initial.setupMove);
@@ -120,10 +123,14 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     const res = submitMove(run, uci);
     setMarks([]);
     if (res.verdict === 'wrong') {
-      setReply({ after: positionAfter(run.fen, uci), from: run.fen, uci, state: 'none' });
+      // The wrong move stays on the board and the engine's answer to it is played as soon as
+      // it is known: what the move leads to is seen, not asked for.
+      const asked = { after: positionAfter(run.fen, uci), from: run.fen, uci, state: 'loading' as const };
+      setReply(asked);
       setWrongSan(sanOf(before, uci));
       setRun(res.run);
-      setResetKey((k) => k + 1);
+      setFlash(`wrong:${Date.now()}`);
+      void showReply(asked);
       void decide(res.run.hints > 0 ? 'assisted' : 'fail', res.run);
       return;
     }
@@ -132,6 +139,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
       setRun(res.run);
       setLastMove(uci);
       setPhase('solved');
+      setFlash(`right:${Date.now()}`);
       void decide(res.run.hints > 0 ? 'assisted' : res.run.mistakes > 0 ? 'fail' : 'success', res.run);
       return;
     }
@@ -147,11 +155,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     }, 380);
   }
 
-  async function showReply() {
-    if (!reply || reply.state === 'loading') return;
-    const asked = reply;
+  async function showReply(asked: { after: string; from: string; uci: string }) {
     const after = asked.after;
-    setReply({ ...asked, state: 'loading' });
     const best = await bestLineFor(after);
     // The learner may have moved on meanwhile; only fill in the request that is still on screen.
     setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 9) } : { ...asked, state: 'shown' }) : r));
@@ -170,6 +175,13 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     void decide(run.hints > 0 ? 'assisted' : 'fail', run);
     setPhase('revealed');
     setMarks([expectedMove(run).slice(0, 2), expectedMove(run).slice(2, 4)]);
+  }
+
+  /** Back to the position as it was asked, after a wrong move and what it led to. */
+  function tryAgain() {
+    setWrongSan(null);
+    setReply(null);
+    setResetKey((k) => k + 1);
   }
 
   /** After the solution has been shown: the same position once more, by hand. */
@@ -210,26 +222,26 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   // move followed by the engine's answer to it.
   const line = phase === 'revealed'
     ? { from: run.fen, pv: remainingLine(run) }
-    : phase === 'solving' && wrongSan && reply?.state === 'shown' && reply.pv
-      ? { from: reply.from, pv: [reply.uci, ...reply.pv] }
+    : phase === 'solving' && wrongSan && reply
+      ? { from: reply.from, pv: [reply.uci, ...(reply.pv ?? [])] }
       : null;
-  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 0, startLabel: 'Play the solution', me: initial.solver, stopThere: false } : { initial: 2, me: initial.solver, cap: 6 });
+  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 99, startLabel: 'Play the solution', me: initial.solver, stopThere: false } : { initial: 2, me: reply?.state === 'shown' && reply.pv ? initial.solver : undefined, cap: 6 });
   const stepping = !!steps.pos && steps.step > 0;
+  const side = solver === 'white' ? 'White' : 'Black';
+  const themes = puzzle.themes.filter((t) => THEMES[t]).map((t) => THEMES[t]!.name).join(', ');
   return (
-    <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' ? expectedMove(run) : ''}>
-      <header className="puzzle-head">
-        {props.heading && <p className="kicker">{props.heading}</p>}
-        <h2>{phase === 'setup' ? 'Opponent is moving' : `${solver === 'white' ? 'White' : 'Black'} to move`}</h2>
-      </header>
-      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !stepping ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? steps.marks : marks} onMove={onMove} resetKey={resetKey} />
+    <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' && !wrongSan ? expectedMove(run) : ''}>
+      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !wrongSan ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? steps.marks : marks} onMove={onMove} resetKey={resetKey} flash={flash} />
 
-      <div className="feedback" aria-live="polite">
-        {phase === 'solving' && !wrongSan && !outcome && <p className="muted">Find the best move. Any checkmate also counts.</p>}
-        {phase === 'solving' && outcome === 'assisted' && !wrongSan && <p className="muted">Hint used: counts as assisted.</p>}
+      <div className="say" aria-live="polite">
+        {(phase === 'setup' || (phase === 'solving' && !wrongSan)) && (
+          <Ask title={`${side} to move`} meta={outcome === 'assisted' ? 'Hint used: counts as assisted.' : replaying ? 'Second go: not recorded.' : `Find the best move.${props.heading ? ` ${props.heading}.` : ''}`} />
+        )}
         {phase === 'solving' && wrongSan && (
           <div className="verdict wrong" data-testid="verdict-wrong">
             <strong>{wrongSan} is not the move.</strong>
-            {reply?.state === 'shown' && <p data-testid="engine-reply">{reply.line ? `After ${wrongSan}: ${reply.line}` : 'The engine did not answer on this device.'}</p>}
+            {reply?.state === 'loading' && <p className="muted">Asking the engine what it leads to</p>}
+            {reply?.state === 'shown' && <p data-testid="engine-reply" data-line={reply.line ?? ''}>{reply.pv ? 'On the board: the engine’s answer to it.' : 'The engine did not answer on this device.'}</p>}
             {steps.note}
           </div>
         )}
@@ -246,31 +258,29 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
             {steps.note}
           </div>
         )}
+        {done && (
+          <p className="ask-meta provenance">
+            {themes || 'Puzzle'}, rated {puzzle.rating}.{' '}
+            <a href={`https://lichess.org/training/${puzzle.id}`} target="_blank" rel="noreferrer">Puzzle {puzzle.id} on Lichess</a>
+          </p>
+        )}
       </div>
 
-      {done && (
-        <p className="provenance">
-          {puzzle.themes.filter((t) => THEMES[t]).map((t) => THEMES[t]!.name).join(', ') || 'Puzzle'}; Lichess puzzle rating {puzzle.rating}.{' '}
-          <a href={`https://lichess.org/training/${puzzle.id}`} target="_blank" rel="noreferrer">Puzzle {puzzle.id} on Lichess</a>
-        </p>
-      )}
-
-      <div className="actions">
+      <div className="actions dock">
         {phase === 'solving' && (
           <>
-            {wrongSan && <button className="primary" disabled={!armed} onClick={() => { steps.reset(); setWrongSan(null); }}>Try again</button>}
             {wrongSan && steps.controls}
-            {wrongSan && reply && reply.state !== 'shown' && <button data-testid="show-reply" disabled={reply.state === 'loading'} onClick={() => void showReply()}>{reply.state === 'loading' ? 'Asking the engine' : `What happens after ${wrongSan}?`}</button>}
             {allowHints && !wrongSan && <button onClick={hint} disabled={!armed || busy || marks.length > 0}>Show which piece</button>}
             {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show solution</button>}
             {/* A check is a fixed set of positions: skipping one would shrink it. */}
             {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={!armed || busy} onClick={() => void skip()}>Skip</button>}
+            {wrongSan && <button className="primary" data-testid="try-again" disabled={!armed} onClick={tryAgain}>Try again</button>}
           </>
         )}
         {phase === 'revealed' && steps.controls}
         {/* A check is a fixed set of first tries: no second go there. */}
-        {phase === 'revealed' && props.context !== 'check' && <button data-testid="replay" disabled={!armed} onClick={replay}>Now play it yourself</button>}
-        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={props.onNext}>{props.nextLabel ?? 'Next position'}</button>}
+        {phase === 'revealed' && props.context !== 'check' && <button data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
+        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={props.onNext}>{props.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );

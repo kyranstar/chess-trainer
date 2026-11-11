@@ -25,6 +25,7 @@
 - Export full user-owned data to JSON/ZIP with schema version; reimport into clean device reproduces attempts, review due dates and dashboard derived values.
 - Corrupted import shows error and does not damage existing data; migrate old schema successfully.
 - Navigation, board taps, voiceover labels, color contrasts, move feedback, portrait/landscape; avoid excessive scrolling for main session.
+- Exercise layout (ADR-051, `e2e/layout.spec.ts`): the board's place and size are the same through question, wrong move, replay, solution and the next position; the main button is in one place; nothing scrolls while a position is being asked; the flip control in the bar turns the board. The churn suite starts watching for unwanted movement only once a line that plays itself has come to rest.
 
 ## Cost/security
 - Network capture verifies no personal data uploaded in local-only mode. No third-party credential collection, logs sanitized, HTTPS for static hosting.

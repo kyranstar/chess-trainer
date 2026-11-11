@@ -36,25 +36,29 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // Test: no check on the day of the lesson. The mixed test starts at once; miss one on
   // purpose: it must be recorded as a miss and queued for review.
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
-  await expect(page.getByTestId('puzzle')).toContainText('Mixed test, no hints');
-  await failPuzzle(page);
-  // The wrong move can be followed up: the built-in engine's reply is shown as evidence.
-  await page.getByTestId('show-reply').click();
-  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/, { timeout: 30_000 });
-  // ... on the board, not only as notation: it opens on the opponent's answer and steps back and on.
+  // The test block offers no hint and does not say what the position is about.
   const missed = page.getByTestId('puzzle');
+  await expect(missed).toHaveAttribute('data-phase', 'solving');
+  await expect(missed).toContainText('Find the best move.');
+  await expect(page.getByRole('button', { name: 'Show which piece' })).toHaveCount(0);
+  const start = await missed.locator('.board').getAttribute('data-fen');
+  await failPuzzle(page);
+  // The wrong move is followed up unasked: the built-in engine's reply is played on the board
+  // as evidence, from the wrong move on, and can be stepped back and on.
+  await expect(page.getByTestId('engine-reply')).toContainText('the engine’s answer', { timeout: 30_000 });
+  await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/);
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
+  expect(Number(await page.getByTestId('line-steps').getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
   const asked = await missed.locator('.board').getAttribute('data-fen');
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '2');
   await page.getByTestId('line-prev').click();
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
   await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', asked!);
   // The solution is played through the same way, and then the position can be played by hand:
   // that second go is practice and changes nothing that was recorded.
   await page.getByRole('button', { name: 'Show solution' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
-  const start = await missed.locator('.board').getAttribute('data-fen');
-  await page.getByTestId('line-next').click();
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
+  const solution = page.getByTestId('line-steps');
+  await expect(solution).toHaveAttribute('data-playing', 'false');
+  await expect(solution).toHaveAttribute('data-step', (await solution.getAttribute('data-length'))!);
   await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', start!);
   await page.getByTestId('replay').click();
   await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
@@ -78,7 +82,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // (5 unseen, no hints, not skippable, and it does not name its theme while running).
   await page.goto('./#/learn/safety.hanging-pieces');
   await page.getByTestId('start-check').click();
-  await expect(page.getByTestId('puzzle')).toContainText('Check: 5 unseen positions, no hints');
+  await expect(page.getByTestId('run-note')).toHaveText('Check 1 of 5');
   await expect(page.getByTestId('skip')).toHaveCount(0);
   for (let i = 0; i < 5; i++) {
     await solvePuzzle(page);
@@ -234,7 +238,7 @@ test('the check for a studied concept comes in a later day’s session, unannoun
     await page.getByTestId('end-block').click();
   }
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
-  await expect(page.getByTestId('puzzle')).toContainText('Check: 5 unseen positions, no hints');
+  await expect(page.getByTestId('run-note')).toHaveText('Check 1 of 5');
   await expect(page.getByTestId('puzzle')).not.toContainText('Hanging pieces');
   for (let i = 0; i < 5; i++) {
     await solvePuzzle(page);
@@ -267,9 +271,9 @@ test('a lesson example does not fault a sound move that is not the text’s: no 
       }
     }
     // Move on one step and wait until the next step is really on screen before looking again.
-    const part = await page.getByText(/^Lesson, part \d+ of \d+$/).textContent();
+    const part = await page.getByText(/^Part \d+ of \d+/).textContent();
     await page.getByTestId('lesson-next').click();
-    await expect(page.getByText(/^Lesson, part \d+ of \d+$/)).not.toHaveText(part!);
+    await expect(page.getByText(/^Part \d+ of \d+/)).not.toHaveText(part!);
   }
   const alt = target.alternatives[0]!;
   await playMove(page, alt.uci);
@@ -301,7 +305,7 @@ test('a check interrupted by a reload goes on with the answers already given', a
   await page.reload(); // what iOS does to an app that sat in the background
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
   await page.getByTestId('start-check').click();
-  await expect(page.getByTestId('puzzle')).toContainText('2 already answered');
+  await expect(page.getByTestId('run-note')).toHaveText('Check 3 of 5');
   for (let i = 0; i < 3; i++) {
     await solvePuzzle(page);
     await page.getByTestId('next').click();

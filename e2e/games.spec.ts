@@ -57,7 +57,7 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
 
   // The missed mate has one clearly best move, so it becomes a personal drill.
   await page.goto('./#/practice');
-  await expect(page.getByTestId('practice-own')).toContainText('1 position where one move was clearly best and you played another');
+  await expect(page.getByTestId('practice-own')).toContainText('1 position where one move was clearly best');
   await page.getByTestId('practice-own').click();
   const drill = page.getByTestId('own-drill');
   await expect(drill).toHaveAttribute('data-expected', 'h5f7');
@@ -70,8 +70,9 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   const start = await drill.locator('.board').getAttribute('data-fen');
   await page.getByTestId('own-see-mine').click();
   await expect(page.getByTestId('own-mine-line')).toContainText('Qxe5+ and the reply');
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '2');
-  await page.getByTestId('line-prev').click();
+  // It plays itself: his move, the reply, and on to where the line is decided.
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
+  expect(Number(await page.getByTestId('line-steps').getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
   await page.getByTestId('line-prev').click();
   await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', start!);
   await page.getByTestId('own-see-best').click();
@@ -167,8 +168,9 @@ test('one button: "Just practise" mixes own-game questions, missed moves and new
     await expect(mix).toHaveAttribute('data-turn', String(turn));
     const kind = (await mix.getAttribute('data-kind'))!;
     kinds.push(kind);
-    // The same plain heading whatever the item is; no concept or exercise type is announced.
-    await expect(mix.locator('.kicker').first()).toHaveText(turn === 0 ? 'Practice' : `Practice, ${turn} done`);
+    // Only a count in the bar, whatever the item is; no concept or exercise type is announced.
+    await expect(page.getByTestId('mix-how')).toHaveText(`${turn} done`);
+    await expect(mix.locator('.kicker')).toHaveCount(0);
     if (kind === 'puzzle') {
       await solvePuzzle(page);
       await page.getByTestId('next').click();
@@ -219,11 +221,13 @@ test('your move: play your own move in a position from your game and see exactly
   await page.getByTestId('practice-move').click();
   const drill = page.getByTestId('own-move');
   await expect(drill).toHaveAttribute('data-phase', 'move');
-  await expect(drill).toContainText('White to move. Play your move.');
+  await expect(drill).toContainText('White to move');
+  await expect(drill).toContainText('Play your own move.');
   // Move 10 of the game. Taking the pawn on e5 puts the knight where the d6 pawn takes it.
   await playMove(page, 'f3e5');
   await expect(drill).toHaveAttribute('data-phase', 'predict');
-  await expect(drill).toContainText('Now play the reply you had to reckon with');
+  await expect(drill).toContainText('Black’s reply to Nxe5?');
+  await expect(drill).toContainText('Play the reply you had to reckon with');
   await playMove(page, 'd6e5');
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
   await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing can take back at once.');
@@ -240,13 +244,12 @@ test('your move: play your own move in a position from your game and see exactly
   // The consequence can be played through on the board ...
   const afterMine = await drill.getAttribute('data-fen');
   await page.getByTestId('line-next').click();
-  await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-step', '1');
   await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', afterMine!);
-  // ... and the replay stops where it is decided, marks the square and says what went: here the knight.
+  // ... it plays itself, and the replay stops where it is decided, marks the square and says what went: here the knight.
   const stepper = page.getByTestId('own-move-line');
   const length = Number(await stepper.getAttribute('data-length'));
-  for (let i = 1; i < length; i++) await page.getByTestId('line-next').click();
   await expect(stepper).toHaveAttribute('data-step', String(length));
+  await expect(stepper).toHaveAttribute('data-playing', 'false');
   await expect(page.getByTestId('line-next')).toBeDisabled();
   await expect(page.getByTestId('line-consequence')).toContainText('Knight taken on e5');
   await expect(page.getByTestId('line-consequence')).toContainText('you come out 2 points behind');
@@ -295,7 +298,7 @@ test('your move on the clock: running over never forces a move or changes its ra
   await page.goto('./#/practice/run?mode=move&pace=2');
   const drill = page.getByTestId('own-move');
   await expect(page.getByTestId('own-move-clock')).toContainText('s for this move');
-  await expect(page.getByTestId('own-move-clock')).toContainText('2 seconds are up', { timeout: 10_000 });
+  await expect(page.getByTestId('own-move-clock')).toContainText('Over 2 s', { timeout: 10_000 });
   // The position stays; the move is still played, and the facts are still given.
   await expect(drill).toHaveAttribute('data-phase', 'move');
   await playMove(page, 'a2a3');
@@ -396,20 +399,24 @@ test('repertoire: read from your own games; your courses decide inside their ope
   await expect(page.getByTestId('games-count')).toContainText('3 games on this device', { timeout: 120_000 });
 
   await page.goto('./#/practice/openings');
+  // The courses, the coverage table and the list of moves are folded under the two things to do there.
+  await expect(page.getByTestId('courses-card')).toBeHidden();
+  await page.getByTestId('openings-more').locator('summary').click();
   await expect(page.getByTestId('courses-card')).toContainText('The Italian Game');
   await expect(page.getByTestId('course-note')).toContainText('the app does not know them');
   const sources = page.getByTestId('repertoire-sources');
-  await expect(sources).toContainText('read from your games', { timeout: 30_000 });
+  await expect(sources).toContainText('from your games', { timeout: 30_000 });
   const rows = page.getByTestId('repertoire-row');
   // His first move and the move into the Italian are his own habits.
-  await expect(rows.filter({ hasText: 'after the starting position, you play e4; from your games: played in 3 of 3' })).toHaveCount(1);
-  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6, you play Bc4; from your games: played in 3 of 3' })).toHaveCount(1);
+  const row = (line: RegExp) => rows.filter({ has: page.locator('.concept-name', { hasText: line }) });
+  await expect(row(/^1\.e4$/).filter({ hasText: 'from your games: played in 3 of 3' })).toHaveCount(1);
+  await expect(row(/^1\.e4 e5 2\.Nf3 Nc6 3\.Bc4$/).filter({ hasText: 'from your games: played in 3 of 3' })).toHaveCount(1);
   // Inside the Italian his course decides: the habit is listed, but waits for his confirmation ...
-  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5, you play c3; from your games: played in 2 of 3; not yet confirmed against your course' })).toHaveCount(1);
+  await expect(row(/^1\.e4 e5 2\.Nf3 Nc6 3\.Bc4 Bc5 4\.c3$/).filter({ hasText: 'from your games: played in 2 of 3; not yet confirmed against your course' })).toHaveCount(1);
   // ... and the app suggests nothing of its own there or in the Caro-Kann. Elsewhere it does.
   const suggested = rows.filter({ hasText: 'suggested: the sound move most played at your level' });
   expect(await suggested.count()).toBeGreaterThan(0);
-  await expect(suggested.filter({ hasText: /after 1\.e4 c6|2\.Nf3 Nc6 3\.Bc4 / })).toHaveCount(0);
+  await expect(suggested.filter({ has: page.locator('.concept-name', { hasText: /^1\.e4 c6 |2\.Nf3 Nc6 3\.Bc4 / }) })).toHaveCount(0);
   await expect(page.getByTestId('left-card')).toHaveCount(0);
 
   // Recall: a move inside a course's opening is asked about, not tested. Outside, a suggestion is
@@ -425,7 +432,7 @@ test('repertoire: read from your own games; your courses decide inside their ope
     await expect(drill.or(confirm).or(done).first()).toBeVisible();
     if (await done.isVisible()) break;
     if (await confirm.isVisible()) {
-      await expect(confirm).toContainText('covered by your course The Italian Game');
+      await expect(confirm).toContainText('your course The Italian Game');
       await expect(page.getByTestId('confirm-course')).toHaveAttribute('href', /chessreps\.com/);
       const inferred = await confirm.getAttribute('data-inferred');
       if (inferred === 'c2c3') {
@@ -437,7 +444,7 @@ test('repertoire: read from your own games; your courses decide inside their ope
     }
     await expect(drill).toHaveAttribute('data-done', 'false');
     const expected = (await drill.getAttribute('data-expected'))!;
-    const isSuggestion = (await drill.locator('.muted').first().textContent())!.includes('suggested');
+    const isSuggestion = (await drill.locator('.ask-meta').first().textContent())!.includes('suggested');
     const fen = (await drill.locator('.board').getAttribute('data-fen'))!;
     const data = book.positions[fen.split(' ').slice(0, 4).join(' ')];
     // Another move that the data rates as sound in this position, if there is one.
@@ -459,18 +466,19 @@ test('repertoire: read from your own games; your courses decide inside their ope
 
   // The confirmed move is now his, and the newer game that played something else is listed with the way back to the course.
   await page.goto('./#/practice/openings');
-  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5, you play c3; recorded by you' })).toHaveCount(1);
+  await expect(row(/^1\.e4 e5 2\.Nf3 Nc6 3\.Bc4 Bc5 4\.c3$/).filter({ hasText: 'recorded by you' })).toHaveCount(1);
   const left = page.getByTestId('left-row');
   await expect(left).toHaveCount(1);
   await expect(left).toContainText('2026-11-08: after 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 you played d3; your move is c3.');
   await expect(left.getByRole('link')).toHaveText('Review it in The Italian Game');
 
   // Removing a suggestion leaves the position to him: it does not come back.
+  await page.getByTestId('openings-moves').locator('summary').click();
   await expect(suggested.first()).toBeVisible();
   const gone = (await suggested.first().locator('.concept-name').textContent())!;
   await suggested.first().getByRole('button').click();
   await expect(rows.filter({ hasText: gone })).toHaveCount(0);
   await page.reload();
-  await expect(sources).toContainText('read from your games', { timeout: 30_000 });
+  await expect(sources).toContainText('from your games', { timeout: 30_000 });
   await expect(rows.filter({ hasText: gone })).toHaveCount(0);
 });

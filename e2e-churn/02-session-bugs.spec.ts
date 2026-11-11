@@ -6,7 +6,7 @@ const DAY = 86_400_000;
 
 async function senseIdentity(page: Page) {
   const d = page.getByTestId('sense-drill');
-  return { h2: await d.locator('h2').textContent(), sub: await d.locator('.puzzle-head .muted').textContent(), fen: await d.locator('.board').getAttribute('data-fen'), kind: await d.getAttribute('data-kind') };
+  return { h2: await d.locator('h2').textContent(), sub: await d.locator('.say .ask-meta').first().textContent(), fen: await d.locator('.board').getAttribute('data-fen'), kind: await d.getAttribute('data-kind') };
 }
 
 test('a re-check that falls due while the mixed test is on screen replaces the position in progress', async ({ page }) => {
@@ -35,7 +35,7 @@ test('a re-check that falls due while the mixed test is on screen replaces the p
   await expect(run).toHaveAttribute('data-block', 'test');
   const puzzle = page.getByTestId('puzzle');
   await expect(puzzle).toHaveAttribute('data-phase', 'solving');
-  await expect(puzzle).toContainText('Mixed test, no hints');
+  await expect(puzzle).toContainText('Find the best move.');
   const id = await puzzle.getAttribute('data-puzzle-id');
   const fen = await puzzle.locator('.board').getAttribute('data-fen');
   const attemptsBefore = (await store(page, 'attempts')).length;
@@ -44,11 +44,12 @@ test('a re-check that falls due while the mixed test is on screen replaces the p
   await page.clock.fastForward(180_000);
   await page.waitForTimeout(1500);
 
-  const after = { heading: await page.locator('.puzzle-head .kicker').textContent(), id: await puzzle.getAttribute('data-puzzle-id'), fen: await puzzle.locator('.board').getAttribute('data-fen') };
+  // A check would announce itself in the bar ("Check 1 of 5"); the mixed test shows no count there.
+  const after = { heading: (await page.getByTestId('run-note').count()) ? await page.getByTestId('run-note').textContent() : '', id: await puzzle.getAttribute('data-puzzle-id'), fen: await puzzle.locator('.board').getAttribute('data-fen') };
   const attempts = await store(page, 'attempts');
   const lost = attempts.find((a) => a.exerciseId === `lichess:${id}`);
   console.log('before:', { id, fen }, 'after:', after, 'attempt for the replaced position:', lost && { outcome: lost.outcome, context: lost.context }, 'attempts', attemptsBefore, '->', attempts.length);
-  expect(after.heading, 'the mixed-test position should still be on screen').toBe('Mixed test, no hints');
+  expect(after.heading, 'the mixed-test position should still be on screen').toBe('');
   expect(after.id).toBe(id);
 });
 

@@ -12,6 +12,7 @@ import { useGames } from './Games';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { ucisOfSanLine } from '../chess/line';
 import { useLineSteps } from './LineSteps';
+import { Ask, gameRef } from './Stage';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
 export function senseItemsFrom(games: GameRecord[]): SenseItem[] {
@@ -31,8 +32,8 @@ type Phase = 'ask' | 'play' | 'checking' | 'done';
 
 
 /** One yes/no question about a real position from the learner's own games. */
-export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDone }: {
-  item: SenseItem; sessionId: string | null; context: AttemptContext; heading?: string; onRecorded?: (a: Attempt) => void; onDone: () => void;
+export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
+  item: SenseItem; sessionId: string | null; context: AttemptContext; onRecorded?: (a: Attempt) => void; onDone: () => void;
 }) {
   const db = useDb();
   useFocusMode();
@@ -121,21 +122,23 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
     return { from, pv: pv[0] === first ? pv : [first], before: safety ? item.fen : undefined };
   }, [item, safety]);
   const keepMine = !safety && grade?.response === 'hit' && !!grade.alternative;
-  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Play the engine’s line', me: item.color });
+  // The line plays itself to where it is decided: what the answer means is seen on the board.
+  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Engine’s line', me: item.color });
   const onLine = phase === 'done' && steps.pos && !(keepMine && steps.step === 0);
   const words = grade ? senseWords(item, grade, playedSan) : null;
-  const question = safety ? `You are ${me}. Is ${item.proposedSan} safe to play?` : `${me} to move. Is there something to win here?`;
+  const them = item.color === 'white' ? 'Black' : 'White';
+  const source = gameRef(item.date, item.ply);
   const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
   return (
     <section className="puzzle" data-testid="sense-drill" data-kind={item.kind} data-truth={item.truth} data-phase={phase} data-expected={phase === 'play' ? (safety ? item.replyUci : item.best) : ''} data-response={grade?.response ?? ''}>
-      <header className="puzzle-head">
-        {heading && <p className="kicker">{heading}</p>}
-        <h2>{phase === 'play' ? (safety ? 'Play the reply that punishes it' : 'Play it') : question}</h2>
-        <p className="muted">From your game on {item.date}, move {Math.floor(item.ply / 2) + 1}. Many of these have nothing in them.</p>
-      </header>
-      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} marks={onLine ? steps.marks : []} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} />
-      <div className="feedback" aria-live="polite">
-        {phase === 'checking' && <p className="muted">Checking your move with the engine</p>}
+      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} marks={onLine ? steps.marks : []} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} flash={grade ? `${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'none' : 'wrong'}:${item.id}` : null} />
+      <div className="say" aria-live="polite">
+        {phase === 'ask' && (safety
+          ? <Ask title={`Is ${item.proposedSan} safe for ${me}?`} meta={`${source}.`} />
+          : <Ask title={`${me} to move. Anything to win?`} meta={`${source}.`} />)}
+        {(phase === 'play' || phase === 'checking') && (
+          <Ask title={safety ? `Play ${them}’s reply that punishes it` : 'Play the winning move'} meta={phase === 'checking' ? 'Checking your move with the engine' : undefined} />
+        )}
         {grade && (
           <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
             <strong>{words!.title}</strong>
@@ -144,19 +147,19 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
           </div>
         )}
       </div>
-      <div className="actions">
+      <div className={`actions dock${phase === 'ask' ? ' split' : ''}`}>
         {phase === 'ask' && (
           <>
-            <button className="primary" data-testid="sense-no" disabled={!armed} onClick={() => answer(false)}>{safety ? 'Safe to play' : 'Nothing special'}</button>
-            <button className="primary" data-testid="sense-yes" disabled={!armed} onClick={() => answer(true)}>{safety ? 'It loses something' : 'There is something'}</button>
+            <button className="primary" data-testid="sense-no" disabled={!armed} onClick={() => answer(false)}>{safety ? 'Safe' : 'Nothing'}</button>
+            <button className="primary" data-testid="sense-yes" disabled={!armed} onClick={() => answer(true)}>{safety ? 'Loses something' : 'Something'}</button>
           </>
         )}
         {phase === 'play' && <button data-testid="sense-giveup" disabled={!armed} onClick={() => void finish(safety ? gradeSafety(item, 'unsafe', null, 'no') : gradeChance(item, 'something', null, 'no'), null)}>I cannot find it</button>}
         {phase === 'done' && steps.controls}
         {phase === 'done' && (
           <>
-            <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Continue</button>
-            {item.truth && <a className="button" href={href(`progress/game-event/${item.gameId}/${item.ply}`)}>See it in the game</a>}
+            {item.truth && <a className="button" href={href(`progress/game-event/${item.gameId}/${item.ply}`)}>In the game</a>}
+            <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Next</button>
           </>
         )}
       </div>
@@ -205,5 +208,5 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
     );
   }
   shown.current.add(current.id);
-  return <SenseDrill key={current.id} item={current} sessionId={null} context="practice" heading="From your own games" onDone={() => setN(n + 1)} />;
+  return <SenseDrill key={current.id} item={current} sessionId={null} context="practice" onDone={() => setN(n + 1)} />;
 }

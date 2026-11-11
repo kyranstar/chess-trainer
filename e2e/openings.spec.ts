@@ -86,6 +86,8 @@ test('repertoire: the learner’s own PGN can be imported, conflicts are reporte
   await expect(page.getByTestId('repertoire-row')).toHaveCount(6);
 
   const download = page.waitForEvent('download');
+  // Import and export are folded with the courses and the coverage table.
+  await page.getByTestId('openings-more').locator('summary').click();
   await page.getByTestId('pgn-export').click();
   let text = '';
   for await (const chunk of await (await download).createReadStream()) text += chunk;

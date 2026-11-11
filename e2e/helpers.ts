@@ -3,7 +3,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 /** Waits until the first-run pack install has finished and the app is usable. */
 export async function openApp(page: Page, path = '#/today') {
   // Progress folds most of its numbers away by default; these tests read them, so they are opened here.
-  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); } catch { /* not available */ } });
+  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); localStorage.setItem('progress.data', '1'); } catch { /* not available */ } });
   await page.goto(`./${path}`);
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
@@ -65,6 +65,8 @@ export async function playUntilAccepted(page: Page, holder: Locator, expected: s
 export async function solvePuzzle(page: Page) {
   const puzzle = page.getByTestId('puzzle');
   await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  // After a wrong move the board shows what it leads to; "Try again" puts the position back.
+  if (await page.getByTestId('try-again').isVisible()) await page.getByTestId('try-again').click();
   const done = async () => (await puzzle.getAttribute('data-phase')) !== 'solving';
   for (let i = 0; i < 8; i++) {
     if (await done()) break;

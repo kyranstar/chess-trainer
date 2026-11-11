@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { applyUci, fenOf, isCheckmate, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { LESSON_MARGIN, lessonTryEvidence, SOURCE_BY_ID } from '../content';
 import { bestLineFor } from '../engine/interactive';
@@ -11,8 +11,10 @@ import { useArmed, useScreenChange } from '../app/tapGuard';
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
 /** One "find the author's move" interaction inside a lesson (also reused for spaced review). */
-export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone, hideBefore = false }: {
+export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone, hideBefore = false, back }: {
   lesson: Lesson; stepIndex: number; step: TryStep; sessionId: string | null; context: 'lesson' | 'review'; onDone: () => void;
+  /** A control put beside the main button (the lesson's "Back"). */
+  back?: ReactNode;
   /** Review shows the position without the lead-in text, which would give the move away. */
   hideBefore?: boolean;
 }) {
@@ -137,29 +139,32 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
         <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
       </div>
       {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-      <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Find the move. The text’s own move, and what it says about it, come next.`}</p>
-      <div className="feedback" aria-live="polite">
-        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have it shown.</p></div>}
+      <p className="prompt">{finished ? 'The text’s move is on the board.' : `${side} to move. Find the text’s move.`}</p>
+      <div aria-live="polite">
+        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong></div>}
         {checking && <p className="muted">Checking your move with the engine</p>}
         {other && !finished && (
           <div className="verdict neutral" data-testid="lesson-other" data-kind={other.kind}>
             <strong>{other.kind === 'sound' ? `${other.san} is sound, but not the text’s move.` : `${other.san} could not be checked.`}</strong>
-            <p>Not a miss. Try again, or have it shown.</p>
+            <p>Not a miss.</p>
           </div>
         )}
       </div>
-      {!finished && <div className="actions"><button disabled={!armed} onClick={reveal}>Show the move</button></div>}
-      {finished && (
-        <>
-          {step.after.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!armed} onClick={onDone}>Continue</button></div>
-        </>
-      )}
+      {finished && step.after.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
+      <div className="actions dock split">
+        {back}
+        {!finished && <button disabled={!armed} onClick={reveal}>Show the move</button>}
+        {finished && <button className="primary" data-testid="lesson-next" disabled={!armed} onClick={onDone}>Continue</button>}
+      </div>
     </div>
   );
 }
 
-export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson: Lesson; sessionId: string | null; onFinished: () => void; onExit: () => void }) {
+export function LessonPlayer({ lesson, sessionId, onFinished, onExit, showExit = true }: {
+  lesson: Lesson; sessionId: string | null; onFinished: () => void; onExit: () => void;
+  /** False where the frame around the lesson already has the way out. */
+  showExit?: boolean;
+}) {
   const db = useDb();
   useFocusMode();
   const source = SOURCE_BY_ID.get(lesson.sourceId)!;
@@ -211,12 +216,13 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
     window.scrollTo(0, 0);
   }
 
+  const back = index > 0 ? <button data-testid="lesson-back" onClick={() => { void setMeta(db, key, index - 1); setIndex(index - 1); }}>Back</button> : null;
   return (
     <article className="lesson" data-testid="lesson" data-step={index + 1} data-steps={total}>
       <header>
         <div className="lesson-bar">
-          <p className="kicker">Lesson, part {index + 1} of {total}</p>
-          <button className="quiet" data-testid="lesson-exit" onClick={onExit}>Leave lesson</button>
+          <p className="kicker">Part {index + 1} of {total}{index > 0 ? ` · ${source.author}` : ''}</p>
+          {showExit && <button className="quiet" data-testid="lesson-exit" onClick={onExit}>Leave lesson</button>}
         </div>
         {index === 0 ? (
           <>
@@ -233,9 +239,7 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
               </details>
             )}
           </>
-        ) : (
-          <p className="attribution">{source.author}, <cite>{source.title}</cite></p>
-        )}
+        ) : null}
       </header>
       <progress value={index} max={total} aria-label="Lesson progress" />
       {step.type === 'text' && (
@@ -246,18 +250,17 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit }: { lesson
             </div>
           )}
           {step.paragraphs.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
+          <div className="actions dock split">{back}<button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}
       {step.type === 'board' && (
         <>
           <div className="lesson-board"><Board fen={step.fen} orientation={step.orientation} movable={null} /></div>
           <p className="prompt">{step.diagram && !step.afterDiagramMoves?.length ? `Diagram ${step.diagram} from the book.` : 'Position from the text.'} {positionFromFen(step.fen).turn === 'white' ? 'White' : 'Black'} to move.</p>
-          <div className="actions"><button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
+          <div className="actions dock split">{back}<button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
       )}
-      {step.type === 'try' && <LessonTry lesson={lesson} stepIndex={index} step={step} sessionId={sessionId} context="lesson" onDone={() => void advance()} />}
-      {index > 0 && <div className="actions"><button className="quiet" onClick={() => { void setMeta(db, key, index - 1); setIndex(index - 1); }}>Back</button></div>}
+      {step.type === 'try' && <LessonTry lesson={lesson} stepIndex={index} step={step} sessionId={sessionId} context="lesson" onDone={() => void advance()} back={back} />}
     </article>
   );
 }

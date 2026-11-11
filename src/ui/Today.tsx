@@ -18,7 +18,8 @@ import { useArmed, useScreenChange } from '../app/tapGuard';
 import { type MoveItem, moveItems } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { OwnMoveDrill } from './OwnMove';
-import { RunSummaryView } from './Mix';
+import { RunSummaryRows } from './Mix';
+import { RunFrame } from './Stage';
 
 /** A small stable hash for choosing among a few candidates by turn. */
 function hashOf(text: string): number {
@@ -40,7 +41,8 @@ function blockSubject(b: SessionBlock): string {
   return 'Mixed unseen positions';
 }
 
-function Scoresheet({ session, activeIndex }: { session: SessionRecord; activeIndex: number }) {
+/** The day's blocks. `why` adds the reason for each: shown with the plan before starting, not while it runs. */
+function Scoresheet({ session, activeIndex, why = false }: { session: SessionRecord; activeIndex: number; why?: boolean }) {
   return (
     <ol className="scoresheet" data-testid="scoresheet">
       {session.blocks.map((b, i) => (
@@ -50,7 +52,7 @@ function Scoresheet({ session, activeIndex }: { session: SessionRecord; activeIn
             <p className="sheet-title">
               {BLOCK_NAME[b.kind]} <span className="sheet-subject">{blockSubject(b)}</span>
             </p>
-            <p className="sheet-why">{b.reason}</p>
+            {why && <p className="sheet-why">{b.reason}</p>}
             {b.notice && <p className="sheet-notice" data-testid={`notice-${b.kind}`}>{b.notice}</p>}
           </div>
           <span className="sheet-time">
@@ -95,31 +97,26 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
   const total = session.blocks.reduce((t, b) => t + b.spentSec, 0);
   return (
     <section className="summary" data-testid="summary">
-      <h2>Today’s session is finished</h2>
+      <h2>Session finished: {Math.round(total / 60)} of {session.budgetMin} minutes</h2>
       <dl className="facts">
-        <dt>Time</dt>
-        <dd>{Math.round(total / 60)} of {session.budgetMin} minutes</dd>
         <dt>New concept</dt>
         <dd>{concept ? `${concept.concept.title}: ${concept.stage === 'demonstrated' ? 'demonstrated' : concept.stage === 'taught' ? (concept.assessable ? 'studied; its check comes on a later day' : 'studied') : 'started'}` : (learn?.notice ?? 'None today')}</dd>
-        <dt>New puzzles</dt>
-        <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None in this session' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
-        <dt>Reviews</dt>
-        <dd>{reviews.length === 0 ? 'None due' : `${reviews.filter((a) => a.outcome === 'success').length} of ${reviews.length} recalled`}</dd>
         {checks.length > 0 && (
           <>
             <dt>Checks</dt>
             <dd>{checks.map((c) => `${CONCEPT_BY_ID.get(c.conceptId)?.title}: ${c.type === 'check-passed' ? 'passed' : 'not passed'}`).join('; ')}</dd>
           </>
         )}
-        <dt>How it went</dt>
-        <dd><RunSummaryView attempts={mine} /></dd>
-        <dt>Added to review</dt>
-        <dd>{missed} position{missed === 1 ? '' : 's'}, first due tomorrow</dd>
+        <RunSummaryRows attempts={mine} omit={['puzzles', 'reviews']} />
+        <dt>New puzzles</dt>
+        <dd data-testid="summary-unseen">{fresh.length === 0 ? 'None in this session' : `${fresh.filter((a) => a.outcome === 'success').length} of ${fresh.length} solved first try`}</dd>
+        <dt>Reviews</dt>
+        <dd>{reviews.length === 0 ? 'None due' : `${reviews.filter((a) => a.outcome === 'success').length} of ${reviews.length} recalled`}</dd>
+        {missed > 0 && (<><dt>Added to review</dt><dd>{missed} position{missed === 1 ? '' : 's'}, first due tomorrow</dd></>)}
       </dl>
-      <p className="muted">One session is too small a sample to judge a trend. Progress shows the running totals with their uncertainty.</p>
       <div className="actions">
-        <a className="button primary" href={href('progress')}>See progress</a>
-        <a className="button" data-testid="summary-mix" href={href('practice/run', { mode: 'mix' })}>Keep practising</a>
+        <a className="button primary" data-testid="summary-mix" href={href('practice/run', { mode: 'mix' })}>Keep practising</a>
+        <a className="button" href={href('progress')}>See progress</a>
       </div>
     </section>
   );
@@ -172,37 +169,37 @@ export function Today({ learner }: { learner: Learner }) {
       <div className="page" data-testid="today" data-state="unplanned">
         <p className="kicker">{dateLabel}</p>
         <h1>Today</h1>
-        <p className="lede" data-testid="suggestion" data-kind={suggestion.kind}>{suggestion.reason}</p>
-        <div className="actions">
-          {/* Fixed places: the suggestion can change a moment after launch (a game fetched from
+        <div className="actions start-actions">
+          {/* Fixed places and sizes: the suggestion can change a moment after launch (a game fetched from
               Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
-          <button className={suggestion.kind === 'study' ? 'primary big' : ''} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>{suggestion.kind === 'study' ? `Start training: about ${length} minutes` : `Train for ${length} minutes instead`}</button>
-          <button className={suggestion.kind === 'play' ? 'primary big' : ''} data-testid="start-play" onClick={() => void start('play')}>{suggestion.kind === 'play' ? 'Start play day: one rapid game' : 'Make today a play day instead'}</button>
-          <a className="button" data-testid="start-mix" href={href('practice/run', { mode: 'mix' })}>Just practise: no plan, the app picks</a>
+          <button className={suggestion.kind === 'study' ? 'primary big' : 'big'} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start training · {length} min</button>
+          <button className={suggestion.kind === 'play' ? 'primary big' : 'big'} data-testid="start-play" onClick={() => void start('play')}>Play day · one rapid game</button>
+          <a className="button big" data-testid="start-mix" href={href('practice/run', { mode: 'mix' })}>Just practise</a>
         </div>
+        <p className="muted small" data-testid="suggestion" data-kind={suggestion.kind}>{suggestion.reason}</p>
         {!packReady && <p className="note" data-testid="pack-missing">The practice positions are not installed on this device yet. Connect once to download them.</p>}
         <p className="definition-small" data-testid="offline-ready" data-ready={packReady && appCached === true}>
           {packReady && appCached === true
-            ? 'Stored on this phone: lessons, positions and the engine work with no connection. Only new games and linked lessons need one.'
+            ? 'Stored on this phone: everything but new games and linked lessons works with no connection.'
             : appCached === false
               ? 'This browser cannot store the app for offline use. Add it to the Home Screen from Safari.'
               : online
-                ? 'Still storing the app on this phone for offline use. Keep it open with a connection for a moment before going underground.'
+                ? 'Still storing the app on this phone. Keep it open with a connection for a moment before going underground.'
                 : 'The app is not fully stored on this phone yet; it needs a connection once.'}
         </p>
         {/* One thing to do on this screen: start. The length, the plan and the optional
             baseline are a tap away for the day they are wanted. */}
         <details className="today-options" data-testid="today-options">
-          <summary>Today’s plan and other lengths</summary>
+          <summary>Plan and length</summary>
           <div className="length-picker" role="group" aria-label="Session length">
             {SESSION_LENGTHS.map((m) => (
               <button key={m} className={m === length ? 'chip is-on' : 'chip'} aria-pressed={m === length} onClick={() => setLength(m)}>{m} min</button>
             ))}
           </div>
-          <Scoresheet session={preview} activeIndex={-1} />
+          <Scoresheet session={preview} activeIndex={-1} why />
           {!baseline.complete && packReady && (
             <div className="return-card" data-testid="baseline-card">
-              <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> Optional. About {baseline.positionsLeft} unseen positions, no hints, at your own pace. It only replaces “untested” with a first, provisional reading.</p>
+              <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> Optional: about {baseline.positionsLeft} unseen positions, no hints.</p>
               <div className="actions"><a className="button" data-testid="start-baseline" href={href('today/baseline')}>{baseline.sampled === 0 && learner.attempts.length === 0 ? 'Take the baseline' : 'Continue the baseline'}</a></div>
             </div>
           )}
@@ -370,14 +367,22 @@ export function SessionRun({ learner }: { learner: Learner }) {
     return item;
   })();
 
+  const last = idx === session.blocks.length - 1;
+  const leave = () => void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped');
   return (
-    <div className="page run" data-testid="session-run" data-block={block.kind}>
-      <header className="run-bar">
-        <a className="back" href={href('today')}>Today</a>
-        <p className="run-title">{idx + 1}. {BLOCK_NAME[block.kind]}</p>
-        <p className={`run-clock${timeUp ? ' is-up' : ''}`} data-testid="block-clock" aria-label="Time left in this block">{untimed ? mins(spent) : timeUp ? 'time is up' : mins(left)}</p>
-      </header>
-      {timeUp && <p className="note" data-testid="time-up">This block’s minutes are used. Finish what is on screen, then move on.</p>}
+    <RunFrame testid="session-run" attrs={{ 'data-block': block.kind }} back={{ href: href('today'), label: 'Today' }}
+      title={`${idx + 1}. ${BLOCK_NAME[block.kind]}`}
+      clock={<span className={`run-clock${timeUp ? ' is-up' : ''}`} data-testid="block-clock" data-up={timeUp} aria-label="Time left in this block">{untimed ? mins(spent) : timeUp ? <span data-testid="time-up">time is up</span> : mins(left)}</span>}
+      side={<button className="quiet" data-testid="end-block" disabled={!armed} onClick={() => (last ? setConfirmEnd(true) : leave())}>{last ? 'End' : 'Skip'}</button>}>
+      {confirmEnd && (
+        <div className="run-confirm" data-testid="end-confirm">
+          <p>{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? What you did is saved.'}</p>
+          <div className="actions">
+            <button className="primary" data-testid="end-confirm-no" onClick={() => setConfirmEnd(false)}>Keep going</button>
+            <button data-testid="end-confirm-yes" disabled={!armed} onClick={() => { setConfirmEnd(false); leave(); }}>End session</button>
+          </div>
+        </div>
+      )}
 
       {block.kind === 'review' && dueAtStart.current && (
         <ReviewRunner due={dueAtStart.current} sessionId={session.id} stop={timeUp} onAttempt={onAttempt} onFinished={() => void finish()} />
@@ -388,7 +393,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
           {block.notice && <p className="note">{block.notice}</p>}
           {learnStatus && (learnStatus.stage === 'taught' || learnStatus.stage === 'demonstrated') && (
             <div className="return-card" data-testid="learn-complete" ref={(el) => { if (el && !learnShown.current) { learnShown.current = true; el.scrollIntoView({ block: 'start' }); } }}>
-              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson recorded as studied.'}</strong> Next: practice.{learnStatus.assessable && learnStatus.stage === 'taught' ? ' Its check comes on a later day, not today.' : ''}</p>
+              <p><strong>{learnStatus.stage === 'demonstrated' ? 'Already demonstrated.' : 'Lesson studied.'}</strong>{learnStatus.assessable && learnStatus.stage === 'taught' ? ' Its check comes on a later day.' : ''}</p>
               <div className="actions"><button className="primary" data-testid="learn-continue" disabled={!armed} onClick={() => void finish()}>Continue to practice</button></div>
             </div>
           )}
@@ -398,10 +403,10 @@ export function SessionRun({ learner }: { learner: Learner }) {
 
       {leaving && <p className="muted" data-testid="leaving-block">Moving on</p>}
       {block.kind === 'apply' && moveTurn && (
-        <OwnMoveDrill key={moveTurn.item.id} item={moveTurn.item} sessionId={session.id} context="apply" heading="Practice: your move" pace={moveTurn.pace} onRecorded={onAttempt} onDone={nextTestItem} />
+        <OwnMoveDrill key={moveTurn.item.id} item={moveTurn.item} sessionId={session.id} context="apply" pace={moveTurn.pace} onRecorded={onAttempt} onDone={nextTestItem} />
       )}
       {block.kind === 'apply' && senseTurn && (
-        <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" heading="Practice: from your own games" onRecorded={onAttempt} onDone={nextTestItem} />
+        <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" onRecorded={onAttempt} onDone={nextTestItem} />
       )}
       {block.kind === 'apply' && !leaving && !moveTurn && !senseTurn && concept && pool && (
         <PuzzleStream
@@ -409,7 +414,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
           limit={1}
           pick={conceptPicker(pool.puzzles, concept, learner.level.level - 100, `${seed}|${testIndex}`)}
           context="apply" conceptId={concept.id} sessionId={session.id} allowHints seen={learner.seen}
-          heading={`Practice: ${concept.title}`} onAttempt={onAttempt}
+          heading={concept.title} onAttempt={onAttempt}
           onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
         />
       )}
@@ -425,7 +430,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       )}
       {block.kind === 'test' && pool && !activeCheck && !leaving && (
         senseTurn ? (
-          <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="test" heading="From your own games, nothing announced" onRecorded={onAttempt} onDone={nextTestItem} />
+          <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="test" onRecorded={onAttempt} onDone={nextTestItem} />
         ) : (
           <PuzzleStream
             key={`mixed-${testIndex}`}
@@ -437,7 +442,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
               return conceptPicker(pool.puzzles, s.concept, learner.level.level, `${seed}|${testIndex}`)(exclude, i);
             }}
             context="test" conceptId={() => lastTestConcept.current}
-            sessionId={session.id} allowHints={false} seen={learner.seen} heading="Mixed test, no hints"
+            sessionId={session.id} allowHints={false} seen={learner.seen}
             onAttempt={onAttempt} onFinished={nextTestItem}
           />
         )
@@ -446,20 +451,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
       {block.kind === 'play' && <PlayBlock onFinished={() => void finish()} />}
       {block.kind === 'reflect' && <ReflectBlock sessionId={session.id} onSaved={() => void finish()} />}
 
-      <footer className="run-foot">
-        {confirmEnd ? (
-          <div className="actions" data-testid="end-confirm">
-            <p className="muted">{block.kind === 'reflect' ? 'End without saving these notes? The day’s session is closed.' : 'End today’s session now? What you did is saved. More training today goes through “Just practise”.'}</p>
-            <button data-testid="end-confirm-yes" disabled={!armed} onClick={() => { setConfirmEnd(false); void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'); }}>End session</button>
-            <button className="primary" data-testid="end-confirm-no" onClick={() => setConfirmEnd(false)}>Keep going</button>
-          </div>
-        ) : (
-          <button className="quiet" data-testid="end-block" disabled={!armed} onClick={() => (idx === session.blocks.length - 1 ? setConfirmEnd(true) : void finish(block.spentSec > 0 || spent > 0 ? 'done' : 'skipped'))}>
-            {idx === session.blocks.length - 1 ? 'End session' : `End ${BLOCK_NAME[block.kind].toLowerCase()} and move on`}
-          </button>
-        )}
-      </footer>
-    </div>
+    </RunFrame>
   );
 }
 
@@ -502,12 +494,8 @@ export function BaselineRun({ learner }: { learner: Learner }) {
     );
   }
   return (
-    <div className="page run" data-testid="baseline-run">
-      <header className="run-bar">
-        <a className="back" href={href('today')}>Today</a>
-        <p className="run-title">Baseline</p>
-        <p className="run-clock" data-testid="baseline-left">{progress.positionsLeft} left</p>
-      </header>
+    <RunFrame testid="baseline-run" back={{ href: href('today'), label: 'Today' }} title="Baseline"
+      side={<><span className="run-note" data-testid="baseline-left">{progress.positionsLeft} left</span><button className="quiet" data-testid="baseline-stop" onClick={() => setStopped(true)}>Stop</button></>}>
       <PuzzleStream
         pick={(exclude, i) => {
           const c = nextBaselineConcept(learner.statuses, last.current);
@@ -519,9 +507,8 @@ export function BaselineRun({ learner }: { learner: Learner }) {
           return conceptPicker(pool.puzzles, c, learner.level.level, `baseline|${DIAGNOSTIC.version}`)(exclude, i);
         }}
         context="diagnostic" conceptId={() => last.current} sessionId={null} allowHints={false} seen={learner.seen}
-        heading="Baseline, no hints" onFinished={() => setStopped(true)}
+        onFinished={() => setStopped(true)}
       />
-      <footer className="run-foot"><button className="quiet" data-testid="baseline-stop" onClick={() => setStopped(true)}>Stop for now</button></footer>
-    </div>
+    </RunFrame>
   );
 }

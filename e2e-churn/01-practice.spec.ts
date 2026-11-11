@@ -44,11 +44,11 @@ test('practice / game-sense question holds under continuous analysis, clock tick
   await watch(page);
   await everything(page, 3000);
   expect(await watched(page)).toHaveLength(1);
-  const first = await drill.locator('.muted').first().textContent();
+  const first = await drill.locator('.say').textContent();
   await page.getByTestId('sense-next').click();
   await expect(drill).toHaveAttribute('data-phase', 'ask');
   expect((await store(page, 'attempts')).filter((a) => a.exerciseKind === 'sense')).toHaveLength(1);
-  console.log('first/second', first, await drill.locator('.muted').first().textContent());
+  console.log('first/second', first, await drill.locator('.say').textContent());
 });
 
 test('practice / own-game drill holds under churn and records once', async ({ page }) => {
@@ -56,14 +56,14 @@ test('practice / own-game drill holds under churn and records once', async ({ pa
   await page.goto('./#/practice/run?mode=own');
   const drill = page.getByTestId('own-drill');
   await expect(drill).toHaveAttribute('data-expected', /.+/);
-  const heading = await page.locator('.puzzle-head .kicker').textContent();
+  const heading = await page.getByTestId('run-note').textContent();
   await watch(page);
   const c = await everything(page);
   expect(c.after).toBeGreaterThan(c.before + 3);
   expect(c.after).toBeLessThan(c.total);
   const states = await watched(page);
   expect(states, JSON.stringify(states, null, 1)).toHaveLength(1);
-  expect(await page.locator('.puzzle-head .kicker').textContent()).toBe(heading);
+  expect(await page.getByTestId('run-note').textContent()).toBe(heading);
   await playMove(page, (await drill.getAttribute('data-expected'))!);
   await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'true');
   await watch(page);
@@ -141,7 +141,7 @@ test('practice / review queue (puzzle, own-game, game-sense items) holds under c
     await expect(holder).toBeVisible();
     const kind = (await holder.getAttribute('data-testid'))!;
     seen.push(kind);
-    await expect(page.locator('.puzzle-head .kicker')).toHaveText(`Review, ${3 - i} due`);
+    await expect(page.getByTestId('run-note')).toHaveText(`${3 - i} left`);
     await watch(page);
     // A sync that brings new games while the review item is on screen.
     mock.games = [...mock.games, ...clones(3, 1000 + i * 3)];
