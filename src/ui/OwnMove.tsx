@@ -7,7 +7,7 @@ import type { Attempt, AttemptContext } from '../db/types';
 import { lineAt } from '../chess/line';
 import { bestLineFor } from '../engine/interactive';
 import { DEVICE_NODES, lineSan } from '../games/analyse';
-import { describeFree, describeLoose, freeTag, GRADE_LABEL, gradeMove, isPunishingReply, looseNote, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
+import { describeFree, describeLoose, freeTag, gradeMove, isPunishingReply, looseNote, moveHeadline, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 import { useLineSteps } from './LineSteps';
@@ -215,6 +215,15 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
   const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line', me: item.color, cap: 6 } : { initial: 0, startLabel: 'Play the engine’s line', testid: 'own-move-line', me: item.color, cap: 6 });
   const shown = steps.pos && steps.step > 0 ? { fen: steps.pos.fen, last: steps.pos.last, marks: steps.marks } : { fen, last: lastMove, marks: [] as string[] };
   const passed = result ? outcomeOfGrade(result.verdict) === 'success' : false;
+  const looseWords = result && facts && facts.loose.length > 0 && !facts.mateInOne && result.verdict !== 'unrated' ? looseNote({ passed, engineTakes, captureCost: result.captureCost }) : null;
+  // The engine's reply to his move, to set beside the reply he named.
+  const replySan = (() => {
+    try {
+      return facts && result?.pv[0] ? sanOf(positionFromFen(facts.afterFen), result.pv[0]) : null;
+    } catch {
+      return null;
+    }
+  })();
   const gameSan = sanOf(positionFromFen(item.fen), item.played);
   const title = phase === 'move' ? `${me} to move. Play your move.` : phase === 'predict' ? `You played ${mine?.san}. Now play the reply you had to reckon with.` : phase === 'checking' ? 'Checking' : '';
   return (
@@ -235,37 +244,23 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
         {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
         {phase === 'done' && result && facts && mine && (
           <div className={`verdict ${result.verdict === 'best' || result.verdict === 'good' ? 'right' : result.verdict === 'mistake' || result.verdict === 'blunder' ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
-            <strong data-testid="own-move-grade">{GRADE_LABEL[result.verdict]}{timedOut.current ? `, made after the ${pace} seconds` : ''}.</strong>
-            <p data-testid="own-move-rating">
-              {facts.mateInOne && !facts.mateUnavoidable
-                ? `${mine.san} allows mate in one: ${facts.mateInOne.san}.`
-                : result.verdict === 'unrated'
-                  ? `The built-in engine did not answer, so ${mine.san} is not rated.`
-                  : result.verdict === 'best'
-                    ? `${mine.san} is the built-in engine’s first choice (about ${result.bestWp} out of 100 for you).`
-                    : `The built-in engine rates ${mine.san} ${result.loss ?? 0} point${result.loss === 1 ? '' : 's'} below its first choice, ${result.bestSan}: ${result.wp} against ${result.bestWp} out of 100.`}
-            </p>
-            {facts.mateInOne && facts.mateUnavoidable && <p>Mate in one follows ({facts.mateInOne.san}), but every legal move allowed one.</p>}
-            {!facts.mateInOne && facts.loose.length === 0 && <p>After {mine.san} no piece of yours can be taken without an immediate recapture or by a cheaper piece, and there is no mate in one.</p>}
-            {facts.loose.map((l) => <p key={l.square} data-testid="own-move-loose">{describeLoose(l)}{facts.threatsBefore.some((t) => t.square === l.square) ? ' It could already be taken before your move.' : ''}</p>)}
-            {facts.loose.length > 0 && !facts.mateInOne && result.verdict !== 'unrated' && (
-              <p data-testid="own-move-loose-note">{looseNote({ passed, engineTakes, captureCost: result.captureCost })}</p>
-            )}
-            {taken?.state === 'shown' && <p data-testid="own-move-taken">On the board: {taken.san}, and the engine’s line from there{taken.pv.length > 1 ? ` (${lineSan(lineAt(facts.afterFen, taken.pv.slice(0, 1), 1).fen, taken.pv.slice(1))})` : ''}. Step back and on through it.</p>}
-            {facts.dealtWith.length > 0 && <p data-testid="own-move-met">Before your move {facts.dealtWith.length === 1 ? `your piece on ${facts.dealtWith[0]} could be taken` : `your pieces on ${facts.dealtWith.join(' and ')} could be taken`}; after your move that capture is no longer there.</p>}
-            {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">There was a mate in one: {facts.mateBefore.san}.</p>}
-            {!facts.tookFree && !(facts.mateBefore && mine.uci === facts.mateBefore.uci) && facts.freeBefore.slice(0, 2).map((l) => <p key={`free-${l.square}`} data-testid="own-move-free">{describeFree(l)}</p>)}
-            {freeTag(facts, result.verdict, mine.uci) === 'free-declined' && <p data-testid="own-move-free-ok">The engine rates your move {result.verdict === 'best' ? 'as its first choice' : `within ${result.loss ?? 0} point${result.loss === 1 ? '' : 's'} of its first choice`}, so nothing was missed by not taking: it is not counted against you.</p>}
-            {named && (facts.mateInOne || facts.loose.length > 0) && (
-              <p>{isPunishingReply(facts, named.uci) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
-            )}
-            {result.line && <p>After {mine.san} the built-in engine continues {result.line}.</p>}
+            <strong data-testid="own-move-grade">{moveHeadline({ grade: result.verdict, san: mine.san, bestSan: result.bestSan, loss: result.loss, mateAllowed: facts.mateInOne && !facts.mateUnavoidable ? facts.mateInOne.san : null, late: timedOut.current ? pace : null })}</strong>
+            {facts.mateInOne && facts.mateUnavoidable && <p>Every move allowed mate in one ({facts.mateInOne.san}).</p>}
+            {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">You had mate in one: {facts.mateBefore.san}.</p>}
+            {facts.loose.map((l, i) => (
+              <p key={l.square} data-testid="own-move-loose">
+                {describeLoose(l)}
+                {i === 0 && looseWords && <span data-testid="own-move-loose-note"> {looseWords}</span>}
+              </p>
+            ))}
+            {freeTag(facts, result.verdict, mine.uci) === 'free-left' && !facts.mateBefore && facts.freeBefore.slice(0, 1).map((l) => <p key={`free-${l.square}`} data-testid="own-move-free">{describeFree(l)}</p>)}
+            {facts.dealtWith.length > 0 && <p data-testid="own-move-met">You dealt with the threat to {facts.dealtWith.join(' and ')}.</p>}
+            {named && (replySan && sameMove(positionFromFen(facts.afterFen), named.uci, result.pv[0]!)
+              ? <p data-testid="own-move-named">You named it: {named.san}.</p>
+              : <p data-testid="own-move-named">You expected {named.san}{replySan ? `; the engine plays ${replySan}` : ''}.</p>)}
+            {taken?.state === 'shown' && <p data-testid="own-move-taken">If taken: {taken.san}{taken.pv.length > 1 ? ` ${lineSan(lineAt(facts.afterFen, taken.pv.slice(0, 1), 1).fen, taken.pv.slice(1))}` : ''}</p>}
             {steps.note}
-            <p className="definition-small">
-              {result.verdict === 'mistake' || result.verdict === 'blunder' ? 'Recorded as a miss; it returns in your review queue.' : result.verdict === 'unrated' ? 'Not recorded as a pass or a miss.' : 'Recorded as a pass.'}
-              {' '}Ratings are the built-in engine’s, a small one: under 5 points below its first choice is good, under 10 an inaccuracy, under 20 a mistake, more a blunder.
-              {mine.uci !== item.played ? ` In the game you played ${gameSan}.` : ' This is the move you played in the game.'}
-            </p>
+            {mine.uci !== item.played && <p className="definition-small">In the game you played {gameSan}.</p>}
           </div>
         )}
       </div>

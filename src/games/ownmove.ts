@@ -223,21 +223,28 @@ export function freeTag(facts: MovePicture, grade: MoveGrade, uci: string): 'fre
  * `captureCost` is how many points of expected score the capture gives up for the opponent
  * against the engine's best reply (null when it was not checked).
  */
-export function looseNote(x: { passed: boolean; engineTakes: boolean; captureCost: number | null }): string {
-  if (x.engineTakes) {
-    return x.passed
-      ? 'That it can be taken is a fact about the board, not the rating. The engine does take it in its line and still rates your move as above: play the line through to see what you get for it.'
-      : 'The engine’s line takes it. Play the line through to see where the material goes.';
-  }
-  if (x.captureCost !== null && x.captureCost >= 10) {
-    return `It is not really hanging: by the engine’s reckoning, taking it would be a mistake, ${Math.round(x.captureCost)} points worse for your opponent than its best reply. “If it is taken” plays the capture out on the board.`;
-  }
-  if (x.captureCost !== null && x.captureCost < 3) {
-    return `Taking it is about as good for your opponent as the engine’s own reply${x.passed ? ', so the piece is there to be taken even though the move is rated as above' : ''}. “If it is taken” plays the capture out on the board.`;
-  }
-  return x.passed
-    ? 'That it can be taken is a fact about the board, not the rating. The engine does not take it: by its reckoning the capture is not your opponent’s best move. That alone does not show the capture is harmless; “If it is taken” plays it out on the board.'
-    : 'The engine’s line starts with a different move, so the rating may be about something else than this piece. “If it is taken” plays the capture out on the board.';
+export function looseNote(x: { passed: boolean; engineTakes: boolean; captureCost: number | null }): string | null {
+  if (x.engineTakes) return x.passed ? 'The engine takes it and your move still holds.' : 'The engine takes it.';
+  if (x.captureCost !== null && x.captureCost >= 10) return `Not really hanging: taking it costs your opponent ${Math.round(x.captureCost)}.`;
+  if (x.captureCost !== null && x.captureCost < 3) return 'It is hanging: taking it is as good as the engine’s reply.';
+  return null; // in between, or not checked: nothing is known that is worth a sentence
+}
+
+/**
+ * The result of a move in one line: right or not, by how much, and what was better. The owner
+ * asked for exactly this and nothing that is not about the case in hand (2026-11-11). Numbers
+ * are points of expected score out of 100, by the built-in engine.
+ */
+export function moveHeadline(x: { grade: MoveGrade; san: string; bestSan: string | null; loss: number | null; mateAllowed: string | null; late: number | null }): string {
+  const late = x.late ? ` Late: over ${x.late} s.` : '';
+  if (x.mateAllowed) return `Blunder: ${x.san} allows mate in one, ${x.mateAllowed}.${late}`;
+  if (x.grade === 'unrated') return `Not rated: the engine did not answer.${late}`;
+  if (x.grade === 'best') return `Best move.${late}`;
+  const label = { good: 'Good', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder' }[x.grade];
+  const loss = Math.round(x.loss ?? 0);
+  if (!x.bestSan) return `${label}.${late}`;
+  if (loss === 0) return `${label}: as strong as ${x.bestSan}.${late}`;
+  return `${label}. Best was ${x.bestSan}, ${loss} point${loss === 1 ? '' : 's'} better.${late}`;
 }
 
 export interface MoveItem {

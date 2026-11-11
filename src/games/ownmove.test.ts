@@ -170,7 +170,7 @@ describe('cases from the outside reviewer (fourth pass)', () => {
   });
 });
 
-import { freeTag, looseNote } from './ownmove';
+import { freeTag, looseNote, moveHeadline } from './ownmove';
 
 describe('what the practice audit found in the messages', () => {
   // Black to move; a white knight on e5 can be taken for nothing by the d6 pawn.
@@ -190,19 +190,27 @@ describe('what the practice audit found in the messages', () => {
     expect(freeTag(movePicture('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'e2e4'), 'best', 'e2e4')).toBeNull();
   });
 
-  it('says whether a piece that can be taken is really worth taking, from what the capture costs the opponent', () => {
-    // The engine takes it itself.
-    expect(looseNote({ passed: true, engineTakes: true, captureCost: null })).toContain('The engine does take it');
-    // Taking it is a mistake for the opponent: say so, do not leave "can be taken" standing alone.
-    const trap = looseNote({ passed: true, engineTakes: false, captureCost: 50 });
-    expect(trap).toContain('not really hanging');
-    expect(trap).toContain('50 points');
-    // Taking it is nearly as good as the engine's reply: the piece is hanging, even if the rating passes.
-    expect(looseNote({ passed: true, engineTakes: false, captureCost: 2 })).toContain('about as good for your opponent');
-    // Not checked (no engine answer): the cautious wording, with the way to play it out.
-    expect(looseNote({ passed: true, engineTakes: false, captureCost: null })).toContain('That alone does not show the capture is harmless');
-    expect(looseNote({ passed: false, engineTakes: false, captureCost: null })).toContain('starts with a different move');
-    expect(looseNote({ passed: false, engineTakes: true, captureCost: null })).toContain('takes it');
+  it('says in a few words whether a piece that can be taken is really hanging, and nothing when it does not know', () => {
+    expect(looseNote({ passed: true, engineTakes: true, captureCost: null })).toBe('The engine takes it and your move still holds.');
+    expect(looseNote({ passed: false, engineTakes: true, captureCost: null })).toBe('The engine takes it.');
+    expect(looseNote({ passed: true, engineTakes: false, captureCost: 50 })).toBe('Not really hanging: taking it costs your opponent 50.');
+    expect(looseNote({ passed: true, engineTakes: false, captureCost: 2 })).toBe('It is hanging: taking it is as good as the engine’s reply.');
+    expect(looseNote({ passed: true, engineTakes: false, captureCost: null })).toBeNull();
+    expect(looseNote({ passed: false, engineTakes: false, captureCost: 6 })).toBeNull();
+  });
+
+  it('the result in one line: right or not, by how much, and what was better (owner: no paragraphs)', () => {
+    const h = (over: Partial<Parameters<typeof moveHeadline>[0]>) => moveHeadline({ grade: 'good', san: 'Qe6', bestSan: 'Rad1', loss: 3, mateAllowed: null, late: null, ...over });
+    expect(h({ grade: 'best', bestSan: 'Qe6', loss: 0 })).toBe('Best move.');
+    expect(h({})).toBe('Good. Best was Rad1, 3 points better.');
+    expect(h({ loss: 0 })).toBe('Good: as strong as Rad1.');
+    expect(h({ grade: 'inaccuracy', loss: 8, bestSan: 'd5' })).toBe('Inaccuracy. Best was d5, 8 points better.');
+    expect(h({ grade: 'mistake', loss: 13, bestSan: 'Bd6' })).toBe('Mistake. Best was Bd6, 13 points better.');
+    expect(h({ grade: 'blunder', loss: 89, bestSan: 'O-O' })).toBe('Blunder. Best was O-O, 89 points better.');
+    expect(h({ grade: 'good', loss: 1 })).toBe('Good. Best was Rad1, 1 point better.');
+    expect(h({ grade: 'blunder', mateAllowed: 'Qxf7#', loss: 60 })).toBe('Blunder: Qe6 allows mate in one, Qxf7#.');
+    expect(h({ grade: 'unrated', bestSan: null, loss: null })).toBe('Not rated: the engine did not answer.');
+    expect(h({ grade: 'mistake', loss: 13, bestSan: 'Bd6', late: 30 })).toBe('Mistake. Best was Bd6, 13 points better. Late: over 30 s.');
   });
 });
 

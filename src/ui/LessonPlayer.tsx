@@ -139,12 +139,12 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
       <p className="prompt">{finished ? 'The move from the text is on the board.' : `${side} to move. Find the move. The text’s own move, and what it says about it, come next.`}</p>
       <div className="feedback" aria-live="polite">
-        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have the move shown; the text’s reason follows it.</p></div>}
+        {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong><p>Try again, or have it shown.</p></div>}
         {checking && <p className="muted">Checking your move with the engine</p>}
         {other && !finished && (
           <div className="verdict neutral" data-testid="lesson-other" data-kind={other.kind}>
-            <strong>{other.kind === 'sound' ? `The engine’s check does not fault ${other.san} here.` : `${other.san} could not be checked on this device.`}</strong>
-            <p>The text plays a different move. Try again, or have it shown. Nothing is recorded as missed.</p>
+            <strong>{other.kind === 'sound' ? `${other.san} is sound, but not the text’s move.` : `${other.san} could not be checked.`}</strong>
+            <p>Not a miss. Try again, or have it shown.</p>
           </div>
         )}
       </div>

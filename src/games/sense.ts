@@ -332,3 +332,37 @@ export function senseStats(attempts: Attempt[], since?: number): Record<SenseKin
   };
   return { 'safe-or-not': of('safe-or-not'), 'chance-or-not': of('chance-or-not') };
 }
+
+/**
+ * The result of a question in one line, with at most one more fact about this very case.
+ * The owner asked for no paragraphs: right or wrong, and what the answer was (2026-11-11).
+ * `playedSan` is the move he played on the board, if he played one.
+ */
+export function senseWords(item: SenseItem, grade: SenseGrade, playedSan: string | null): { title: string; detail: string | null } {
+  const mine = playedSan ?? 'that move';
+  if (item.kind === 'safe-or-not') {
+    const p = item.proposedSan ?? 'the move';
+    const reply = item.replyLine ?? '';
+    const cost = item.truth && item.loss !== undefined ? `It cost ${Math.round(item.loss)} points in the game.` : null;
+    switch (grade.response) {
+      case 'hit': return { title: `Correct: ${p} loses to ${reply}`, detail: [grade.alternative && playedSan ? `Your ${playedSan} also works.` : null, cost].filter(Boolean).join(' ') || null };
+      case 'miss': return { title: `Wrong: ${p} loses to ${reply}`, detail: cost };
+      case 'wrong-reply': return { title: `Right that ${p} is unsafe, but not ${mine}. It is ${reply}`, detail: cost };
+      case 'unverified-reply': return { title: `Right that ${p} is unsafe. ${mine[0]!.toUpperCase()}${mine.slice(1)} could not be checked: not scored. The engine’s reply: ${reply}`, detail: null };
+      case 'correct-rejection': return { title: `Correct: ${p} is safe.`, detail: null };
+      case 'false-alarm': return { title: `Wrong: ${p} is safe.`, detail: null };
+      default: return { title: `${mine[0]!.toUpperCase()}${mine.slice(1)} does win something: the question was wrong. Not scored.`, detail: null };
+    }
+  }
+  const line = item.bestLine ?? '';
+  switch (grade.response) {
+    case 'hit': return grade.alternative && playedSan ? { title: `Correct: ${playedSan} wins too.`, detail: `The engine’s line: ${line}` } : { title: `Correct: ${line}`, detail: null };
+    case 'miss': return { title: `Missed: ${line}`, detail: null };
+    case 'wrong-reply': return { title: `Right that something is there, but not ${mine}. It is ${line}`, detail: null };
+    case 'unverified-reply': return { title: `Right that something is there. ${mine[0]!.toUpperCase()}${mine.slice(1)} could not be checked: not scored. The engine’s line: ${line}`, detail: null };
+    case 'correct-rejection': return { title: 'Correct: nothing to win here.', detail: null };
+    case 'false-alarm': return { title: 'Wrong: there was nothing to win.', detail: null };
+    default: return { title: `${mine[0]!.toUpperCase()}${mine.slice(1)} does win something: the question was wrong. Not scored.`, detail: null };
+  }
+}
+

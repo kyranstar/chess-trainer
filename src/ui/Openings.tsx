@@ -137,10 +137,10 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
         {result && !result.ok && (
           <div className="verdict neutral" data-testid="drill-verdict" data-ok="false" data-alt={result.ev?.verdict ?? ''}>
             <strong>Your repertoire move is {entry.san}.</strong>
-            {result.playedSan && result.ev?.verdict === 'sound' && <p>{result.playedSan} is a sound alternative by the engine evidence ({Math.round(result.ev.wp!)}% against {Math.round(result.ev.bestWp!)}% for the first choice); it is just not the move you chose to learn.</p>}
-            {result.playedSan && result.ev?.verdict === 'weaker' && <p>{result.playedSan} scores about {Math.round(result.ev.wp!)}% against {Math.round(result.ev.bestWp!)}% for the engine’s first choice here.</p>}
-            {result.playedSan && (!result.ev || result.ev.verdict === 'unknown') && <p>{result.playedSan} has no stored engine evaluation here, so nothing is claimed about its quality.</p>}
-            {result.shown && <p>Shown on request; recorded as assisted.</p>}
+            {result.playedSan && result.ev?.verdict === 'sound' && <p>{result.playedSan} is also sound ({Math.round(result.ev.wp!)} against {Math.round(result.ev.bestWp!)} for the engine’s first choice).</p>}
+            {result.playedSan && result.ev?.verdict === 'weaker' && <p>{result.playedSan} is weaker ({Math.round(result.ev.wp!)} against {Math.round(result.ev.bestWp!)} for the engine’s first choice).</p>}
+            {result.playedSan && (!result.ev || result.ev.verdict === 'unknown') && <p>No evaluation is stored for {result.playedSan} here.</p>}
+            {result.shown && <p>Shown: counts as assisted.</p>}
             {adopted && <p data-testid="drill-adopted">{adopted} is now your move here.</p>}
           </div>
         )}

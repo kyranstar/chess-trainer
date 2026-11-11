@@ -16,7 +16,7 @@ test('the engine check of the learner\'s own move still answers while background
   await page.getByTestId('show-reply').click();
   await expect(page.getByTestId('engine-reply')).toBeVisible({ timeout: 30_000 });
   console.log(`puzzle engine reply after ${Date.now() - t0} ms:`, (await page.getByTestId('engine-reply').textContent())!.slice(0, 80));
-  await expect(page.getByTestId('engine-reply')).toContainText('the built-in engine continues');
+  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/);
 
   // An unsafe move from an own game, answered with a reply other than the stored one.
   await page.goto('./#/practice/run?mode=sense');

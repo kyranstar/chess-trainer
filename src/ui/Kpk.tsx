@@ -75,7 +75,7 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
     if (!ev.kept) {
       const keeping = ev.keeping.map((u) => sanOf(pos, u)).join(', ');
       void finish(false, false, goal === 'win' ? `${san} lets the win go: the position is now a theoretical draw.` : `${san} loses: the pawn now queens by force.`,
-        `Exact result from the table, not an opinion. ${ev.keeping.length === 1 ? `The only move that kept the ${goal === 'win' ? 'win' : 'draw'} was ${keeping}.` : `Moves that kept the ${goal === 'win' ? 'win' : 'draw'}: ${keeping}.`}`);
+        ev.keeping.length === 1 ? `Only ${keeping} kept the ${goal === 'win' ? 'win' : 'draw'}.` : `These kept the ${goal === 'win' ? 'win' : 'draw'}: ${keeping}.`);
       return;
     }
     const o = outcomeAfter(after, goal, myMoves.current);
@@ -100,7 +100,7 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
     setFen(fenOf(applyUci(pos, move)));
     setLastMove(move);
     setResetKey((k) => k + 1);
-    void finish(false, true, `${sanOf(pos, move)} keeps the ${goal === 'win' ? 'win' : 'draw'}.`, 'Shown on request; recorded as assisted.');
+    void finish(false, true, `${sanOf(pos, move)} keeps the ${goal === 'win' ? 'win' : 'draw'}.`, 'Shown: counts as assisted.');
   }
 
   const dist = goal === 'win' && !end ? distanceKpk(fen) : null;
@@ -120,7 +120,7 @@ export function KpkDrill({ start, goal, sessionId, heading, context = 'practice'
           <div className={`verdict ${end.ok ? 'right' : 'neutral'}`} data-testid="kpk-verdict" data-ok={end.ok}>
             <strong>{end.text}</strong>
             {end.detail && <p>{end.detail}</p>}
-            {retrying && <p data-testid="kpk-retry-note">Second go: practice, not recorded. The first attempt stands.</p>}
+            {retrying && <p data-testid="kpk-retry-note">Second go: not recorded.</p>}
           </div>
         )}
       </div>

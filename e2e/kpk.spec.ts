@@ -62,8 +62,7 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   const verdict = page.getByTestId('kpk-verdict');
   await expect(verdict).toHaveAttribute('data-ok', 'false');
   await expect(verdict).toContainText('theoretical draw');
-  await expect(verdict).toContainText('The only move that kept the win was');
-  await expect(verdict).toContainText('Exact result from the table, not an opinion');
+  await expect(verdict).toContainText(/Only \S+ kept the win\./);
   // The same start can be tried again at once. The second go is practice: Progress below
   // still counts three play-outs, one of them missed.
   await page.getByTestId('kpk-retry').click();

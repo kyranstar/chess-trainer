@@ -225,35 +225,25 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
 
       <div className="feedback" aria-live="polite">
         {phase === 'solving' && !wrongSan && !outcome && <p className="muted">Find the best move. Any checkmate also counts.</p>}
-        {phase === 'solving' && outcome === 'assisted' && !wrongSan && <p className="muted">Hint shown: this attempt is recorded as assisted, not as a first-try solve.</p>}
+        {phase === 'solving' && outcome === 'assisted' && !wrongSan && <p className="muted">Hint used: counts as assisted.</p>}
         {phase === 'solving' && wrongSan && (
           <div className="verdict wrong" data-testid="verdict-wrong">
             <strong>{wrongSan} is not the move.</strong>
-            <p>An engine check found one move here clearly better than every other. Recorded as missed; this position returns in your review queue.</p>
-            {reply?.state === 'shown' && (
-              <p data-testid="engine-reply">
-                {reply.line
-                  ? `After ${wrongSan} the built-in engine continues ${reply.line}. It is on the board: step back and on through it. This is the engine’s line for this position, not an explanation.`
-                  : 'The built-in engine did not answer on this device, so no reply can be shown.'}
-              </p>
-            )}
+            {reply?.state === 'shown' && <p data-testid="engine-reply">{reply.line ? `After ${wrongSan}: ${reply.line}` : 'The engine did not answer on this device.'}</p>}
             {steps.note}
           </div>
         )}
         {phase === 'solved' && (
           <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
-            <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : 'Solved.'}</strong>
-            {run.acceptedAlternative && <p>Your checkmate differs from the source game’s move and is equally correct.</p>}
-            {replaying && <p data-testid="replay-note">This go was practice. The first attempt stays recorded as {outcome === 'assisted' ? 'assisted' : 'missed'}; the position returns in your review queue.</p>}
-            {!replaying && outcome === 'fail' && <p>Recorded as missed because the first move was wrong. It returns in your review queue.</p>}
-            {!replaying && outcome === 'assisted' && <p>Recorded as assisted because a hint was used. It returns in your review queue.</p>}
+            <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : outcome === 'assisted' ? 'Solved with a hint: counts as assisted.' : 'Solved after a wrong move: counts as a miss.'}</strong>
+            {run.acceptedAlternative && <p>Your checkmate also counts.</p>}
+            {replaying && <p data-testid="replay-note">The first attempt stays {outcome === 'assisted' ? 'assisted' : 'a miss'}.</p>}
           </div>
         )}
         {phase === 'revealed' && (
           <div className="verdict neutral" data-testid="verdict-revealed">
             <strong>Solution: {solutionSan}</strong>
             {steps.note}
-            <p>Recorded as missed. It returns in your review queue.</p>
           </div>
         )}
       </div>

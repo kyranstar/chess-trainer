@@ -257,6 +257,7 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
   // After the answer the lines can be played through on the board: the engine's, and what
   // follows the move he played. A second go is practice and is never recorded.
   const [mine, setMine] = useState<{ uci: string; pv: string[] } | null>(null);
+  const [worseBy, setWorseBy] = useState<number | null>(null);
   const [view, setView] = useState<'best' | 'mine'>('best');
   const recorded = useRef(false);
   const [retrying, setRetrying] = useState(false);
@@ -283,6 +284,7 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
       setChecking(false);
       setMine({ uci, pv: line?.pv ?? [] });
       other = !line ? 'unchecked' : 100 - line.wp >= event.bestWp - 10 ? 'not-faulted' : 'worse';
+      setWorseBy(line ? Math.round(event.bestWp - (100 - line.wp)) : null);
     }
     setOther(other);
     setResult({ ok, playedSan: uci ? sanOf(pos, uci) : null, shown });
@@ -311,20 +313,17 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
         <h2>{game.color === 'white' ? 'White' : 'Black'} to move</h2>
         <p className="muted">From your {game.timeClass} game on {game.endDate}, move {Math.floor(event.ply / 2) + 1}. The engine found one move here clearly better than the rest. Find it.</p>
       </header>
-      {retrying && !result && <p className="muted" data-testid="own-retry-note">Second go. This one is not recorded.</p>}
+      {retrying && !result && <p className="muted" data-testid="own-retry-note">Second go: not recorded.</p>}
       <Board fen={steps.pos ? steps.pos.fen : fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={steps.pos ? steps.pos.last : null} marks={steps.marks} onMove={(u) => void record(u, false)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
-        {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>{event.bestSan}: the engine’s first choice.</strong><p>In the game you played {event.playedSan}.</p></div>}
+        {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>Correct: {event.bestSan}.</strong><p>In the game you played {event.playedSan}.</p></div>}
         {result && !result.ok && (
           <div className="verdict neutral" data-testid="own-verdict" data-ok="false">
-            <strong>The engine’s first choice is {event.bestLine}.</strong>
-            <p>
-              {result.playedSan && other === 'not-faulted' ? `The built-in engine’s check does not fault ${result.playedSan} either, so it is not scored. ` : ''}
-              {result.playedSan && other === 'unchecked' ? `${result.playedSan} could not be checked on this device, so it is not scored. ` : ''}
-              {result.playedSan && other === 'worse' ? `The built-in engine rates ${result.playedSan} clearly lower; it comes back in your review queue. ` : ''}
-              Best move about {Math.round(event.bestWp)}% expected score, the second best {event.secondWp === null ? 'unknown' : `${Math.round(event.secondWp)}%`}.
-            </p>
-            {view === 'mine' && result.playedSan && <p data-testid="own-mine-line">On the board: {result.playedSan} and the engine’s reply to it. Step back and on through it.</p>}
+            <strong>Best: {event.bestLine}</strong>
+            {result.playedSan && other === 'worse' && <p>{result.playedSan} is {worseBy ?? 'many'} points worse.</p>}
+            {result.playedSan && other === 'not-faulted' && <p>{result.playedSan} is about as good: not scored.</p>}
+            {result.playedSan && other === 'unchecked' && <p>{result.playedSan} could not be checked: not scored.</p>}
+            {view === 'mine' && result.playedSan && <p data-testid="own-mine-line">On the board: {result.playedSan} and the reply.</p>}
             {steps.note}
           </div>
         )}

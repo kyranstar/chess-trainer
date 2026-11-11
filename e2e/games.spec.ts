@@ -64,12 +64,12 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await playMove(page, 'h5e5');
   await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'false');
   // Another move is checked by the built-in engine before anything is recorded against it; this one loses the queen.
-  await expect(page.getByTestId('own-verdict')).toContainText('rates Qxe5+ clearly lower', { timeout: 30_000 });
+  await expect(page.getByTestId('own-verdict')).toContainText(/Qxe5\+ is \d+ points worse\./, { timeout: 30_000 });
   // What his move leads to can be put on the board and stepped through, then the engine's line again
   // (found missing by the practice audit: this drill only printed the answer).
   const start = await drill.locator('.board').getAttribute('data-fen');
   await page.getByTestId('own-see-mine').click();
-  await expect(page.getByTestId('own-mine-line')).toContainText('Qxe5+ and the engine’s reply');
+  await expect(page.getByTestId('own-mine-line')).toContainText('Qxe5+ and the reply');
   await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '2');
   await page.getByTestId('line-prev').click();
   await page.getByTestId('line-prev').click();
@@ -229,11 +229,14 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing can take back at once.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
   // What the engine does about the piece that can be taken is said, so the fact and the rating cannot seem to disagree.
-  await expect(page.getByTestId('own-move-loose-note')).toContainText(/The engine’s line (takes it|starts with a different move)/);
+  await expect(page.getByTestId('own-move-loose-note')).toContainText('The engine takes it.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
   // Judged plainly: giving a knight for a pawn is rated by the engine, with both numbers.
   expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));
-  await expect(page.getByTestId('own-move-rating')).toContainText('below its first choice');
+  // One line: the verdict, what was better, and by how much.
+  await expect(page.getByTestId('own-move-grade')).toHaveText(/^(Mistake|Blunder)\. Best was \S+, \d+ points better\.$/);
+  // Nothing generic: no explanation of the rating scale, no "recorded as".
+  await expect(page.getByTestId('own-move-verdict')).not.toContainText(/Recorded as|Ratings are|built-in engine/);
   // The consequence can be played through on the board ...
   const afterMine = await drill.getAttribute('data-fen');
   await page.getByTestId('line-next').click();
@@ -298,7 +301,7 @@ test('your move on the clock: running over never forces a move or changes its ra
   await playMove(page, 'a2a3');
   await page.getByTestId('own-move-no-reply').click();
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
-  await expect(page.getByTestId('own-move-grade')).toContainText('made after the 2 seconds');
+  await expect(page.getByTestId('own-move-grade')).toContainText('Late: over 2 s.');
   // Late is beside the rating, not instead of it: the move still has one.
   await expect(page.getByTestId('own-move-grade')).toContainText(/Best|Good|inaccuracy|mistake|blunder/i);
 

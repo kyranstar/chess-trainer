@@ -119,6 +119,6 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
   await expect(page.getByTestId('puzzle')).toContainText('Practice:');
   await failPuzzle(page);
   await page.getByTestId('show-reply').click();
-  await expect(page.getByTestId('engine-reply')).toContainText('the built-in engine continues', { timeout: 30_000 });
+  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/, { timeout: 30_000 });
 });
 

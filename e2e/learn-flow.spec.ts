@@ -40,7 +40,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await failPuzzle(page);
   // The wrong move can be followed up: the built-in engine's reply is shown as evidence.
   await page.getByTestId('show-reply').click();
-  await expect(page.getByTestId('engine-reply')).toContainText('the built-in engine continues', { timeout: 30_000 });
+  await expect(page.getByTestId('engine-reply')).toContainText(/^After \S+: \S+/, { timeout: 30_000 });
   // ... on the board, not only as notation: it opens on the opponent's answer and steps back and on.
   const missed = page.getByTestId('puzzle');
   const asked = await missed.locator('.board').getAttribute('data-fen');
@@ -59,7 +59,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await page.getByTestId('replay').click();
   await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
   await solvePuzzle(page);
-  await expect(page.getByTestId('replay-note')).toContainText('The first attempt stays recorded as missed');
+  await expect(page.getByTestId('replay-note')).toHaveText('The first attempt stays a miss.');
   await expect(missed).toHaveAttribute('data-outcome', 'fail');
 
   // Ending the day asks once.
@@ -274,8 +274,8 @@ test('a lesson example does not fault a sound move that is not the text’s: no 
   const alt = target.alternatives[0]!;
   await playMove(page, alt.uci);
   const other = page.getByTestId('lesson-other');
-  await expect(other).toContainText(`does not fault ${alt.san}`);
-  await expect(other).toContainText('Nothing is recorded as missed');
+  await expect(other).toContainText(`${alt.san} is sound, but not the text’s move.`);
+  await expect(other).toContainText('Not a miss.');
   await expect(example.locator('.verdict.wrong')).toHaveCount(0);
   // A move that throws the position away is still told apart (checked by the engine on the device).
   await playMove(page, 'h6f8');

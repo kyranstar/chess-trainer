@@ -5,7 +5,7 @@ import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
 import { bestLineFor } from '../engine/interactive';
-import { chanceItems, gradeChance, gradeSafety, pickSense, safetyItems, type SenseGrade, type SenseItem, type SenseKind, senseThemes, verifyReply } from '../games/sense';
+import { chanceItems, gradeChance, gradeSafety, pickSense, safetyItems, type SenseGrade, type SenseItem, type SenseKind, senseThemes, senseWords, verifyReply } from '../games/sense';
 import type { GameRecord } from '../games/types';
 import { Board } from './Board';
 import { useGames } from './Games';
@@ -29,15 +29,6 @@ const MIN_SHOWN_MS = 1000;
 
 type Phase = 'ask' | 'play' | 'checking' | 'done';
 
-const RESULT_TITLE: Record<string, string> = {
-  hit: 'Correct, and you found the move.',
-  miss: 'There was something here.',
-  'wrong-reply': 'Right that something is there; that move is not it.',
-  'unverified-reply': 'Right that something is there. Your move could not be checked, so it is not scored.',
-  'correct-rejection': 'Correct: nothing special here.',
-  'false-alarm': 'Nothing was there.',
-  'label-disputed': 'Your move does mate or win material by the engine’s check, so this question was wrong to hold that nothing is there. It is not scored.',
-};
 
 /** One yes/no question about a real position from the learner's own games. */
 export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDone }: {
@@ -132,6 +123,7 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
   const keepMine = !safety && grade?.response === 'hit' && !!grade.alternative;
   const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Play the engine’s line', me: item.color });
   const onLine = phase === 'done' && steps.pos && !(keepMine && steps.step === 0);
+  const words = grade ? senseWords(item, grade, playedSan) : null;
   const question = safety ? `You are ${me}. Is ${item.proposedSan} safe to play?` : `${me} to move. Is there something to win here?`;
   const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
   return (
@@ -146,11 +138,8 @@ export function SenseDrill({ item, sessionId, context, heading, onRecorded, onDo
         {phase === 'checking' && <p className="muted">Checking your move with the engine</p>}
         {grade && (
           <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
-            <strong>{RESULT_TITLE[grade.response]}</strong>
-            {item.truth && safety && <p>After {item.proposedSan} the engine’s reply is {item.replyLine}. In the game this move cost about {Math.round(item.loss ?? 0)} points of expected score.{grade.alternative ? ` Your reply ${playedSan} also wins material or mates, by the engine’s check.` : ''}</p>}
-            {item.truth && !safety && <p>The engine’s line is {item.bestLine} (about {Math.round(item.bestWp ?? 0)}% expected score).{grade.alternative ? ` Your move ${playedSan} also mates or wins material, by the engine’s check.` : ''}</p>}
-            {!item.truth && safety && <p>The engine found no reply to {item.proposedSan} that mates or wins any material in a short line. That is all “safe” means here.</p>}
-            {!item.truth && !safety && <p>The engine’s best line here neither mates nor wins any material in a short line.</p>}
+            <strong>{words!.title}</strong>
+            {words!.detail && <p>{words!.detail}</p>}
             {onLine && steps.note}
           </div>
         )}
