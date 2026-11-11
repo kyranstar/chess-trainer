@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { legalDests, positionFromFen } from '../src/chess/rules';
 import { playMove, playUntilAccepted, solvePuzzle } from '../e2e/helpers';
 import { churnFor, clones, flipOffOn, hideShow, measured, mockChessCom, openApp, setUsername, store, waitMeasured, watch, watched } from './lib';
 
@@ -254,24 +255,34 @@ test('baseline, opening gap builder with a pending choice, opening recall, and "
 
   await page.goto('./#/practice/openings');
   const builder = page.getByTestId('gap-builder');
-  await expect(builder).toHaveAttribute('data-path', '');
-  await playMove(page, 'e2e4');
+  // With games on the device the first moves are read from them (ADR-046), so the builder asks
+  // about the first position that has no move yet, whichever that is.
+  await expect(builder).toBeVisible();
+  const gapPath = (await builder.getAttribute('data-path'))!;
+  const gapPos = positionFromFen((await builder.locator('.board').getAttribute('data-fen'))!);
+  const [from, tos] = [...legalDests(gapPos)].find(([, t]) => t.length > 0)!;
+  await playMove(page, `${from}${tos[0]}`);
   await expect(page.getByTestId('save-move')).toBeVisible();
   await watch(page);
   c = await everything(page);
   expect(c.after).toBeGreaterThan(c.before + 3);
   await still(page, 'gap builder with a pending choice');
+  // The same position is still being asked, with the choice still pending.
+  await expect(builder).toHaveAttribute('data-path', gapPath);
   await expect(page.getByTestId('save-move')).toBeVisible();
   await page.getByTestId('save-move').click();
-  await expect(page.getByTestId('repertoire-row')).toHaveCount(1);
+  await expect(page.locator('[data-testid=repertoire-row] [data-source=hand]')).toHaveCount(1);
   await page.getByTestId('start-recall').click();
   const drill = page.getByTestId('opening-drill');
-  await expect(drill).toHaveAttribute('data-expected', 'e2e4');
+  await expect(drill).toHaveAttribute('data-done', 'false');
+  const recall = (await drill.getAttribute('data-expected'))!;
   await watch(page);
   c = await everything(page);
   expect(c.after).toBeGreaterThan(c.before + 3);
   await still(page, 'opening recall');
-  await playMove(page, 'e2e4');
+  // The move asked for has not changed under the churn.
+  await expect(drill).toHaveAttribute('data-expected', recall);
+  await playMove(page, recall);
   await expect(page.getByTestId('drill-verdict')).toHaveAttribute('data-ok', 'true');
   expect((await store(page, 'attempts')).filter((a) => a.exerciseKind === 'opening')).toHaveLength(1);
 

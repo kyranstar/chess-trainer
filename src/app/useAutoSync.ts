@@ -4,6 +4,7 @@ import { browserEngine, type UciEngine } from '../engine/uci';
 import { DEVICE_NODES } from '../games/analyse';
 import { analysePending, type AnalyseProgress, needsMeasure, syncIfDue } from '../games/autosync';
 import { browserFetch, type SyncReport } from '../games/chesscom';
+import { refreshRepertoire } from '../openings/auto';
 
 export interface SyncState {
   syncing: boolean;
@@ -92,7 +93,8 @@ async function analysisPart(db: TrainerDB): Promise<void> {
 export async function runSyncRound(db: TrainerDB, force = false): Promise<void> {
   // Analysis of games already on the device does not wait for the network: underground a
   // request can hang until it times out. A second pass picks up whatever the fetch brings.
-  await Promise.all([analysisPart(db), syncPart(db, force).then(() => analysisPart(db))]);
+  // Once the games are in, the repertoire is brought up to date from them (it needs the moves, not the analysis).
+  await Promise.all([analysisPart(db), syncPart(db, force).then(() => { void refreshRepertoire(db); return analysisPart(db); })]);
 }
 
 /** Starts a round on launch and whenever the app returns to the foreground or comes back online. */

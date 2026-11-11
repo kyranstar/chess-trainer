@@ -5,6 +5,9 @@ import { type Learner, useDb, useDueReviews, useFocusMode, useNow } from '../app
 import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { formatPct } from '../metrics/metrics';
+import { declineEntry, DOUBTFUL_KEY, refreshRepertoire } from '../openings/auto';
+import { DEFAULT_BAND, loadOpeningBook } from '../openings/book';
+import type { Doubtful } from '../openings/fromGames';
 import { entriesFromPgn, repertoireToPgn } from '../openings/pgn';
 import { classifyMove, type Decision, drillId, makeEntry, type MoveEvidence, type OpeningBook, type RepertoireEntry, type Side, SOUND_MARGIN, walkRepertoire } from '../openings/repertoire';
 import { Board } from './Board';
@@ -15,15 +18,12 @@ let bookCache: OpeningBook | null | undefined;
 export function useOpeningBook(): OpeningBook | null | undefined {
   const [, bump] = useState(0);
   useEffect(() => {
-    if (bookCache !== undefined) return;
+    if (bookCache !== undefined && bookCache !== null) return;
     let live = true;
-    fetch('./packs/openings-lichess.json')
-      .then((r) => (r.ok ? (r.json() as Promise<OpeningBook>) : null))
-      .catch(() => null)
-      .then((b) => {
-        bookCache = b && b.positions ? b : null;
-        if (live) bump((x) => x + 1);
-      });
+    void loadOpeningBook().then((b) => {
+      bookCache = b;
+      if (live) bump((x) => x + 1);
+    });
     return () => {
       live = false;
     };
@@ -31,12 +31,19 @@ export function useOpeningBook(): OpeningBook | null | undefined {
   return bookCache;
 }
 
+/** How a move got into the repertoire, in a few words. */
+export function sourceLabel(e: RepertoireEntry): string {
+  if (e.source === 'own-games') return e.games ? `from your games: played in ${e.games.played} of ${e.games.reached}` : 'from your games';
+  if (e.source === 'suggested') return 'suggested: the sound move most played at your level';
+  return 'recorded by you';
+}
+
 export function useRepertoire(): RepertoireEntry[] {
   const db = useDb();
   return useLiveQuery(() => db.repertoire.toArray(), [db]) ?? [];
 }
 
-export const DEFAULT_BAND = 1;
+export { DEFAULT_BAND };
 
 export function useOpeningPrefs(): { band: number; side: Side; setBand: (b: number) => void; setSide: (s: Side) => void } {
   const db = useDb();
@@ -87,11 +94,23 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
   const [fen, setFen] = useState(entry.fen);
   const [resetKey, setResetKey] = useState(0);
   const started = useRef(Date.now());
+  const playedUci = useRef<string | null>(null);
+  const [adopted, setAdopted] = useState<string | null>(null);
+
+  /** A move the app put in (from his games, or a suggestion) gives way to the sound move he prefers. */
+  async function adopt() {
+    if (!playedUci.current) return;
+    const mine = makeEntry(entry.side, entry.fen, entry.path, playedUci.current, Date.now());
+    await db.repertoire.put(mine);
+    setAdopted(mine.san);
+    void refreshRepertoire(db);
+  }
 
   async function record(uci: string | null, shown: boolean) {
     const pos = positionFromFen(entry.fen);
     const ok = !!uci && sameMove(pos, uci, entry.uci);
     const ev = uci && !ok && book ? classifyMove(book, entry.positionKey, uci, [band]) : null;
+    playedUci.current = uci;
     setResult({ ok, playedSan: uci ? sanOf(pos, uci) : null, ev, shown });
     setFen(fenOf(applyUci(pos, entry.uci)));
     setResetKey((k) => k + 1);
@@ -108,7 +127,7 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
       <header className="puzzle-head">
         {heading && <p className="kicker">{heading}</p>}
         <h2>Your move as {entry.side === 'white' ? 'White' : 'Black'}</h2>
-        <p className="muted">After {pathText(entry.path)}. Recall mode: only the move you chose for your repertoire counts for the review schedule.</p>
+        <p className="muted">After {pathText(entry.path)}. Recall mode: only the repertoire move counts for the review schedule.{entry.source ? ` This one is ${sourceLabel(entry)}.` : ''}</p>
       </header>
       <Board fen={fen} orientation={entry.side} movable={result ? null : entry.side} lastMove={result ? entry.uci : null} onMove={(u) => void record(u, false)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
@@ -120,11 +139,15 @@ export function OpeningDrill({ entry, book, band, sessionId, heading, onDone }: 
             {result.playedSan && result.ev?.verdict === 'weaker' && <p>{result.playedSan} scores about {Math.round(result.ev.wp!)}% against {Math.round(result.ev.bestWp!)}% for the engine’s first choice here.</p>}
             {result.playedSan && (!result.ev || result.ev.verdict === 'unknown') && <p>{result.playedSan} has no stored engine evaluation here, so nothing is claimed about its quality.</p>}
             {result.shown && <p>Shown on request; recorded as assisted.</p>}
+            {adopted && <p data-testid="drill-adopted">{adopted} is now your move here.</p>}
           </div>
         )}
       </div>
       <div className="actions">
         {!result && <button onClick={() => void record(null, true)}>Show my move</button>}
+        {result && !result.ok && !adopted && entry.source && result.playedSan && result.ev?.verdict === 'sound' && (
+          <button data-testid="drill-adopt" onClick={() => void adopt()}>Make {result.playedSan} my move here</button>
+        )}
         {result && <button className="primary" data-testid="drill-next" onClick={onDone}>Continue</button>}
       </div>
     </section>
@@ -205,6 +228,16 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
   }
 
   const walk = useMemo(() => (book ? walkRepertoire(book, entries, prefs.side, [prefs.band]) : null), [book, entries, prefs.side, prefs.band]);
+  const doubtful = useLiveQuery(async () => ((await getMeta<Doubtful[]>(db, DOUBTFUL_KEY)) ?? []), [db]) ?? [];
+  // Opening the page, recording or removing a move by hand, or choosing another rating band
+  // brings the moves read from the games and the suggestions up to date.
+  const handKey = entries.filter((e) => !e.source).map((e) => `${e.id}:${e.uci}`).sort().join(',');
+  useEffect(() => {
+    void refreshRepertoire(db);
+  }, [db, handKey, prefs.band]);
+  // The position on screen stays until it is answered or skipped, even if the app fills it in
+  // meanwhile (a game arrives, a suggestion is added): what he then records replaces that.
+  const held = useRef<{ side: Side; band: number; gap: Decision } | null>(null);
 
   if (book === undefined) return <div className="page"><p className="muted">Loading opening data</p></div>;
   if (book === null || !walk) {
@@ -220,14 +253,21 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
   const queued = new Set(learner.reviews.map((r) => r.itemId));
   const dueIds = new Set(due.map((d) => d.itemId));
   const toRecall = mine.filter((e) => !queued.has(drillId(e)) || dueIds.has(drillId(e)));
-  const gap = walk.gaps[Math.min(skip, Math.max(0, walk.gaps.length - 1))];
+  if (held.current && (held.current.side !== prefs.side || held.current.band !== prefs.band)) held.current = null;
+  const heldEntry = held.current ? entries.find((e) => e.id === `${prefs.side}|${held.current!.gap.positionKey}`) : undefined;
+  // Answered by hand: move on. Filled in by the app while it was on screen: keep showing it.
+  if (held.current && heldEntry && !heldEntry.source) held.current = null;
+  const gap = held.current?.gap ?? walk.gaps[Math.min(skip, Math.max(0, walk.gaps.length - 1))];
+  if (gap && !held.current) held.current = { side: prefs.side, band: prefs.band, gap };
+  const count = (src: RepertoireEntry['source']) => mine.filter((e) => e.source === src).length;
   const m = book.manifest;
 
   return (
     <div className="page" data-testid="openings-home">
       <a className="back" href={href('practice')}>Practice</a>
       <h1>Opening repertoire</h1>
-      <p className="lede">Record the moves you have chosen to play, most common positions first, then recall them on a schedule. Your course stays where it is; nothing is copied from it.</p>
+      <p className="lede">Your moves are read from your own games. The common positions you have no move for get a suggestion: the sound move most played at your level, from open game data and an engine check. A move you record yourself replaces either.</p>
+      <p className="definition-small" data-testid="course-note">Nothing is copied from your opening course: Chessreps’ terms do not allow its lines to be copied or collected. What you learned there shows up here because you play it; where a suggestion differs from your course, play your course’s move in recall and make it yours with one tap.</p>
 
       <div className="length-picker" role="group" aria-label="Side">
         {(['white', 'black'] as Side[]).map((s) => (
@@ -265,7 +305,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
 
       {gap ? (
         // Keyed by position: a new position must start with no pending choice from the last one.
-        <GapBuilder key={`${prefs.side}|${gap.positionKey}`} gap={gap} side={prefs.side} book={book} band={prefs.band} onSaved={() => setSkip(0)} onSkip={() => setSkip((s) => (s + 1) % walk.gaps.length)} />
+        <GapBuilder key={`${prefs.side}|${gap.positionKey}`} gap={gap} side={prefs.side} book={book} band={prefs.band} onSaved={() => { held.current = null; setSkip(0); }} onSkip={() => { held.current = null; setSkip((s) => (s + 1) % Math.max(1, walk.gaps.length)); }} />
       ) : (
         <p className="note">Every position the data reaches has an answer recorded.</p>
       )}
@@ -273,6 +313,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
       <section className="card" data-testid="recall-card">
         <h2>Recall</h2>
         <p>{mine.length} move{mine.length === 1 ? '' : 's'} recorded as {prefs.side === 'white' ? 'White' : 'Black'}; {toRecall.length} to recall now (new or due).</p>
+        {(count('own-games') > 0 || count('suggested') > 0) && <p className="muted" data-testid="repertoire-sources">{count('own-games')} read from your games, {count('suggested')} suggested, {count(undefined)} recorded by you.</p>}
         {toRecall.length > 0 && <div className="actions"><a className="button primary" data-testid="start-recall" href={href('practice/run', { mode: 'openings', side: prefs.side })}>Recall {toRecall.length} move{toRecall.length === 1 ? '' : 's'}</a></div>}
       </section>
 
@@ -287,6 +328,18 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
         {pgnMessage && <p className={`note ${pgnMessage.kind === 'error' ? 'is-error' : 'is-ok'}`} role="status" data-testid="pgn-message">{pgnMessage.text}</p>}
       </section>
 
+      {doubtful.filter((d) => d.side === prefs.side).length > 0 && (
+        <section className="card" data-testid="doubtful-card">
+          <h2>Habits not taken over</h2>
+          <p className="muted">In these positions the move you usually play is rated clearly below the best move by the engine check, so it was not added and no suggestion was put in its place. Record the move you want when the position comes up above.</p>
+          <ul className="attempt-list">
+            {doubtful.filter((d) => d.side === prefs.side).map((d) => (
+              <li key={d.positionKey} data-testid="doubtful-row">After {pathText(d.path)} you usually play {d.san} ({d.played} of {d.reached} games){d.bestSan ? `; the engine’s first choice is ${d.bestSan}` : ''}.</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {mine.length > 0 && (
         <section className="concept-group">
           <h2>Your recorded moves</h2>
@@ -295,8 +348,8 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
               <li key={e.id}>
                 <span className="journal-row" data-testid="repertoire-row">
                   <span className="concept-name">{pathText([...e.path, e.san])}</span>
-                  <span className="concept-meta">after {pathText(e.path)}, you play {e.san}</span>
-                  <button className="quiet" onClick={() => void db.repertoire.delete(e.id)} aria-label={`Remove ${e.san} after ${pathText(e.path)}`}>Remove and choose again</button>
+                  <span className="concept-meta" data-source={e.source ?? 'hand'}>after {pathText(e.path)}, you play {e.san}; {sourceLabel(e)}</span>
+                  <button className="quiet" onClick={() => void declineEntry(db, e).then(() => refreshRepertoire(db))} aria-label={`Remove ${e.san} after ${pathText(e.path)}`}>Remove and choose again</button>
                 </span>
               </li>
             ))}

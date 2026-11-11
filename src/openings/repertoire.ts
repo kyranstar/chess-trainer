@@ -45,7 +45,7 @@ export interface OpeningBook {
   positions: Record<string, BookPosition>;
 }
 
-/** The learner's chosen move in one position. User-authored; included in backups. */
+/** The learner's move in one position. Included in backups. */
 export interface RepertoireEntry {
   id: string;
   side: Side;
@@ -57,6 +57,14 @@ export interface RepertoireEntry {
   path: string[];
   addedAt: number;
   updatedAt: number;
+  /**
+   * Where the move came from when the learner did not record it by hand: read from his own
+   * games, or suggested from game statistics and an engine check (src/openings/fromGames.ts).
+   * Absent on moves he chose or imported himself.
+   */
+  source?: 'own-games' | 'suggested';
+  /** For 'own-games': how often he played this move in the games that reached the position. */
+  games?: { played: number; reached: number };
 }
 
 export function entryId(side: Side, key: string): string {

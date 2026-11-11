@@ -351,3 +351,73 @@ test('your move: a position left by a reload never comes back as a first look, a
   await expect(page.getByTestId('ownmove-clean')).toContainText(/of 1/);
 });
 
+
+test('repertoire fills itself from your own games, with suggestions for common gaps; a move you prefer replaces a suggestion', async ({ page }) => {
+  // Two games as White with the same first moves: a habit. Nothing is read from any course.
+  const game = (id: number, day: string) => {
+    const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', `[Date "2026.11.${day}"]`, '[White "fixture_learner"]', '[Black "opponent_rep"]', '[Result "1-0"]', `[UTCDate "2026.11.${day}"]`, '[UTCTime "10:00:00"]',
+      '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', `[EndDate "2026.11.${day}"]`, '[EndTime "10:20:00"]', `[Link "https://www.chess.com/game/live/${id}"]`, '',
+      '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 1-0'].join('\n');
+    return { url: `https://www.chess.com/game/live/${id}`, pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', end_time: 1794133200 + id % 1000, white: { username: 'fixture_learner', rating: 455, result: 'win' }, black: { username: 'opponent_rep', rating: 470, result: 'resigned' } };
+  };
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [game(900000801, '07'), game(900000802, '08')] } });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  await openApp(page, '#/progress');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toContainText('2 games on this device', { timeout: 120_000 });
+
+  await page.goto('./#/practice/openings');
+  await expect(page.getByTestId('course-note')).toContainText('Nothing is copied from your opening course');
+  const sources = page.getByTestId('repertoire-sources');
+  await expect(sources).toContainText('read from your games', { timeout: 30_000 });
+  const rows = page.getByTestId('repertoire-row');
+  // His first move and the Italian, each played in both games.
+  await expect(rows.filter({ hasText: 'after the starting position, you play e4; from your games: played in 2 of 2' })).toHaveCount(1);
+  await expect(rows.filter({ hasText: 'after 1.e4 e5 2.Nf3 Nc6, you play Bc4; from your games: played in 2 of 2' })).toHaveCount(1);
+  // Other replies to 1.e4 are common at this level and he has no games with them: suggestions, marked as such.
+  const suggested = rows.filter({ hasText: 'suggested: the sound move most played at your level' });
+  expect(await suggested.count()).toBeGreaterThan(0);
+
+  // In recall a suggestion is asked like any move; a different sound move can be made his own with one tap.
+  await page.getByTestId('start-recall').click();
+  const drill = page.getByTestId('opening-drill');
+  const book = JSON.parse(readFileSync('public/packs/openings-lichess.json', 'utf8')) as { positions: Record<string, { bestWp?: number; moves: { uci: string; wp?: number }[] }> };
+  let adopted = false;
+  for (let i = 0; i < 60 && !adopted; i++) {
+    await expect(drill).toHaveAttribute('data-done', 'false');
+    const expected = (await drill.getAttribute('data-expected'))!;
+    const isSuggestion = (await drill.locator('.muted').first().textContent())!.includes('suggested');
+    const fen = (await drill.locator('.board').getAttribute('data-fen'))!;
+    const data = book.positions[fen.split(' ').slice(0, 4).join(' ')];
+    // Another move that the data rates as sound in this position, if there is one.
+    const other = isSuggestion && data?.bestWp !== undefined ? data.moves.find((m) => m.uci !== expected && m.wp !== undefined && data.bestWp! - m.wp <= 8) : undefined;
+    if (!other) {
+      await playMove(page, expected);
+      await page.getByTestId('drill-next').click();
+      continue;
+    }
+    await playMove(page, other.uci);
+    await expect(page.getByTestId('drill-verdict')).toHaveAttribute('data-alt', 'sound');
+    await page.getByTestId('drill-adopt').click();
+    await expect(page.getByTestId('drill-adopted')).toContainText('is now your move here');
+    adopted = true;
+  }
+  expect(adopted).toBe(true);
+
+  // Removing a suggestion leaves the position to him: it does not come back.
+  await page.goto('./#/practice/openings');
+  await expect(suggested.first()).toBeVisible();
+  const gone = (await suggested.first().locator('.concept-name').textContent())!;
+  await suggested.first().getByRole('button').click();
+  await expect(rows.filter({ hasText: gone })).toHaveCount(0);
+  await page.reload();
+  await expect(sources).toContainText('read from your games', { timeout: 30_000 });
+  await expect(rows.filter({ hasText: gone })).toHaveCount(0);
+});
