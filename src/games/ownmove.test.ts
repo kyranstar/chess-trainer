@@ -84,6 +84,11 @@ describe('which positions are used', () => {
     // The fake game's moves are not legal chess, so positions cannot be built; the selection itself is what is tested.
     const picked = moveItems([game], { build: false }).map((i) => i.ply);
     expect(picked).toEqual([20, 36]); // ply 8 too early, 22 next to 20, 30 decided, 44 too late
+
+    // Found by the practice audit: at 16 out of 100 no move can lose 20 points, so a blunder cannot
+    // be told from a good move there. Positions below 25 are not used.
+    const lost = { ...game, id: 'lost', measure: { decisions: [], events: [], facts: [{ ply: 20, wp: 16, played: 0, best: 0 }, { ply: 28, wp: 24, played: 0, best: 0 }, { ply: 36, wp: 26, played: 0, best: 0 }] } } as unknown as GameRecord;
+    expect(moveItems([lost], { build: false }).map((i) => i.ply)).toEqual([36]);
   });
 });
 
@@ -164,3 +169,40 @@ describe('cases from the outside reviewer (fourth pass)', () => {
     expect(gradeMove(avoidable, { loss: 2, isBest: false }, 'g2g4')).toBe('blunder');
   });
 });
+
+import { freeTag, looseNote } from './ownmove';
+
+describe('what the practice audit found in the messages', () => {
+  // Black to move; a white knight on e5 can be taken for nothing by the d6 pawn.
+  const fen = 'rnbqk1nr/ppp2ppp/3p4/4N3/1b2P3/P7/1PPP1PPP/RNBQKB1R b KQkq - 0 4';
+
+  it('a free capture he passed up is a miss only when his move was rated worse than good', () => {
+    const quiet = movePicture(fen, 'g8f6');
+    const took = movePicture(fen, 'd6e5');
+    expect(freeTag(took, 'best', 'd6e5')).toBe('free-taken');
+    // He played another move that the engine rates as its first choice or close to it: nothing was missed.
+    expect(freeTag(quiet, 'best', 'g8f6')).toBe('free-declined');
+    expect(freeTag(quiet, 'good', 'g8f6')).toBe('free-declined');
+    expect(freeTag(quiet, 'inaccuracy', 'g8f6')).toBe('free-left');
+    expect(freeTag(quiet, 'blunder', 'g8f6')).toBe('free-left');
+    expect(freeTag(quiet, 'unrated', 'g8f6')).toBe('free-left'); // no rating: the plain fact stands
+    // Nothing was free: no tag at all.
+    expect(freeTag(movePicture('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'e2e4'), 'best', 'e2e4')).toBeNull();
+  });
+
+  it('says whether a piece that can be taken is really worth taking, from what the capture costs the opponent', () => {
+    // The engine takes it itself.
+    expect(looseNote({ passed: true, engineTakes: true, captureCost: null })).toContain('The engine does take it');
+    // Taking it is a mistake for the opponent: say so, do not leave "can be taken" standing alone.
+    const trap = looseNote({ passed: true, engineTakes: false, captureCost: 50 });
+    expect(trap).toContain('not really hanging');
+    expect(trap).toContain('50 points');
+    // Taking it is nearly as good as the engine's reply: the piece is hanging, even if the rating passes.
+    expect(looseNote({ passed: true, engineTakes: false, captureCost: 2 })).toContain('about as good for your opponent');
+    // Not checked (no engine answer): the cautious wording, with the way to play it out.
+    expect(looseNote({ passed: true, engineTakes: false, captureCost: null })).toContain('That alone does not show the capture is harmless');
+    expect(looseNote({ passed: false, engineTakes: false, captureCost: null })).toContain('starts with a different move');
+    expect(looseNote({ passed: false, engineTakes: true, captureCost: null })).toContain('takes it');
+  });
+});
+

@@ -7,7 +7,7 @@ import type { Attempt, AttemptContext } from '../db/types';
 import { lineAt } from '../chess/line';
 import { bestLineFor } from '../engine/interactive';
 import { DEVICE_NODES, lineSan } from '../games/analyse';
-import { describeFree, describeLoose, GRADE_LABEL, gradeMove, isPunishingReply, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
+import { describeFree, describeLoose, freeTag, GRADE_LABEL, gradeMove, isPunishingReply, looseNote, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 import { useLineSteps } from './LineSteps';
@@ -64,7 +64,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
   }, [pace, phase, retrying]);
   const elapsedInPhase = () => Math.round(visibleMs.current + (document.visibilityState === 'visible' ? performance.now() - lastTick.current : 0));
   const [named, setNamed] = useState<{ uci: string; san: string } | null>(null);
-  const [result, setResult] = useState<{ verdict: MoveGrade; line: string | null; wp: number | null; pv: string[]; loss: number | null; bestSan: string | null; bestWp: number | null } | null>(null);
+  const [result, setResult] = useState<{ verdict: MoveGrade; line: string | null; wp: number | null; pv: string[]; captureCost: number | null; loss: number | null; bestSan: string | null; bestWp: number | null } | null>(null);
   // The engine's first choice for the position is searched for while the learner thinks.
   const bestSearch = useRef<ReturnType<typeof bestLineFor> | null>(null);
   bestSearch.current ??= bestLineFor(item.fen, RATE_NODES);
@@ -110,7 +110,16 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     const end = positionFromFen(f.afterFen);
     // Two searches at the same budget: the position itself (begun when it appeared, so it is
     // usually ready) and the position after his move.
-    const [best, line] = await Promise.all([bestSearch.current, end.isEnd() ? Promise.resolve(null) : bestLineFor(f.afterFen, RATE_NODES)]);
+    // A third when something of his can be taken afterwards: what that capture is worth to the
+    // opponent, so that "can be taken" is not left standing beside a piece that is not really hanging.
+    const captureUci = f.mateInOne ? null : f.captures.map((c) => (isLegalUci(end, c) ? c : isLegalUci(end, `${c}q`) ? `${c}q` : null)).find((c): c is string => !!c) ?? null;
+    const [best, line, afterCapture] = await Promise.all([
+      bestSearch.current,
+      end.isEnd() ? Promise.resolve(null) : bestLineFor(f.afterFen, RATE_NODES),
+      captureUci && f.loose.length ? bestLineFor(lineAt(f.afterFen, [captureUci], 1).fen, RATE_NODES) : Promise.resolve(null),
+    ]);
+    // Points of expected score the capture gives up for the opponent against his best reply.
+    const captureCost = line && afterCapture ? Math.round(line.wp - (100 - afterCapture.wp)) : null;
     let rating: MoveRating | null = null;
     let myWp: number | null = null;
     const bestUci = best?.pv[0];
@@ -122,7 +131,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     const grade = gradeMove(f, rating, my.uci);
     const verdict = grade;
     setResult({
-      verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 10) : [],
+      captureCost, verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 10) : [],
       loss: rating ? Math.round(rating.loss) : null, bestSan: best && bestUci ? sanOf(start, bestUci) : null, bestWp: best ? Math.round(best.wp) : null,
     });
     setPhase('done');
@@ -139,7 +148,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
         ...(timedOut.current ? ['late'] : []),
         ...(interrupted.current ? ['interrupted'] : []),
         ...(replyMs.current !== null ? [`reply-ms:${replyMs.current}`] : []),
-        ...(f.mateBefore || f.freeBefore.length ? [f.tookFree || my.uci === f.mateBefore?.uci ? 'free-taken' : 'free-left'] : []),
+        ...[freeTag(f, grade, my.uci)].filter((t): t is NonNullable<typeof t> => !!t),
         ...(f.threatsBefore.length ? [f.dealtWith.length === f.threatsBefore.length ? 'threat-met' : 'threat-left'] : []),
       ],
       rating: null, ts: Date.now(), elapsedMs: decisionMs.current, firstMove: my.uci, played: reply ? [my.uci, reply.uci] : [my.uci], mistakes: outcomeOfGrade(grade) === 'fail' ? 1 : 0, hints: 0,
@@ -240,20 +249,13 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
             {!facts.mateInOne && facts.loose.length === 0 && <p>After {mine.san} no piece of yours can be taken without an immediate recapture or by a cheaper piece, and there is no mate in one.</p>}
             {facts.loose.map((l) => <p key={l.square} data-testid="own-move-loose">{describeLoose(l)}{facts.threatsBefore.some((t) => t.square === l.square) ? ' It could already be taken before your move.' : ''}</p>)}
             {facts.loose.length > 0 && !facts.mateInOne && result.verdict !== 'unrated' && (
-              <p data-testid="own-move-loose-note">
-                {passed
-                  ? engineTakes
-                    ? 'That it can be taken is a fact about the board, not the rating. The engine does take it in its line and still rates your move as above: play the line through to see what you get for it.'
-                    : 'That it can be taken is a fact about the board, not the rating. The engine does not take it: by its reckoning the capture is not your opponent’s best move. That alone does not show the capture is harmless; “If it is taken” plays it out on the board.'
-                  : engineTakes
-                    ? 'The engine’s line takes it. Play the line through to see where the material goes.'
-                    : 'The engine’s line starts with a different move, so the rating may be about something else than this piece. “If it is taken” plays the capture out on the board.'}
-              </p>
+              <p data-testid="own-move-loose-note">{looseNote({ passed, engineTakes, captureCost: result.captureCost })}</p>
             )}
             {taken?.state === 'shown' && <p data-testid="own-move-taken">On the board: {taken.san}, and the engine’s line from there{taken.pv.length > 1 ? ` (${lineSan(lineAt(facts.afterFen, taken.pv.slice(0, 1), 1).fen, taken.pv.slice(1))})` : ''}. Step back and on through it.</p>}
             {facts.dealtWith.length > 0 && <p data-testid="own-move-met">Before your move {facts.dealtWith.length === 1 ? `your piece on ${facts.dealtWith[0]} could be taken` : `your pieces on ${facts.dealtWith.join(' and ')} could be taken`}; after your move that capture is no longer there.</p>}
             {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">There was a mate in one: {facts.mateBefore.san}.</p>}
             {!facts.tookFree && !(facts.mateBefore && mine.uci === facts.mateBefore.uci) && facts.freeBefore.slice(0, 2).map((l) => <p key={`free-${l.square}`} data-testid="own-move-free">{describeFree(l)}</p>)}
+            {freeTag(facts, result.verdict, mine.uci) === 'free-declined' && <p data-testid="own-move-free-ok">The engine rates your move {result.verdict === 'best' ? 'as its first choice' : `within ${result.loss ?? 0} point${result.loss === 1 ? '' : 's'} of its first choice`}, so nothing was missed by not taking: it is not counted against you.</p>}
             {named && (facts.mateInOne || facts.loose.length > 0) && (
               <p>{isPunishingReply(facts, named.uci) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
             )}

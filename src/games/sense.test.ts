@@ -124,6 +124,16 @@ describe('positives and controls are defined by the same test', () => {
     expect(safe).not.toContain(plies[3]); // already won: "safe" would mean nothing here
   });
 
+  it('a move is not offered as "safe" where material is going whatever is played, or where the game is nearly lost (found by the practice audit)', () => {
+    // The audit's case: king in check from a fork, the rook falls after every move. The phone's short
+    // line showed no loss after the move played (played 0) and a loss in its own best line (best -5).
+    const g = custom([{ wp: 50, played: 0, best: 0 }, { wp: 50, played: 0, best: 0 }, { wp: 40, played: 0, best: -5 }, { wp: 12, played: 0, best: 0 }], [0, 1, 2, 2]);
+    const safe = safetyItems([g]).filter((i) => !i.truth).map((i) => i.ply);
+    expect(safe).toContain(plies[1]);
+    expect(safe).not.toContain(plies[2]); // something is already being lost: "nothing happens after this move" cannot be claimed
+    expect(safe).not.toContain(plies[3]); // 12 out of 100: nearly lost, "safe" teaches nothing
+  });
+
   it('a forced loss, a quick mate allowed, or a costly move that loses no material is not asked at all', () => {
     const g = custom([{ wp: 50, played: 0, best: 0 }, { wp: 40, played: -3, best: -3 }, { wp: 50, played: 0, best: 0, mated: true }, { wp: 60, played: 0, best: 0 }], [0, 1, 1, 25]);
     expect(safetyItems([g]).map((i) => i.ply)).toEqual([]); // the first move is skipped as an opening move

@@ -230,6 +230,7 @@ export async function auditBackup(backup: BackupFile, puzzles: Map<string, Puzzl
         let consequence: string | null = null;
         let line = '';
         let truth: SenseRow['deep']['truth'] = 'unclear';
+        let materialGoesAnyway = false;
         if (safety) {
           const before = await deep(item.fen);
           const afterFen = item.afterFen ?? fenOf(applyUci(positionFromFen(item.fen), item.proposed!));
@@ -240,17 +241,21 @@ export async function auditBackup(backup: BackupFile, puzzles: Map<string, Puzzl
           consequence = c?.text ?? null;
           line = d ? lineSan(afterFen, d.pv) : '';
           const behind = !!c && (c.kind === 'mate' ? positionFromFen(afterFen).turn !== item.color : c.text.includes('behind'));
-          truth = behind || (loss !== null && loss >= 15) ? 'yes' : loss !== null && loss < 5 && !behind ? 'no' : 'unclear';
+          // "Unsafe" means worse than the best move, not merely that material goes: in a position that
+          // is losing material whatever is played, a move that costs nothing is as safe as any.
+          truth = loss === null ? 'unclear' : loss >= 15 || (behind && loss >= 5) ? 'yes' : loss < 5 ? 'no' : 'unclear';
+          if (behind && loss !== null && loss < 5 && !item.truth) materialGoesAnyway = true;
         } else {
           const d = await deep(item.fen);
           const c = d ? consequenceOf(item.fen, d.pv, item.color) : null;
           consequence = c?.text ?? null;
           line = d ? lineSan(item.fen, d.pv) : '';
           const ahead = !!c && (c.kind === 'mate' || c.text.includes('ahead'));
-          truth = ahead ? 'yes' : c ? 'unclear' : 'no';
+          truth = ahead ? 'yes' : 'no'; // level or behind at the end of the best line: nothing to win
         }
         const supported = truth === 'unclear' ? 'unclear' : (truth === 'yes') === item.truth ? 'label-supported' : 'label-doubtful';
         const notes: string[] = [];
+        if (materialGoesAnyway) notes.push('The move costs nothing against the best move, but material goes in the deep line all the same: the position was losing it whatever was played. The sentence shown for a "safe" answer (no reply wins any material) is not true of such a position.');
         if (supported === 'label-doubtful') {
           const saidYes = ['hit', 'wrong-reply', 'unverified-reply', 'false-alarm'].includes(a.themes[2] ?? '');
           notes.push(`The question holds that there ${item.truth ? 'IS' : 'is NOT'} something; the deep search says the opposite. He answered "${saidYes ? 'there is' : 'there is not'}" and was scored ${a.outcome}.`);

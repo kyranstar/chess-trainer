@@ -27,6 +27,13 @@ export type SenseKind = 'safe-or-not' | 'chance-or-not';
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 /** Material (in pawns) that counts as lost or won in a short line; the same threshold defines positives and controls. */
 const LOSES = 2;
+/**
+ * A move is offered as a "safe" control only from a position that is still open and where
+ * nothing is being lost whatever is played. The practice audit (ADR-049) found a control at 12
+ * out of 100 with the king in check from a fork: the rook fell after every move, the short line
+ * after the move played happened not to show it, and "no reply wins any material" was untrue.
+ */
+export const SAFE_CONTROL_FLOOR = 25;
 /** An own move counts as a safe control only if it lost at most this much expected score. */
 export const SAFE_LOSS = 3;
 /** A chance must be clearly better than the next move to be asked as a chance. */
@@ -112,7 +119,7 @@ export function safetyItems(games: GameRecord[], opts: { minControlPly?: number 
         const replyUci = firstUciOfLine(afterFen, e.refutation);
         if (!replyUci) continue;
         out.push({ ...base, truth: true, proposedSan: e.playedSan, afterFen, replyUci, replyLine: e.refutation, playedWp: e.playedWp, loss: e.loss, label: e.target === 'mate' ? 'allows-mate' : 'loses-material' });
-      } else if (!f.mated && !f.unsure && f.played >= 0 && f.wp >= UNDECIDED.lo && f.wp <= UNDECIDED.hi && loss <= SAFE_LOSS && ply >= minPly) {
+      } else if (!f.mated && !f.unsure && f.played >= 0 && f.best >= 0 && f.wp >= SAFE_CONTROL_FLOOR && f.wp <= UNDECIDED.hi && loss <= SAFE_LOSS && ply >= minPly) {
         out.push({ ...base, truth: false, proposedSan: sanOf(positionFromFen(fen), uci), loss });
       }
     }

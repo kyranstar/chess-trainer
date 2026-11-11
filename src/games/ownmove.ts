@@ -197,6 +197,49 @@ export function outcomeOfGrade(g: MoveGrade): 'success' | 'fail' | 'skipped' {
 
 export const GRADE_LABEL: Record<MoveGrade, string> = { best: 'Best move', good: 'Good move', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder', unrated: 'Not rated' };
 
+/**
+ * How open a position must be to be used. The lower limit is higher than for game statistics:
+ * the ratings are bands of expected score lost, and from 16 out of 100 no move can lose the 20
+ * points that make a blunder, so a nearly lost position cannot tell a good move from a bad one
+ * (found by the practice audit, ADR-049: a position at 7 out of 100 was rated "good").
+ */
+export const OWN_MOVE_OPEN = { lo: 25, hi: UNDECIDED.hi };
+
+/**
+ * Whether a capture that was free for the taking counts as taken, missed, or passed up for a
+ * move that was at least as good. The audit found "you could have taken the rook" shown, and
+ * counted as a miss, beside a move the engine rated as its first choice.
+ */
+export function freeTag(facts: MovePicture, grade: MoveGrade, uci: string): 'free-taken' | 'free-left' | 'free-declined' | null {
+  if (!facts.mateBefore && facts.freeBefore.length === 0) return null;
+  if (facts.tookFree || uci === facts.mateBefore?.uci) return 'free-taken';
+  // A mate in one passed up is a miss whatever else was played.
+  if (facts.mateBefore) return 'free-left';
+  return grade === 'best' || grade === 'good' ? 'free-declined' : 'free-left';
+}
+
+/**
+ * What to say about a piece that can be taken after the move, beyond the bare fact.
+ * `captureCost` is how many points of expected score the capture gives up for the opponent
+ * against the engine's best reply (null when it was not checked).
+ */
+export function looseNote(x: { passed: boolean; engineTakes: boolean; captureCost: number | null }): string {
+  if (x.engineTakes) {
+    return x.passed
+      ? 'That it can be taken is a fact about the board, not the rating. The engine does take it in its line and still rates your move as above: play the line through to see what you get for it.'
+      : 'The engine’s line takes it. Play the line through to see where the material goes.';
+  }
+  if (x.captureCost !== null && x.captureCost >= 10) {
+    return `It is not really hanging: by the engine’s reckoning, taking it would be a mistake, ${Math.round(x.captureCost)} points worse for your opponent than its best reply. “If it is taken” plays the capture out on the board.`;
+  }
+  if (x.captureCost !== null && x.captureCost < 3) {
+    return `Taking it is about as good for your opponent as the engine’s own reply${x.passed ? ', so the piece is there to be taken even though the move is rated as above' : ''}. “If it is taken” plays the capture out on the board.`;
+  }
+  return x.passed
+    ? 'That it can be taken is a fact about the board, not the rating. The engine does not take it: by its reckoning the capture is not your opponent’s best move. That alone does not show the capture is harmless; “If it is taken” plays it out on the board.'
+    : 'The engine’s line starts with a different move, so the rating may be about something else than this piece. “If it is taken” plays the capture out on the board.';
+}
+
 export interface MoveItem {
   id: string;
   gameId: string;
@@ -241,7 +284,7 @@ export function moveItems(games: GameRecord[], opts: { fromMove?: number; toMove
     }
     let last = -100;
     for (const f of facts) {
-      if (f.ply < lo || f.ply >= hi || f.wp < UNDECIDED.lo || f.wp > UNDECIDED.hi || f.ply - last < SPACING) continue;
+      if (f.ply < lo || f.ply >= hi || f.wp < OWN_MOVE_OPEN.lo || f.wp > OWN_MOVE_OPEN.hi || f.ply - last < SPACING) continue;
       const fen = fens ? fens[f.ply] : '';
       const played = g.moves[f.ply];
       if (fen === undefined || !played) continue;

@@ -65,6 +65,23 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'false');
   // Another move is checked by the built-in engine before anything is recorded against it; this one loses the queen.
   await expect(page.getByTestId('own-verdict')).toContainText('rates Qxe5+ clearly lower', { timeout: 30_000 });
+  // What his move leads to can be put on the board and stepped through, then the engine's line again
+  // (found missing by the practice audit: this drill only printed the answer).
+  const start = await drill.locator('.board').getAttribute('data-fen');
+  await page.getByTestId('own-see-mine').click();
+  await expect(page.getByTestId('own-mine-line')).toContainText('Qxe5+ and the engine’s reply');
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '2');
+  await page.getByTestId('line-prev').click();
+  await page.getByTestId('line-prev').click();
+  await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', start!);
+  await page.getByTestId('own-see-best').click();
+  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
+  // A second go at once is practice: it is not recorded (the review count below is still one).
+  await page.getByTestId('own-retry').click();
+  await expect(page.getByTestId('own-retry-note')).toBeVisible();
+  await expect(drill).toHaveAttribute('data-expected', 'h5f7');
+  await playMove(page, 'h5f7');
+  await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'true');
   await page.getByTestId('own-next').click();
   await expect(page.getByTestId('own-done')).toBeVisible();
 

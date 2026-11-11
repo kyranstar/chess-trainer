@@ -16,6 +16,8 @@ import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { bestLineFor } from '../engine/interactive';
+import { ucisOfSanLine } from '../chess/line';
+import { useLineSteps } from './LineSteps';
 import { localDate } from '../schedule/session';
 
 export function useGames(): GameRecord[] | undefined {
@@ -252,6 +254,21 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
   const [checking, setChecking] = useState(false);
   const [other, setOther] = useState<'worse' | 'not-faulted' | 'unchecked' | null>(null);
   const started = useRef(Date.now());
+  // After the answer the lines can be played through on the board: the engine's, and what
+  // follows the move he played. A second go is practice and is never recorded.
+  const [mine, setMine] = useState<{ uci: string; pv: string[] } | null>(null);
+  const [view, setView] = useState<'best' | 'mine'>('best');
+  const recorded = useRef(false);
+  const [retrying, setRetrying] = useState(false);
+  function retry() {
+    setRetrying(true);
+    setResult(null);
+    setOther(null);
+    setMine(null);
+    setView('best');
+    setFen(event.fen);
+    setResetKey((k) => k + 1);
+  }
 
   async function record(uci: string | null, shown: boolean) {
     const pos = positionFromFen(event.fen);
@@ -264,18 +281,28 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
       setChecking(true);
       const line = await bestLineFor(fenOf(applyUci(pos, uci)));
       setChecking(false);
+      setMine({ uci, pv: line?.pv ?? [] });
       other = !line ? 'unchecked' : 100 - line.wp >= event.bestWp - 10 ? 'not-faulted' : 'worse';
     }
     setOther(other);
     setResult({ ok, playedSan: uci ? sanOf(pos, uci) : null, shown });
     setFen(fenOf(applyUci(pos, event.best)));
     setResetKey((k) => k + 1);
+    if (recorded.current) return;
+    recorded.current = true;
     await recordAttempt(db, {
       sessionId, context: 'review', exerciseId: drill.id, exerciseKind: 'own-game', contentVersion: game.analysisKey ?? 'unanalysed',
       conceptId: null, themes: [], rating: null, ts: Date.now(), elapsedMs: Date.now() - started.current, firstMove: uci, played: uci ? [uci] : [],
       mistakes: other === 'worse' ? 1 : 0, hints: shown ? 1 : 0, outcome: shown ? 'assisted' : ok ? 'success' : other === 'worse' ? 'fail' : 'skipped', acceptedAlternative: false,
     });
   }
+
+  const bestPv = (() => {
+    const pv = ucisOfSanLine(event.fen, event.bestLine ?? '');
+    return pv[0] && sameMove(positionFromFen(event.fen), pv[0], event.best) ? pv : [event.best];
+  })();
+  const line = !result ? null : view === 'mine' && mine ? { from: event.fen, pv: [mine.uci, ...mine.pv] } : { from: event.fen, pv: bestPv };
+  const steps = useLineSteps(line, view === 'mine' ? { initial: 2, me: game.color, cap: 6 } : { initial: 1, me: game.color, stopThere: false, startLabel: 'Play the engine’s line' });
 
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>
@@ -284,7 +311,8 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
         <h2>{game.color === 'white' ? 'White' : 'Black'} to move</h2>
         <p className="muted">From your {game.timeClass} game on {game.endDate}, move {Math.floor(event.ply / 2) + 1}. The engine found one move here clearly better than the rest. Find it.</p>
       </header>
-      <Board fen={fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={result ? event.best : null} onMove={(u) => void record(u, false)} resetKey={resetKey} />
+      {retrying && !result && <p className="muted" data-testid="own-retry-note">Second go. This one is not recorded.</p>}
+      <Board fen={steps.pos ? steps.pos.fen : fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={steps.pos ? steps.pos.last : null} marks={steps.marks} onMove={(u) => void record(u, false)} resetKey={resetKey} />
       <div className="feedback" aria-live="polite">
         {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>{event.bestSan}: the engine’s first choice.</strong><p>In the game you played {event.playedSan}.</p></div>}
         {result && !result.ok && (
@@ -296,11 +324,20 @@ export function OwnGameDrill({ drill, sessionId, heading, onDone }: { drill: Dri
               {result.playedSan && other === 'worse' ? `The built-in engine rates ${result.playedSan} clearly lower; it comes back in your review queue. ` : ''}
               Best move about {Math.round(event.bestWp)}% expected score, the second best {event.secondWp === null ? 'unknown' : `${Math.round(event.secondWp)}%`}.
             </p>
+            {view === 'mine' && result.playedSan && <p data-testid="own-mine-line">On the board: {result.playedSan} and the engine’s reply to it. Step back and on through it.</p>}
+            {steps.note}
           </div>
         )}
       </div>
       <div className="actions">
         {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
+        {result && steps.controls}
+        {result && !result.ok && mine && mine.pv.length > 0 && (
+          view === 'best'
+            ? <button data-testid="own-see-mine" onClick={() => setView('mine')}>What happens after {result.playedSan}</button>
+            : <button data-testid="own-see-best" onClick={() => setView('best')}>The engine’s line</button>
+        )}
+        {result && !result.ok && <button data-testid="own-retry" disabled={!armed} onClick={retry}>Try it again</button>}
         {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>
