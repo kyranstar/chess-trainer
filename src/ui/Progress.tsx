@@ -4,15 +4,17 @@ import { type Learner, useJournal, usePool } from '../app/store';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, THEMES } from '../content';
 import type { Attempt } from '../db/types';
-import { endgameAccuracy, formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy } from '../metrics/metrics';
+import { endgameAccuracy, formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy, wilson } from '../metrics/metrics';
 import { startRun } from '../puzzles/run';
 import { Board } from './Board';
 import { walkRepertoire } from '../openings/repertoire';
 import { reviewCalibration } from '../schedule/review';
 import { DataPanel } from './Data';
-import { GameCards, Headline } from './Games';
+import { GameCards, Headline, useGames } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
+import { timeUse } from '../games/metrics';
+import { ownMoveSummary, PACE_DOWN, PACE_UP, PACE_WINDOW, paceFrom, PACES } from '../schedule/pace';
 
 const DAY = 86_400_000;
 const PERIODS = [
@@ -96,6 +98,7 @@ export function ProgressHome({ learner }: { learner: Learner }) {
       </div>
 
       <Headline attempts={learner.attempts} sinceDate={sinceDateOf(period)} since={from} periodLabel={periodLabel} />
+      <OwnMoveCard attempts={learner.attempts} since={from} sinceDate={sinceDateOf(period)} periodLabel={periodLabel} />
 
       <section className="card" data-testid="card-focus">
         <h2>Where to put effort</h2>
@@ -367,4 +370,43 @@ function safeSan(fen: string, uci: string): string {
   } catch {
     return uci;
   }
+}
+
+/**
+ * "Your move" and the clock: how clean the learner's own moves are, the pace he has reached,
+ * and what his real games say about time. Counts with denominators; no score is made of them.
+ */
+function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: Attempt[]; since: number | undefined; sinceDate: string | undefined; periodLabel: string }) {
+  const games = useGames();
+  const s = ownMoveSummary(attempts, since);
+  const pace = paceFrom(attempts);
+  const established = s.clean + s.failed;
+  const rapid = games ? timeUse(games, 'rapid', { sinceDate }) : null;
+  const iv = established ? wilson(s.clean, established) : null;
+  return (
+    <section className="card" data-testid="card-ownmove">
+      <h2>Your own moves</h2>
+      {established + s.notScored + s.timeouts === 0 ? (
+        <p className="metric-empty">No “Your move” positions played yet. They are part of “Just practise” and have their own entry under Practice.</p>
+      ) : (
+        <>
+          <p className="metric-line" data-testid="ownmove-clean">
+            <span className="metric-value">{s.clean} of {established}</span>
+            {iv && <span className="metric-pct">{formatPct(s.clean / established)}</span>}
+            <span className="metric-range">moves left nothing to take and allowed no mate in one{iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
+          </p>
+          <p>{s.notScored} more could not be scored either way{s.timeouts ? `, and ${s.timeouts} ${s.timeouts === 1 ? 'was' : 'were'} not made in time` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
+        </>
+      )}
+      <p data-testid="ownmove-pace">
+        {pace.pace === 0 ? 'No clock yet.' : `Clock: ${pace.pace} seconds a move.`} Clean at this pace: {pace.atThisPace.clean} of {pace.atThisPace.n}. The clock tightens after {PACE_UP} clean moves in {PACE_WINDOW} (next: {PACES[Math.min(pace.index + 1, PACES.length - 1)]} seconds{pace.index === PACES.length - 1 ? ', the fastest' : ''}) and loosens again at {PACE_DOWN} or fewer. A ten-minute game allows about 15 seconds a move.
+      </p>
+      {rapid && rapid.games > 0 && (
+        <p data-testid="ownmove-time">
+          In your {rapid.games} measured rapid games: {rapid.errors.overHalfClock} of {rapid.errors.n} major errors were made with more than half the clock left{rapid.medianEndShareLosses !== null ? `; the games you lost ended with a median of ${Math.round(100 * rapid.medianEndShareLosses)}% of your time unused (${rapid.lossesOverHalfUnused} of ${rapid.losses} with more than half)` : ''}.
+        </p>
+      )}
+      <p className="definition-small">A move is “clean” when, after it, nothing of yours can be captured and kept and no mate in one is allowed, found by generating the legal moves; a failure also needs the engine’s line to show the loss. {periodLabel}. The rapid figures are from your own games’ clocks and say whether time was actually short; they are not an explanation.</p>
+    </section>
+  );
 }

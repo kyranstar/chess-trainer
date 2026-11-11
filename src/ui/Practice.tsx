@@ -11,6 +11,7 @@ import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
 import { moveItems } from '../games/ownmove';
+import { paceFrom } from '../schedule/pace';
 import { MixRun } from './Mix';
 import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
@@ -130,12 +131,13 @@ export function PracticeHome({ learner }: { learner: Learner }) {
   );
 }
 
-function OwnMoveRunFromGames({ learner }: { learner: Learner }) {
+function OwnMoveRunFromGames({ learner, paceOverride }: { learner: Learner; paceOverride: number | null }) {
   const games = useGames();
   const items = useMemo(() => (games ? moveItems(games) : null), [games]);
   const done = useRef<Set<string> | null>(null);
   if (done.current === null && learner.ready) done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
-  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} onFinished={() => go('practice')} />;
+  const pace = paceOverride ?? paceFrom(learner.attempts).pace;
+  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} pace={pace} onFinished={() => go('practice')} />;
 }
 
 export function PracticeRun({ route, learner }: { route: Route; learner: Learner }) {
@@ -159,7 +161,7 @@ export function PracticeRun({ route, learner }: { route: Route; learner: Learner
         <span />
       </header>
       {mode === 'mix' && <MixRun learner={learner} onFinished={() => go('practice')} />}
-      {mode === 'move' && <OwnMoveRunFromGames learner={learner} />}
+      {mode === 'move' && <OwnMoveRunFromGames learner={learner} paceOverride={route.query.get('pace') ? Number(route.query.get('pace')) : null} />}
       {mode === 'sense' && <SenseRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'kpk' && <KpkRun learner={learner} onFinished={() => go('practice')} />}
       {mode === 'own' && <OwnGameRun learner={learner} onFinished={() => go('practice')} />}

@@ -73,3 +73,38 @@ describe('which positions are used', () => {
     expect(picked).toEqual([20, 36]); // ply 8 too early, 22 next to 20, 30 decided, 44 too late
   });
 });
+
+import { movePicture } from './ownmove';
+
+describe('the three checks of one move, all from legal move generation', () => {
+  it('what the opponent already threatened, what could be taken for nothing, and what the move left loose', () => {
+    // Black to move. His bishop on b4 is attacked by the a3 pawn (a threat he faces).
+    // White's knight on e5 can be taken by the d6 pawn and nothing takes back (a free capture he has).
+    const fen = 'rnbqk1nr/ppp2ppp/3p4/4N3/1b2P3/P7/1PPP1PPP/RNBQKB1R b KQkq - 0 4';
+    const quiet = movePicture(fen, 'g8f6');
+    expect(quiet.threatsBefore.map((l) => `${l.piece}@${l.square}`)).toEqual(['bishop@b4']);
+    expect(quiet.freeBefore.map((l) => `${l.piece}@${l.square} by ${l.by.piece}@${l.by.from}`)).toEqual(['knight@e5 by pawn@d6']);
+    expect(quiet.loose.map((l) => l.square)).toContain('b4'); // left where it was
+    expect(quiet.tookFree).toBe(false);
+    expect(quiet.dealtWith).toEqual([]);
+    // Taking the knight uses the free capture, but the bishop is still attacked.
+    const takes = movePicture(fen, 'd6e5');
+    expect(takes.tookFree).toBe(true);
+    expect(takes.loose.map((l) => l.square)).toContain('b4');
+    // Retreating the bishop deals with the threat.
+    const retreats = movePicture(fen, 'b4a5');
+    expect(retreats.dealtWith).toEqual(['b4']);
+    expect(retreats.loose.map((l) => l.square)).not.toContain('a5');
+  });
+
+  it('a mate in one that was there is reported whether or not it was played', () => {
+    const fen = '6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1';
+    expect(movePicture(fen, 'h2h3').mateBefore).toEqual({ uci: 'e1e8', san: 'Re8#' });
+    expect(movePicture(fen, 'e1e8').mateBefore).toEqual({ uci: 'e1e8', san: 'Re8#' });
+  });
+
+  it('when the learner is in check there is no "what was already threatened" beyond the check itself', () => {
+    const p = movePicture('4k3/8/8/8/8/8/4r3/4K3 w - - 0 1', 'e1e2');
+    expect(p.threatsBefore).toEqual([]);
+  });
+});

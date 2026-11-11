@@ -38,21 +38,24 @@ export interface MoveFacts {
   afterFen: string;
 }
 
-/** Exact facts about the position after `uci` is played in `fen`. */
-export function looseAfter(fen: string, uci: string): MoveFacts {
-  const after = applyUci(positionFromFen(fen), uci);
-  const afterFen = fenOf(after);
-  const me: Color = after.turn === 'white' ? 'black' : 'white';
+type Pos = ReturnType<typeof positionFromFen>;
+
+/**
+ * Pieces of the side NOT to move that the side to move can capture and keep the gain
+ * (nothing takes back, or the capturer is cheaper), and a mate in one for the side to move.
+ */
+function scan(pos: Pos): { loose: Loose[]; mate: { uci: string; san: string } | null } {
+  const victim: Color = pos.turn === 'white' ? 'black' : 'white';
   const found = new Map<string, Loose>();
-  let mateInOne: MoveFacts['mateInOne'] = null;
-  for (const [from, tos] of legalDests(after)) {
+  let mate: { uci: string; san: string } | null = null;
+  for (const [from, tos] of legalDests(pos)) {
     for (const to of tos) {
-      const move = needsPromotion(after, from, to) ? `${from}${to}q` : `${from}${to}`;
-      const next = applyUci(after, move);
-      if (!mateInOne && isCheckmate(next)) mateInOne = { uci: move, san: sanOf(after, move) };
-      const target = after.board.get(parseSquare(to)!);
-      const capturer = after.board.get(parseSquare(from)!);
-      if (!target || !capturer || target.color !== me || target.role === 'king') continue;
+      const move = needsPromotion(pos, from, to) ? `${from}${to}q` : `${from}${to}`;
+      const next = applyUci(pos, move);
+      if (!mate && isCheckmate(next)) mate = { uci: move, san: sanOf(pos, move) };
+      const target = pos.board.get(parseSquare(to)!);
+      const capturer = pos.board.get(parseSquare(from)!);
+      if (!target || !capturer || target.color !== victim || target.role === 'king') continue;
       // Can the capturing piece be taken back on that square? (Legal moves only: pins count.)
       const recapture = [...legalDests(next).values()].some((dests) => dests.includes(to));
       const reason: Loose['reason'] | null = !recapture ? 'undefended' : VALUE[capturer.role as Role] < VALUE[target.role as Role] ? 'cheaper-attacker' : null;
@@ -64,8 +67,57 @@ export function looseAfter(fen: string, uci: string): MoveFacts {
       if (better) found.set(to, entry);
     }
   }
-  const loose = [...found.values()].sort((a, b) => VALUE[b.piece] - VALUE[a.piece] || (a.square < b.square ? -1 : 1));
-  return { loose, mateInOne, afterFen };
+  const loose = [...found.values()].sort((x, y) => VALUE[y.piece] - VALUE[x.piece] || (x.square < y.square ? -1 : 1));
+  return { loose, mate };
+}
+
+/** Exact facts about the position after `uci` is played in `fen`. */
+export function looseAfter(fen: string, uci: string): MoveFacts {
+  const after = applyUci(positionFromFen(fen), uci);
+  const s = scan(after);
+  return { loose: s.loose, mateInOne: s.mate, afterFen: fenOf(after) };
+}
+
+/**
+ * The whole picture of one move: the three things to look at before playing, each found by
+ * generating legal moves.
+ *   threatsBefore : what the opponent could already take (had it been their turn);
+ *   freeBefore    : what the learner could take and keep, and any mate in one he had;
+ *   loose         : what the opponent can take after the move (see looseAfter).
+ */
+export interface MovePicture extends MoveFacts {
+  threatsBefore: Loose[];
+  freeBefore: Loose[];
+  mateBefore: { uci: string; san: string } | null;
+  /** The move captured one of the pieces that could be taken for nothing. */
+  tookFree: boolean;
+  /** Squares of threatened pieces that are no longer loose after the move. */
+  dealtWith: string[];
+}
+
+export function movePicture(fen: string, uci: string): MovePicture {
+  const pos = positionFromFen(fen);
+  const mine = scan(pos);
+  let threatsBefore: Loose[] = [];
+  if (!pos.isCheck()) {
+    // As if it were the opponent's turn. (In check there is no such position: the check is the threat.)
+    const passed = pos.clone();
+    passed.turn = pos.turn === 'white' ? 'black' : 'white';
+    passed.epSquare = undefined;
+    threatsBefore = scan(passed).loose;
+  }
+  const after = looseAfter(fen, uci);
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const stillLoose = (square: string) => after.loose.some((l) => l.square === square);
+  return {
+    ...after,
+    threatsBefore,
+    freeBefore: mine.loose,
+    mateBefore: mine.mate,
+    tookFree: mine.loose.some((l) => l.square === to),
+    dealtWith: threatsBefore.filter((t) => (t.square === from ? !stillLoose(to) : !stillLoose(t.square))).map((t) => t.square),
+  };
 }
 
 /** What the engine's line after the learner's move shows, when there is one. */
@@ -152,3 +204,11 @@ export function describeLoose(l: Loose): string {
     ? `Your ${NAME[l.piece]} on ${l.square} can be taken by the ${NAME[l.by.piece]} on ${l.by.from}, and nothing takes back.`
     : `Your ${NAME[l.piece]} on ${l.square} can be taken by the ${NAME[l.by.piece]} on ${l.by.from}, a cheaper piece.`;
 }
+
+/** A capture the learner had and did not make. A fact about the position, not a verdict on his move. */
+export function describeFree(l: Loose): string {
+  return l.reason === 'undefended'
+    ? `You could have taken the ${NAME[l.piece]} on ${l.square} with the ${NAME[l.by.piece]} on ${l.by.from}, and nothing takes back.`
+    : `You could have taken the ${NAME[l.piece]} on ${l.square} with the ${NAME[l.by.piece]} on ${l.by.from}, a cheaper piece.`;
+}
+

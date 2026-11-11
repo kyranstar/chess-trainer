@@ -269,3 +269,7 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .lesson-board { position: sticky; top: 0; z-index: 3; background: var(--paper); padding: 0.25rem 0 0.4rem; }
 .lesson-board .board-wrap { width: min(100%, 44dvh); margin-left: auto; margin-right: auto; }
 
+/* "Your move" on the clock: plain, and red only once the time is up. */
+.move-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+.move-clock.is-up { color: var(--flag); }
+

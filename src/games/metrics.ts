@@ -321,3 +321,52 @@ export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeCl
     protocol,
   };
 }
+
+export interface TimeUse {
+  /** Games of the time control with clock data and a measurement record. */
+  games: number;
+  losses: number;
+  /** Median share of the starting time still on the clock when a lost game ended. */
+  medianEndShareLosses: number | null;
+  lossesOverHalfUnused: number;
+  /** Major errors (20+ points), and how many were begun with over half the starting time left. */
+  errors: { n: number; overHalfClock: number };
+}
+
+/**
+ * How the clock was used in real games. Facts only: whether time was actually short when
+ * games were lost and when errors were made. The clock before a move is the clock after the
+ * learner's previous move (the starting time for his first).
+ */
+export function timeUse(games: GameRecord[], timeClass: TimeClass, f: { sinceDate?: string } = {}): TimeUse {
+  const out: TimeUse = { games: 0, losses: 0, medianEndShareLosses: null, lossesOverHalfUnused: 0, errors: { n: 0, overHalfClock: 0 } };
+  const ends: number[] = [];
+  for (const g of select(games, { timeClass, sinceDate: f.sinceDate })) {
+    const base = Number(g.timeControl.split('+')[0]);
+    const decisions = g.measure?.decisions;
+    if (!g.clocks || !decisions || !Number.isFinite(base) || base <= 0) continue;
+    out.games++;
+    let before: number | null = base;
+    let last: number | null = null;
+    for (const [, loss, clock] of decisions) {
+      if (before !== null && loss >= 20) {
+        out.errors.n++;
+        if (before > base / 2) out.errors.overHalfClock++;
+      }
+      before = clock;
+      if (clock !== null) last = clock;
+    }
+    if (g.result === 'loss' && last !== null) {
+      out.losses++;
+      ends.push(last / base);
+      if (last > base / 2) out.lossesOverHalfUnused++;
+    }
+  }
+  if (ends.length) {
+    ends.sort((a, b) => a - b);
+    const mid = Math.floor(ends.length / 2);
+    out.medianEndShareLosses = ends.length % 2 ? ends[mid]! : (ends[mid - 1]! + ends[mid]!) / 2;
+  }
+  return out;
+}
+

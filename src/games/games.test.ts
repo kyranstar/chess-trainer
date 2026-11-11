@@ -7,7 +7,7 @@ import { deleteDb, openDb, type TrainerDB } from '../db/db';
 import fixture from './fixtures/my-games.fixture.json';
 import { importGames, parseGamesFile } from './fixtures/load';
 import { withMeasure } from './fixtures/measure';
-import { clockPressure, drillPositions, earlyBlunderGames, gameCoverage, majorErrors, missedOpportunities, ratingSeries } from './metrics';
+import { clockPressure, drillPositions, earlyBlunderGames, gameCoverage, majorErrors, missedOpportunities, ratingSeries, timeUse } from './metrics';
 import type { GameRecord, GamesFile } from './types';
 
 const FILE = fixture as unknown as GamesFile;
@@ -298,3 +298,24 @@ describe('the headline compares fixed groups of games (outside reviewer, third p
   });
 });
 
+
+describe('how the clock is used in real games', () => {
+  it('reports clock left at the end of losses and how many major errors came with over half the clock left, with their denominators', () => {
+    const g = (id: string, result: 'win' | 'loss', decisions: [number, number, number | null][]) => ({
+      id, source: 'chess.com', url: null, date: '2026-11-01', endDate: '2026-11-01', endTime: null, timeControl: '600', timeClass: 'rapid', color: 'white', result,
+      termination: null, playerRating: 1, opponentRating: 1, opponent: 'x', moves: [], clocks: [1], analysis: null, importedAt: 0, updatedAt: 0, analysisKey: null, rated: true,
+      measure: { decisions, events: [], facts: [] }, measureKey: 'k',
+    }) as unknown as GameRecord;
+    const t = timeUse([
+      g('a', 'loss', [[0, 0, 590], [2, 30, 560], [4, 25, 300], [6, 0, 290]]), // ends with 290 of 600 left; errors begun at 590 and 560 seconds
+      g('b', 'loss', [[0, 0, 500], [2, 40, 100], [4, 22, 20]]), // ends with 20 left; errors begun at 500 and 100
+      g('c', 'win', [[0, 0, 550]]),
+    ], 'rapid');
+    expect(t.games).toBe(3);
+    expect(t.losses).toBe(2);
+    expect(t.lossesOverHalfUnused).toBe(0);
+    expect(t.medianEndShareLosses).toBeCloseTo((290 / 600 + 20 / 600) / 2, 5);
+    expect(t.errors).toEqual({ n: 4, overHalfClock: 3 });
+    expect(timeUse([], 'rapid')).toMatchObject({ games: 0, medianEndShareLosses: null });
+  });
+});

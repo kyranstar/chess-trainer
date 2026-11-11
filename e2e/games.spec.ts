@@ -219,3 +219,50 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(page.getByTestId('own-move-verdict')).toBeVisible();
 });
 
+test('your move on the clock: the three checks are reported, a move not made in time is not a clean one, and Progress counts it all', async ({ page }) => {
+  // Black has a bishop that can already be taken, and a knight he can take for nothing.
+  const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',
+    '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', '[EndDate "2026.11.08"]', '[EndTime "10:20:00"]', '[Link "https://www.chess.com/game/live/900000778"]', '',
+    '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 7. Re1 a6 8. Bb3 Ba7 9. h3 h6 10. Nbd2 Re8 11. Nf1 Be6 12. Bc2 d5 13. exd5 Bxd5 14. Ng3 Qd7 15. Nh4 Rad8 16. Nhf5 Kh8 17. Qf3 Ne7 18. Nxe7 Qxe7 1-0'].join('\n');
+  const long = { url: 'https://www.chess.com/game/live/900000778', pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', end_time: 1794133200, white: { username: 'fixture_learner', rating: 455, result: 'win' }, black: { username: 'opponent_long', rating: 470, result: 'resigned' } };
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [long] } });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  await openApp(page, '#/progress');
+  await expect(page.getByTestId('ownmove-pace')).toContainText('No clock yet');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
+
+  // A two-second clock, chosen by hand here; normally the ladder sets it.
+  await page.goto('./#/practice/run?mode=move&pace=2');
+  const drill = page.getByTestId('own-move');
+  await expect(page.getByTestId('own-move-clock')).toContainText('s for this move');
+  await expect(page.getByTestId('own-move-clock')).toContainText('No move in 2 seconds', { timeout: 10_000 });
+  // The position stays; the move is still played, and the facts are still given.
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  await playMove(page, 'a2a3');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  await expect(page.getByTestId('own-move-verdict')).toContainText('The move was not made within 2 seconds');
+
+  // Next position, in time this time (move 14 of the game: White to move).
+  await page.getByTestId('own-move-next').click();
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  await playMove(page, 'a2a3');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+
+  await page.goto('./#/progress');
+  const card = page.getByTestId('card-ownmove');
+  await expect(card).toContainText('1 was not made in time');
+  await expect(page.getByTestId('ownmove-pace')).toContainText('No clock yet'); // one in-time move is far from enough to earn a clock
+  // This game was fetched without move clocks, so nothing is said about time in real games.
+  await expect(page.getByTestId('ownmove-time')).toHaveCount(0);
+});
+

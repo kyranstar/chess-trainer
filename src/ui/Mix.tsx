@@ -6,6 +6,7 @@ import { type DrillPosition, drillPositions } from '../games/metrics';
 import { type MoveItem, moveItems } from '../games/ownmove';
 import { pickSense, type SenseItem } from '../games/sense';
 import { MIX_EXTRA_MINUTES, MIX_MINUTES, type MixKind, nextMixKind, reviewOrder } from '../schedule/mix';
+import { paceFrom } from '../schedule/pace';
 import { pickTestConcept, puzzleBacked } from '../schedule/session';
 import { OwnGameDrill, useGames } from './Games';
 import { OwnMoveDrill } from './OwnMove';
@@ -19,6 +20,7 @@ interface Turn {
   sense?: SenseItem;
   drill?: DrillPosition;
   move?: MoveItem;
+  pace?: number;
   concept?: Concept;
 }
 
@@ -63,7 +65,10 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
     const kind = nextMixKind({ review: dueLeft.length > 0, move: !!move, safe: !!safe, chance: !!chance, missed: !!drill, puzzle: !!status }, history.current, Math.random);
     const t: Turn = { n, kind };
     if (kind === 'review') t.review = dueLeft[0];
-    if (kind === 'move') t.move = move;
+    if (kind === 'move') {
+      t.move = move;
+      t.pace = paceFrom(learner.attempts).pace;
+    }
     if (kind === 'safe') t.sense = safe;
     if (kind === 'chance') t.sense = chance;
     if (kind === 'missed') t.drill = drill;
@@ -104,7 +109,7 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
   return (
     <div data-testid="mix-run" data-turn={n} data-kind={t.kind}>
       {t.kind === 'review' && <ReviewRunner key={`mix-${n}`} due={[t.review!]} sessionId={null} heading={heading} single onFinished={next} />}
-      {t.kind === 'move' && <OwnMoveDrill key={`mix-${n}`} item={t.move!} sessionId={null} context="practice" heading={heading} onDone={next} />}
+      {t.kind === 'move' && <OwnMoveDrill key={`mix-${n}`} item={t.move!} sessionId={null} context="practice" heading={heading} pace={t.pace ?? 0} onDone={next} />}
       {(t.kind === 'safe' || t.kind === 'chance') && <SenseDrill key={`mix-${n}`} item={t.sense!} sessionId={null} context="practice" heading={heading} onDone={next} />}
       {t.kind === 'missed' && <OwnGameDrill key={`mix-${n}`} drill={t.drill!} sessionId={null} heading={heading} onDone={next} />}
       {t.kind === 'puzzle' && (
