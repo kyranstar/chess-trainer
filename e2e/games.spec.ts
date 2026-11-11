@@ -169,6 +169,11 @@ test('one button: "Just practise" mixes own-game questions, missed moves and new
     }
   }
   expect(new Set(kinds).size).toBeGreaterThanOrEqual(2);
+  // At any point: how is it going? One plain count, then on with it.
+  await page.getByTestId('mix-how').click();
+  await expect(page.getByTestId('run-overall')).toContainText(/\d+ of \d+ passed/);
+  await page.getByTestId('mix-resume').click();
+  await expect(mix).toHaveAttribute('data-turn', '9');
   // Everything was recorded as ordinary practice.
   await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen')).toBeVisible();
@@ -207,7 +212,9 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing takes back.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
   await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
-  expect(['failed', 'unresolved']).toContain(await drill.getAttribute('data-verdict'));
+  // Judged plainly: giving a knight for a pawn is rated by the engine, with both numbers.
+  expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));
+  await expect(page.getByTestId('own-move-rating')).toContainText('below its first choice');
   // The consequence can be played through on the board ...
   const afterMine = await drill.getAttribute('data-fen');
   await page.getByTestId('line-next').click();
@@ -275,6 +282,7 @@ test('your move on the clock: the three checks are reported, a move not made in 
   await page.goto('./#/progress');
   const card = page.getByTestId('card-ownmove');
   await expect(card).toContainText('1 was not made in time');
+  await expect(page.getByTestId('ownmove-grades')).toContainText('Best');
   await expect(page.getByTestId('ownmove-pace')).toContainText('No clock yet'); // one in-time move is far from enough to earn a clock
   // This game was fetched without move clocks, so nothing is said about time in real games.
   await expect(page.getByTestId('ownmove-time')).toHaveCount(0);

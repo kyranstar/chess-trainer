@@ -65,10 +65,14 @@ export function paceFrom(attempts: Attempt[]): Pace {
 }
 
 export interface OwnMoveSummary {
+  /** Passed in time: rated best, good or an inaccuracy. */
   clean: number;
+  /** Rated a mistake or a blunder. */
   failed: number;
-  /** Answered, but nothing could be established either way. */
+  /** Answered, but the engine gave no rating. */
   notScored: number;
+  /** How many moves got each rating (moves not made in time are left out). */
+  grades: Record<'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'unrated', number>;
   /** Not made within the pace's time (counted apart from the three above). */
   timeouts: number;
   /** Of moves made when something of his could already be taken: how often the move dealt with all of it. */
@@ -84,11 +88,17 @@ export function ownMoveSummary(attempts: Attempt[], since?: number): OwnMoveSumm
   const has = (a: Attempt, t: string) => a.themes.includes(t);
   const timed = rows.filter((a) => has(a, 'timeout'));
   const inTime = rows.filter((a) => !has(a, 'timeout'));
+  // Attempts recorded before moves were rated in bands used 'clean' / 'failed' / 'unresolved'.
+  const grade = (g: string) => inTime.filter((a) => a.themes[1] === g).length;
   const something = rows.filter((a) => a.themes[2] === 'loose' || a.themes[2] === 'mate');
   return {
-    clean: inTime.filter((a) => a.themes[1] === 'clean').length,
-    failed: inTime.filter((a) => a.themes[1] === 'failed').length,
-    notScored: inTime.filter((a) => a.themes[1] === 'unresolved').length,
+    clean: inTime.filter((a) => a.outcome === 'success').length,
+    failed: inTime.filter((a) => a.outcome === 'fail').length,
+    notScored: inTime.filter((a) => a.outcome === 'skipped').length,
+    grades: {
+      best: grade('best'), good: grade('good') + grade('clean'), inaccuracy: grade('inaccuracy'),
+      mistake: grade('mistake'), blunder: grade('blunder') + grade('failed'), unrated: grade('unrated') + grade('unresolved'),
+    },
     timeouts: timed.length,
     threat: { met: rows.filter((a) => has(a, 'threat-met')).length, n: rows.filter((a) => has(a, 'threat-met') || has(a, 'threat-left')).length },
     free: { taken: rows.filter((a) => has(a, 'free-taken')).length, n: rows.filter((a) => has(a, 'free-taken') || has(a, 'free-left')).length },

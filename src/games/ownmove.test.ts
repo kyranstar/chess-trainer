@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradeOwnMove, looseAfter, moveItems } from './ownmove';
+import { gradeMove, looseAfter, type MoveGrade, moveItems, outcomeOfGrade } from './ownmove';
 import type { GameRecord } from './types';
 
 describe('exact facts about a move the learner chose', () => {
@@ -40,22 +40,35 @@ describe('exact facts about a move the learner chose', () => {
   });
 });
 
-describe('grading with abstention: only what is established counts against the learner', () => {
-  const none = { loose: [], mateInOne: null, afterFen: '' };
-  const hung = { loose: [{ square: 'e5', piece: 'knight' as const, by: { from: 'd6', piece: 'pawn' as const }, reason: 'undefended' as const }], mateInOne: null, afterFen: '' };
-  it('allowing mate in one is a failure whatever the engine says', () => {
-    expect(gradeOwnMove({ ...none, mateInOne: { uci: 'd8h4', san: 'Qh4#' } }, null)).toBe('failed');
+describe('rating a move against the engine\'s best move (owner decision: judge harder, say it plainly)', () => {
+  const nothing = { loose: [], mateInOne: null, afterFen: '', threatsBefore: [], freeBefore: [], mateBefore: null, tookFree: false, dealtWith: [] };
+  it('bands by how far below the engine\'s first choice the move is rated', () => {
+    expect(gradeMove(nothing, { loss: 0, isBest: true }, 'e2e4')).toBe('best');
+    expect(gradeMove(nothing, { loss: 3, isBest: false }, 'e2e4')).toBe('good');
+    expect(gradeMove(nothing, { loss: 7, isBest: false }, 'e2e4')).toBe('inaccuracy');
+    expect(gradeMove(nothing, { loss: 14, isBest: false }, 'e2e4')).toBe('mistake');
+    expect(gradeMove(nothing, { loss: 31, isBest: false }, 'e2e4')).toBe('blunder');
   });
-  it('a loose piece is a failure only when the engine confirms a settled loss of material and a large drop; otherwise nothing is recorded', () => {
-    expect(gradeOwnMove(hung, { loss: 35, swing: -3, settled: true })).toBe('failed');
-    expect(gradeOwnMove(hung, { loss: 1, swing: -3, settled: true })).toBe('unresolved'); // the engine accepts it: a sacrifice
-    expect(gradeOwnMove(hung, { loss: 35, swing: -3, settled: false })).toBe('unresolved');
-    expect(gradeOwnMove(hung, null)).toBe('unresolved'); // no engine answer
+  it('a move with nothing loose is no longer a pass when the engine rates it far below its best', () => {
+    expect(gradeMove(nothing, { loss: 22, isBest: false }, 'a2a3')).toBe('blunder');
   });
-  it('with nothing loose and no mate, a move the engine dislikes for other reasons is not a failure either', () => {
-    expect(gradeOwnMove(none, { loss: 4, swing: 0, settled: true })).toBe('clean');
-    expect(gradeOwnMove(none, null)).toBe('clean');
-    expect(gradeOwnMove(none, { loss: 40, swing: 0, settled: true })).toBe('unresolved');
+  it('exact facts decide where they apply: allowing mate in one is a blunder, missing one is at least a mistake', () => {
+    expect(gradeMove({ ...nothing, mateInOne: { uci: 'd8h4', san: 'Qh4#' } }, { loss: 2, isBest: false }, 'g2g4')).toBe('blunder');
+    expect(gradeMove({ ...nothing, mateBefore: { uci: 'e1e8', san: 'Re8#' } }, { loss: 0, isBest: false }, 'h2h3')).toBe('mistake');
+    expect(gradeMove({ ...nothing, mateBefore: { uci: 'e1e8', san: 'Re8#' } }, { loss: 0, isBest: true }, 'e1e8')).toBe('best');
+    expect(gradeMove({ ...nothing, mateBefore: { uci: 'e1e8', san: 'Re8#' } }, { loss: 40, isBest: false }, 'h2h3')).toBe('blunder');
+  });
+  it('a piece left to be taken is rated by the engine like anything else: accepted if the engine accepts it', () => {
+    const hung = { ...nothing, loose: [{ square: 'e5', piece: 'knight' as const, by: { from: 'd6', piece: 'pawn' as const }, reason: 'undefended' as const }] };
+    expect(gradeMove(hung, { loss: 1, isBest: false }, 'f3e5')).toBe('good');
+    expect(gradeMove(hung, { loss: 35, isBest: false }, 'f3e5')).toBe('blunder');
+  });
+  it('with no engine answer the move is not rated, except for the exact facts', () => {
+    expect(gradeMove(nothing, null, 'a2a3')).toBe('unrated');
+    expect(gradeMove({ ...nothing, mateInOne: { uci: 'd8h4', san: 'Qh4#' } }, null, 'g2g4')).toBe('blunder');
+  });
+  it('what is recorded: mistakes and blunders are misses, the rest pass, unrated counts for nothing', () => {
+    expect(['best', 'good', 'inaccuracy', 'mistake', 'blunder', 'unrated'].map((g) => outcomeOfGrade(g as MoveGrade))).toEqual(['success', 'success', 'success', 'fail', 'fail', 'skipped']);
   });
 });
 

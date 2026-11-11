@@ -15,7 +15,7 @@
  * The same kind never comes three times running while another is available. A run ends
  * naturally after MIX_MINUTES of practice, at the end of an item, with the offer of a few more.
  */
-import type { ReviewState } from '../db/types';
+import type { Attempt, ReviewState } from '../db/types';
 
 export type MixKind = 'review' | 'move' | 'safe' | 'chance' | 'missed' | 'puzzle';
 export const MIX_VERSION = 'mix-v3';
@@ -49,3 +49,55 @@ const rankOf = (id: string) => RANK.find(([p]) => id.startsWith(p))?.[1] ?? 4;
 export function reviewOrder(due: ReviewState[]): ReviewState[] {
   return due.slice().sort((a, b) => rankOf(a.itemId) - rankOf(b.itemId) || a.due - b.due || (a.itemId < b.itemId ? -1 : 1));
 }
+
+type Tally = { right: number; n: number };
+
+/** How a stretch of practice went: each kind of item with its own count, nothing blended into a score. */
+export interface RunSummary {
+  /** "Your move", by the engine's rating of each move. */
+  moves: Record<'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'unrated', number>;
+  /** Questions from own games answered right. */
+  questions: Tally;
+  /** New positions solved first try with no hint. */
+  puzzles: Tally;
+  /** Own missed moves found. */
+  missed: Tally;
+  /** Things due again that were recalled. */
+  reviews: Tally;
+  /** Everything that was scored, and how much of it passed. */
+  passed: number;
+  scored: number;
+}
+
+export function runSummary(attempts: Attempt[]): RunSummary {
+  const out: RunSummary = {
+    moves: { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, unrated: 0 },
+    questions: { right: 0, n: 0 }, puzzles: { right: 0, n: 0 }, missed: { right: 0, n: 0 }, reviews: { right: 0, n: 0 }, passed: 0, scored: 0,
+  };
+  const count = (t: Tally, a: Attempt) => {
+    t.n++;
+    if (a.outcome === 'success') t.right++;
+  };
+  for (const a of attempts) {
+    if (a.themes.includes('left')) continue; // shown and left unanswered
+    const scored = a.outcome !== 'skipped';
+    if (a.scheduledReview) {
+      if (scored) count(out.reviews, a);
+    } else if (a.exerciseKind === 'own-move') {
+      const g = a.themes[1] as keyof RunSummary['moves'];
+      if (g in out.moves) out.moves[g]++;
+    } else if (a.exerciseKind === 'sense') {
+      if (scored) count(out.questions, a);
+    } else if (a.exerciseKind === 'own-game') {
+      if (scored) count(out.missed, a);
+    } else if (a.exerciseKind === 'puzzle' || a.exerciseKind === 'lesson-try' || a.exerciseKind === 'endgame' || a.exerciseKind === 'opening') {
+      if (scored) count(out.puzzles, a);
+    }
+    if (scored) {
+      out.scored++;
+      if (a.outcome === 'success') out.passed++;
+    }
+  }
+  return out;
+}
+

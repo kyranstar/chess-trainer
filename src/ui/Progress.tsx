@@ -393,20 +393,20 @@ function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: At
           <p className="metric-line" data-testid="ownmove-clean">
             <span className="metric-value">{s.clean} of {established}</span>
             {iv && <span className="metric-pct">{formatPct(s.clean / established)}</span>}
-            <span className="metric-range">moves left nothing to take and allowed no mate in one{iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
+            <span className="metric-range">moves passed (rated best, good or an inaccuracy){iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
           </p>
-          <p>{s.notScored} more could not be scored either way{s.timeouts ? `, and ${s.timeouts} ${s.timeouts === 1 ? 'was' : 'were'} not made in time` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
+          <p data-testid="ownmove-grades">Best {s.grades.best}, good {s.grades.good}, inaccuracies {s.grades.inaccuracy}, mistakes {s.grades.mistake}, blunders {s.grades.blunder}{s.grades.unrated ? `, not rated ${s.grades.unrated}` : ''}{s.timeouts ? `; ${s.timeouts} ${s.timeouts === 1 ? 'was' : 'were'} not made in time` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
         </>
       )}
       <p data-testid="ownmove-pace">
-        {pace.pace === 0 ? 'No clock yet.' : `Clock: ${pace.pace} seconds a move.`} Clean at this pace: {pace.atThisPace.clean} of {pace.atThisPace.n}. The clock tightens after {PACE_UP} clean moves in {PACE_WINDOW} (next: {PACES[Math.min(pace.index + 1, PACES.length - 1)]} seconds{pace.index === PACES.length - 1 ? ', the fastest' : ''}) and loosens again at {PACE_DOWN} or fewer. A ten-minute game allows about 15 seconds a move.
+        {pace.pace === 0 ? 'No clock yet.' : `Clock: ${pace.pace} seconds a move.`} Passed at this pace: {pace.atThisPace.clean} of {pace.atThisPace.n}. The clock tightens after {PACE_UP} passes in {PACE_WINDOW} (next: {PACES[Math.min(pace.index + 1, PACES.length - 1)]} seconds{pace.index === PACES.length - 1 ? ', the fastest' : ''}) and loosens again at {PACE_DOWN} or fewer. A ten-minute game allows about 15 seconds a move.
       </p>
       {rapid && rapid.games > 0 && (
         <p data-testid="ownmove-time">
           In your {rapid.games} measured rapid games: {rapid.errors.overHalfClock} of {rapid.errors.n} major errors were made with more than half the clock left{rapid.medianEndShareLosses !== null ? `; the games you lost ended with a median of ${Math.round(100 * rapid.medianEndShareLosses)}% of your time unused (${rapid.lossesOverHalfUnused} of ${rapid.losses} with more than half)` : ''}.
         </p>
       )}
-      <p className="definition-small">A move is “clean” when, after it, nothing of yours can be captured and kept and no mate in one is allowed, found by generating the legal moves; a failure also needs the engine’s line to show the loss. {periodLabel}. The rapid figures are from your own games’ clocks and say whether time was actually short; they are not an explanation.</p>
+      <p className="definition-small">Each move is rated by the built-in engine against its own first choice: under 5 points below is good, under 10 an inaccuracy, under 20 a mistake, more a blunder; allowing mate in one is always a blunder. The engine is a small one and can be wrong. {periodLabel}. The rapid figures are from your own games’ clocks and say whether time was actually short; they are not an explanation.</p>
     </section>
   );
 }

@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDb, useFocusMode } from '../app/store';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
+import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
 import { bestLineFor } from '../engine/interactive';
-import { lineEnd, lineSan, material } from '../games/analyse';
-import { describeFree, describeLoose, gradeOwnMove, type MoveEvidence, type MoveItem, movePicture, type MovePicture, type MoveVerdict } from '../games/ownmove';
+import { DEVICE_NODES, lineSan } from '../games/analyse';
+import { describeFree, describeLoose, GRADE_LABEL, gradeMove, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
 import { Board } from './Board';
 
 type Phase = 'move' | 'predict' | 'checking' | 'done';
+/** Both searches behind a rating use the same budget as the game analysis on this device. */
+const RATE_NODES = DEVICE_NODES;
 const MIN_SHOWN_MS = 1000;
 
 /**
@@ -46,7 +48,10 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     return () => clearInterval(t);
   }, [pace, phase]);
   const [named, setNamed] = useState<{ uci: string; san: string } | null>(null);
-  const [result, setResult] = useState<{ verdict: MoveVerdict; line: string | null; wp: number | null; pv: string[] } | null>(null);
+  const [result, setResult] = useState<{ verdict: MoveGrade; line: string | null; wp: number | null; pv: string[]; loss: number | null; bestSan: string | null; bestWp: number | null } | null>(null);
+  // The engine's first choice for the position is searched for while the learner thinks.
+  const bestSearch = useRef<ReturnType<typeof bestLineFor> | null>(null);
+  bestSearch.current ??= bestLineFor(item.fen, RATE_NODES);
   // After the answer the engine's line can be played through on the board, a move at a time.
   const [step, setStep] = useState(0);
   // A second try after seeing the facts is practice, not a result: it is never recorded.
@@ -73,14 +78,25 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
 
   async function conclude(f: MovePicture, my: { uci: string; san: string }, reply: { uci: string; san: string } | null) {
     setPhase('checking');
-    const line = positionFromFen(f.afterFen).isEnd() ? null : await bestLineFor(f.afterFen);
-    let evidence: MoveEvidence | null = null;
-    if (line) {
-      const end = lineEnd(f.afterFen, line.pv, item.color);
-      evidence = { loss: Math.max(0, item.bestWp - (100 - line.wp)), swing: end.balance - material(positionFromFen(item.fen), item.color), settled: end.settled };
+    const start = positionFromFen(item.fen);
+    const end = positionFromFen(f.afterFen);
+    // Two searches at the same budget: the position itself (begun when it appeared, so it is
+    // usually ready) and the position after his move.
+    const [best, line] = await Promise.all([bestSearch.current, end.isEnd() ? Promise.resolve(null) : bestLineFor(f.afterFen, RATE_NODES)]);
+    let rating: MoveRating | null = null;
+    let myWp: number | null = null;
+    const bestUci = best?.pv[0];
+    if (best && bestUci) {
+      myWp = end.isCheckmate() ? 100 : end.isEnd() ? 50 : line ? 100 - line.wp : null;
+      const isBest = sameMove(start, my.uci, bestUci);
+      rating = isBest ? { loss: 0, isBest } : myWp === null ? null : { loss: Math.max(0, best.wp - myWp), isBest };
     }
-    const verdict = gradeOwnMove(f, evidence);
-    setResult({ verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: line ? Math.round(100 - line.wp) : null, pv: line ? line.pv.slice(0, 6) : [] });
+    const grade = gradeMove(f, rating, my.uci);
+    const verdict = grade;
+    setResult({
+      verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 6) : [],
+      loss: rating ? Math.round(rating.loss) : null, bestSan: best && bestUci ? sanOf(start, bestUci) : null, bestWp: best ? Math.round(best.wp) : null,
+    });
     setStep(0);
     setPhase('done');
     if (recorded.current) return;
@@ -88,16 +104,16 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
     const what = f.mateInOne ? 'mate' : f.loose.length ? 'loose' : 'none';
     const sawIt = !reply ? 'no-reply-named' : reply.uci === f.mateInOne?.uci || f.loose.some((l) => reply.uci.startsWith(`${l.by.from}${l.square}`)) ? 'named-it' : 'named-another';
     const a = await recordAttempt(db, {
-      sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v2', conceptId: 'safety.threat-scan',
+      sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v3', conceptId: 'safety.threat-scan',
       themes: [
         'own-move', verdict, what, sawIt, `pace:${pace}`,
         ...(timedOut.current ? ['timeout'] : []),
         ...(f.mateBefore || f.freeBefore.length ? [f.tookFree || my.uci === f.mateBefore?.uci ? 'free-taken' : 'free-left'] : []),
         ...(f.threatsBefore.length ? [f.dealtWith.length === f.threatsBefore.length ? 'threat-met' : 'threat-left'] : []),
       ],
-      rating: null, ts: Date.now(), elapsedMs: decisionMs.current, firstMove: my.uci, played: reply ? [my.uci, reply.uci] : [my.uci], mistakes: verdict === 'failed' ? 1 : 0, hints: 0,
-      // A clean move made after the clock ran out is not a clean move at this pace: it is not scored.
-      outcome: verdict === 'failed' ? 'fail' : verdict === 'clean' && !timedOut.current ? 'success' : 'skipped', acceptedAlternative: false,
+      rating: null, ts: Date.now(), elapsedMs: decisionMs.current, firstMove: my.uci, played: reply ? [my.uci, reply.uci] : [my.uci], mistakes: outcomeOfGrade(grade) === 'fail' ? 1 : 0, hints: 0,
+      // A passing move made after the clock ran out is not a pass at this pace: it is not scored.
+      outcome: outcomeOfGrade(grade) === 'success' && timedOut.current ? 'skipped' : outcomeOfGrade(grade), acceptedAlternative: false,
     });
     onRecorded?.(a);
   }
@@ -162,14 +178,18 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
       <div className="feedback" aria-live="polite">
         {phase === 'checking' && <p className="muted">Looking at the position after your move</p>}
         {phase === 'done' && result && facts && mine && (
-          <div className={`verdict ${result.verdict === 'clean' ? 'right' : result.verdict === 'failed' ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
-            <strong>
+          <div className={`verdict ${result.verdict === 'best' || result.verdict === 'good' ? 'right' : result.verdict === 'mistake' || result.verdict === 'blunder' ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
+            <strong data-testid="own-move-grade">{GRADE_LABEL[result.verdict]}{timedOut.current ? ', not made in time' : ''}.</strong>
+            <p data-testid="own-move-rating">
               {facts.mateInOne
                 ? `${mine.san} allows mate in one: ${facts.mateInOne.san}.`
-                : facts.loose.length === 0
-                  ? `After ${mine.san} nothing of yours can be taken for nothing or by a cheaper piece, and there is no mate in one.`
-                  : `After ${mine.san}:`}
-            </strong>
+                : result.verdict === 'unrated'
+                  ? `The built-in engine did not answer, so ${mine.san} is not rated.`
+                  : result.verdict === 'best'
+                    ? `${mine.san} is the built-in engine’s first choice (about ${result.bestWp} out of 100 for you).`
+                    : `The built-in engine rates ${mine.san} ${result.loss ?? 0} point${result.loss === 1 ? '' : 's'} below its first choice, ${result.bestSan}: ${result.wp} against ${result.bestWp} out of 100.`}
+            </p>
+            {!facts.mateInOne && facts.loose.length === 0 && <p>After {mine.san} nothing of yours can be taken for nothing or by a cheaper piece, and there is no mate in one.</p>}
             {facts.loose.map((l) => <p key={l.square} data-testid="own-move-loose">{describeLoose(l)}{facts.threatsBefore.some((t) => t.square === l.square) ? ' It could already be taken before your move.' : ''}</p>)}
             {facts.dealtWith.length > 0 && <p data-testid="own-move-met">Before your move {facts.dealtWith.length === 1 ? `your piece on ${facts.dealtWith[0]} could be taken` : `your pieces on ${facts.dealtWith.join(' and ')} could be taken`}; your move dealt with that.</p>}
             {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">There was a mate in one: {facts.mateBefore.san}.</p>}
@@ -178,9 +198,10 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
             {named && (facts.mateInOne || facts.loose.length > 0) && (
               <p>{named.uci === facts.mateInOne?.uci || facts.loose.some((l) => named.uci.startsWith(`${l.by.from}${l.square}`)) ? `You named it: ${named.san}.` : `You named ${named.san}.`}</p>
             )}
-            {result.line && <p>The built-in engine continues {result.line} and then rates your side at {result.wp} out of 100; the best move it knew here kept about {Math.round(item.bestWp)}. This is the engine’s line, not an explanation.</p>}
+            {result.line && <p>After {mine.san} the built-in engine continues {result.line}.</p>}
             <p className="definition-small">
-              {result.verdict === 'failed' ? 'Recorded as missed; it returns in your review queue.' : result.verdict === 'clean' ? 'Recorded as a clean move.' : 'Not scored: a piece that can be taken is a fact, not proof the move is bad, and the engine’s line does not settle it.'}
+              {result.verdict === 'mistake' || result.verdict === 'blunder' ? 'Recorded as a miss; it returns in your review queue.' : result.verdict === 'unrated' ? 'Not recorded as a pass or a miss.' : 'Recorded as a pass.'}
+              {' '}Ratings are the built-in engine’s, a small one: under 5 points below its first choice is good, under 10 an inaccuracy, under 20 a mistake, more a blunder.
               {mine.uci !== item.played ? ` In the game you played ${gameSan}.` : ' This is the move you played in the game.'}
             </p>
           </div>
@@ -194,7 +215,7 @@ export function OwnMoveDrill({ item, sessionId, context, heading, pace = 0, onRe
             <button data-testid="line-next" disabled={step >= result.pv.length} onClick={() => setStep((x) => Math.min(result.pv.length, x + 1))} aria-label="One move on in the engine’s line">{step === 0 ? 'Play the engine’s line' : 'On'}</button>
           </span>
         )}
-        {phase === 'done' && result && result.verdict !== 'clean' && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Take it back and try another move</button>}
+        {phase === 'done' && result && result.verdict !== 'best' && result.verdict !== 'good' && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Take it back and try another move</button>}
         {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={onDone}>Continue</button>}
       </div>
     </section>

@@ -47,20 +47,22 @@ describe('the pace ladder: accuracy first, the clock tightens only while moves s
 import { ownMoveSummary } from './pace';
 
 describe('what is counted for "Your move"', () => {
-  it('clean and failed moves, moves not scored, time-outs, and the two other checks, each with its own denominator', () => {
+  it('passes and misses with the grade behind each, moves not rated, time-outs, and the two other checks, each with its own denominator', () => {
     const a = (themes: string[], outcome: Attempt['outcome']) => ({ uuid: `s${++k}`, ts: k, exerciseKind: 'own-move', context: 'practice', exerciseId: `m${k}`, themes, outcome }) as unknown as Attempt;
     const s = ownMoveSummary([
-      a(['own-move', 'clean', 'none', 'no-reply-named', 'pace:0'], 'success'),
-      a(['own-move', 'clean', 'none', 'no-reply-named', 'pace:0', 'threat-met', 'free-taken'], 'success'),
-      a(['own-move', 'failed', 'loose', 'named-it', 'pace:0', 'threat-left'], 'fail'),
-      a(['own-move', 'failed', 'mate', 'named-another', 'pace:0', 'free-left'], 'fail'),
-      a(['own-move', 'unresolved', 'loose', 'no-reply-named', 'pace:20'], 'skipped'),
-      a(['own-move', 'clean', 'none', 'no-reply-named', 'pace:20', 'timeout'], 'skipped'),
+      a(['own-move', 'best', 'none', 'no-reply-named', 'pace:0'], 'success'),
+      a(['own-move', 'good', 'none', 'no-reply-named', 'pace:0', 'threat-met', 'free-taken'], 'success'),
+      a(['own-move', 'inaccuracy', 'none', 'no-reply-named', 'pace:0'], 'success'),
+      a(['own-move', 'blunder', 'loose', 'named-it', 'pace:0', 'threat-left'], 'fail'),
+      a(['own-move', 'mistake', 'mate', 'named-another', 'pace:0', 'free-left'], 'fail'),
+      a(['own-move', 'unrated', 'loose', 'no-reply-named', 'pace:20'], 'skipped'),
+      a(['own-move', 'good', 'none', 'no-reply-named', 'pace:20', 'timeout'], 'skipped'),
       a(['own-move', 'left'], 'skipped'), // shown and left: not an answer
     ]);
-    expect(s).toMatchObject({ clean: 2, failed: 2, notScored: 1, timeouts: 1 });
+    expect(s).toMatchObject({ clean: 3, failed: 2, notScored: 1, timeouts: 1 });
+    expect(s.grades).toEqual({ best: 1, good: 1, inaccuracy: 1, mistake: 1, blunder: 1, unrated: 1 });
     expect(s.threat).toEqual({ met: 1, n: 2 });
     expect(s.free).toEqual({ taken: 1, n: 2 });
-    expect(s.named).toEqual({ yes: 1, n: 3 }); // of the moves that left something or allowed mate
+    expect(s.named).toEqual({ yes: 1, n: 3 });
   });
 });

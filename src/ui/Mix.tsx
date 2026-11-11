@@ -5,13 +5,35 @@ import type { ReviewState } from '../db/types';
 import { type DrillPosition, drillPositions } from '../games/metrics';
 import { type MoveItem, moveItems } from '../games/ownmove';
 import { pickSense, type SenseItem } from '../games/sense';
-import { MIX_EXTRA_MINUTES, MIX_MINUTES, type MixKind, nextMixKind, reviewOrder } from '../schedule/mix';
+import type { Attempt } from '../db/types';
+import { MIX_EXTRA_MINUTES, MIX_MINUTES, type MixKind, nextMixKind, reviewOrder, runSummary } from '../schedule/mix';
 import { paceFrom } from '../schedule/pace';
 import { pickTestConcept, puzzleBacked } from '../schedule/session';
 import { OwnGameDrill, useGames } from './Games';
 import { OwnMoveDrill } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { SenseDrill, senseItemsFrom } from './Sense';
+
+/** How a stretch of practice went, one plain line per kind of item that came up. */
+export function RunSummaryView({ attempts }: { attempts: Attempt[] }) {
+  const s = runSummary(attempts);
+  const m = s.moves;
+  const moves = m.best + m.good + m.inaccuracy + m.mistake + m.blunder + m.unrated;
+  const part = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '');
+  const grades = [part(m.best, 'best', 'best'), part(m.good, 'good', 'good'), part(m.inaccuracy, 'inaccuracy', 'inaccuracies'), part(m.mistake, 'mistake', 'mistakes'), part(m.blunder, 'blunder', 'blunders'), part(m.unrated, 'not rated', 'not rated')].filter(Boolean).join(', ');
+  if (s.scored + moves === 0) return <p className="metric-empty" data-testid="run-summary">Nothing answered yet.</p>;
+  return (
+    <dl className="facts" data-testid="run-summary">
+      <dt>Overall</dt>
+      <dd data-testid="run-overall"><strong>{s.passed} of {s.scored}</strong> passed</dd>
+      {moves > 0 && (<><dt>Your moves</dt><dd data-testid="run-moves">{grades}</dd></>)}
+      {s.questions.n > 0 && (<><dt>Questions from your games</dt><dd>{s.questions.right} of {s.questions.n} right</dd></>)}
+      {s.missed.n > 0 && (<><dt>Moves you missed in games</dt><dd>{s.missed.right} of {s.missed.n} found</dd></>)}
+      {s.puzzles.n > 0 && (<><dt>New positions</dt><dd>{s.puzzles.right} of {s.puzzles.n} first try</dd></>)}
+      {s.reviews.n > 0 && (<><dt>Due again</dt><dd>{s.reviews.right} of {s.reviews.n} recalled</dd></>)}
+    </dl>
+  );
+}
 
 interface Turn {
   n: number;
@@ -44,6 +66,8 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
   // A natural end: after MIX_MINUTES the run stops at the end of an item and offers a few more.
   const until = useRef(Date.now() + MIX_MINUTES * 60_000);
   const [paused, setPaused] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const startedAt = useRef(Date.now());
   if (!pool || !learner.ready || games === undefined) return <p className="muted">Loading</p>;
 
   if (turn.current?.n !== n) {
@@ -86,10 +110,25 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
   };
   const heading = n === 0 ? 'Practice' : `Practice, ${n} done`;
 
+  // Everything recorded since this run began, whatever kind of item it was.
+  const mine = learner.attempts.filter((a) => a.ts >= startedAt.current && a.sessionId === null);
+  if (looking && !paused) {
+    return (
+      <div className="empty" data-testid="mix-look">
+        <h2>So far: {n} done</h2>
+        <RunSummaryView attempts={mine} />
+        <div className="actions">
+          <button className="primary" data-testid="mix-resume" onClick={() => setLooking(false)}>Keep going</button>
+          <button data-testid="mix-stop" onClick={onFinished}>Stop here</button>
+        </div>
+      </div>
+    );
+  }
   if (paused) {
     return (
       <div className="empty" data-testid="mix-pause">
         <h2>{n} done</h2>
+        <RunSummaryView attempts={mine} />
         <p>That is the planned practice time. Stop here, or go on for {MIX_EXTRA_MINUTES} more minutes.</p>
         <div className="actions">
           <button className="primary" data-testid="mix-stop" onClick={onFinished}>Stop here</button>
@@ -116,6 +155,7 @@ export function MixRun({ learner, onFinished }: { learner: Learner; onFinished: 
         <PuzzleStream key={`mix-${n}`} limit={1} pick={conceptPicker(pool.puzzles, t.concept!, learner.level.level, `mix|${run.current}|${n}`)}
           context="practice" conceptId={t.concept!.id} sessionId={null} allowHints={false} seen={learner.seen} heading={heading} onFinished={next} />
       )}
+      <footer className="run-foot"><button className="quiet" data-testid="mix-how" onClick={() => setLooking(true)}>How is it going?</button></footer>
     </div>
   );
 }

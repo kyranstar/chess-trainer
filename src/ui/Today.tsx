@@ -18,6 +18,7 @@ import { useArmed, useScreenChange } from '../app/tapGuard';
 import { type MoveItem, moveItems } from '../games/ownmove';
 import { paceFrom } from '../schedule/pace';
 import { OwnMoveDrill } from './OwnMove';
+import { RunSummaryView } from './Mix';
 
 /** A small stable hash for choosing among a few candidates by turn. */
 function hashOf(text: string): number {
@@ -110,6 +111,8 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
             <dd>{checks.map((c) => `${CONCEPT_BY_ID.get(c.conceptId)?.title}: ${c.type === 'check-passed' ? 'passed' : 'not passed'}`).join('; ')}</dd>
           </>
         )}
+        <dt>How it went</dt>
+        <dd><RunSummaryView attempts={mine} /></dd>
         <dt>Added to review</dt>
         <dd>{missed} position{missed === 1 ? '' : 's'}, first due tomorrow</dd>
       </dl>

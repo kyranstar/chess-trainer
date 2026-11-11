@@ -54,3 +54,32 @@ describe('order of due reviews', () => {
     expect(order).toEqual(['sense:safe-or-not:g:14', 'game:g:12', 'lesson:x:2', 'opening:white|k:e2e4', 'kpk:win:8/8', 'lichess:b', 'lichess:a']);
   });
 });
+
+import type { Attempt } from '../db/types';
+import { runSummary } from './mix';
+
+describe('how a stretch of practice went, said plainly', () => {
+  it('counts each kind of item with its own denominator, and an overall passed-of-scored', () => {
+    let n = 0;
+    const a = (kind: Attempt['exerciseKind'], outcome: Attempt['outcome'], over: Partial<Attempt> = {}) => ({ uuid: `r${++n}`, ts: n, exerciseKind: kind, exerciseId: `x${n}`, outcome, themes: [], scheduledReview: false, context: 'practice', ...over }) as unknown as Attempt;
+    const s = runSummary([
+      a('own-move', 'success', { themes: ['own-move', 'best'] }),
+      a('own-move', 'success', { themes: ['own-move', 'inaccuracy'] }),
+      a('own-move', 'fail', { themes: ['own-move', 'blunder'] }),
+      a('own-move', 'skipped', { themes: ['own-move', 'left'] }), // shown and left
+      a('sense', 'success'), a('sense', 'fail'), a('sense', 'skipped'),
+      a('puzzle', 'success'), a('puzzle', 'fail'), a('puzzle', 'assisted'),
+      a('own-game', 'success'), a('own-game', 'fail'),
+      a('puzzle', 'success', { scheduledReview: true }), a('sense', 'fail', { scheduledReview: true }),
+    ]);
+    expect(s.moves).toEqual({ best: 1, good: 0, inaccuracy: 1, mistake: 0, blunder: 1, unrated: 0 });
+    expect(s.questions).toEqual({ right: 1, n: 2 });
+    expect(s.puzzles).toEqual({ right: 1, n: 3 });
+    expect(s.missed).toEqual({ right: 1, n: 2 });
+    expect(s.reviews).toEqual({ right: 1, n: 2 });
+    expect(s.passed).toBe(6);
+    expect(s.scored).toBe(12);
+    expect(runSummary([]).scored).toBe(0);
+  });
+});
+

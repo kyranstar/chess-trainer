@@ -11,14 +11,12 @@
  *   - a piece of his that can be captured by a cheaper piece, defended or not;
  *   - a mate in one for the opponent.
  * These are facts about captures, not verdicts: a piece can be left to be taken on purpose.
- * So the result is graded with abstention. A mate in one allowed is a failure. A loose piece
- * is a failure only if the engine's line also shows a settled loss of material and a large
- * drop in its score. Everything else is either clean or unresolved, and unresolved is never
- * recorded against him.
+ * The verdict on the move is the built-in engine's rating of it against its own first choice
+ * (see gradeMove), shown with both numbers; the facts explain it.
  */
 import { parseSquare } from 'chessops/util';
 import { applyUci, type Color, fenOf, isCheckmate, legalDests, needsPromotion, positionFromFen, sanOf } from '../chess/rules';
-import { RULES, UNDECIDED } from './analyse';
+import { UNDECIDED } from './analyse';
 import type { GameRecord } from './types';
 
 type Role = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king';
@@ -120,26 +118,45 @@ export function movePicture(fen: string, uci: string): MovePicture {
   };
 }
 
-/** What the engine's line after the learner's move shows, when there is one. */
-export interface MoveEvidence {
-  /** Expected-score points lost against the stored best move of the position. */
+/**
+ * How the learner's move compares with the engine's first choice in the same position, both
+ * searched on the device at the same budget.
+ */
+export interface MoveRating {
+  /** Expected-score points below the engine's first choice (0 if it is the first choice). */
   loss: number;
-  /** Material at the end of the line, relative to before the move. */
-  swing: number;
-  settled: boolean;
+  isBest: boolean;
 }
 
-export type MoveVerdict = 'clean' | 'failed' | 'unresolved';
+export type MoveGrade = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'unrated';
+/** Upper bounds, in expected-score points below the engine's first choice. */
+export const GRADE_BANDS = { good: 5, inaccuracy: 10, mistake: 20 };
 
-export function gradeOwnMove(facts: MoveFacts, engine: MoveEvidence | null): MoveVerdict {
-  if (facts.mateInOne) return 'failed';
-  if (facts.loose.length > 0) {
-    const confirmed = !!engine && engine.settled && engine.swing <= -RULES.materialSwing && engine.loss >= RULES.majorLoss;
-    return confirmed ? 'failed' : 'unresolved';
-  }
-  if (engine && engine.loss >= RULES.majorLoss) return 'unresolved';
-  return 'clean';
+/**
+ * The owner asked for moves to be judged harder and for the result to be plain (2026-11-11):
+ * a move that leaves nothing to take but is far below the best move used to pass. Every
+ * move is now rated against the engine's first choice, in the bands players know: best,
+ * good (under 5 points below), inaccuracy (under 10), mistake (under 20), blunder. These are
+ * the built-in engine's ratings, and the screen says so and shows both numbers; a small
+ * engine can be wrong. Two things are exact and override it: a move that allows mate in one
+ * is a blunder, and a move that passes up a mate in one is at least a mistake. With no
+ * engine answer a move is not rated.
+ */
+export function gradeMove(facts: MovePicture, rating: MoveRating | null, uci: string): MoveGrade {
+  if (facts.mateInOne) return 'blunder';
+  const missedMate = !!facts.mateBefore && uci !== facts.mateBefore.uci;
+  if (!rating) return missedMate ? 'mistake' : 'unrated';
+  if (rating.isBest && !missedMate) return 'best';
+  const byScore: MoveGrade = rating.loss < GRADE_BANDS.good ? 'good' : rating.loss < GRADE_BANDS.inaccuracy ? 'inaccuracy' : rating.loss < GRADE_BANDS.mistake ? 'mistake' : 'blunder';
+  return missedMate && (byScore === 'good' || byScore === 'inaccuracy') ? 'mistake' : byScore;
 }
+
+/** Mistakes and blunders are recorded as misses and come back in review; an unrated move counts for nothing. */
+export function outcomeOfGrade(g: MoveGrade): 'success' | 'fail' | 'skipped' {
+  return g === 'mistake' || g === 'blunder' ? 'fail' : g === 'unrated' ? 'skipped' : 'success';
+}
+
+export const GRADE_LABEL: Record<MoveGrade, string> = { best: 'Best move', good: 'Good move', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder', unrated: 'Not rated' };
 
 export interface MoveItem {
   id: string;
