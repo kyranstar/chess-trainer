@@ -1,0 +1,108 @@
+{
+  "id": "lichess-core",
+  "version": "2026.11.10",
+  "schema": 1,
+  "file": "lichess-core.json",
+  "bytes": 2176617,
+  "contentHash": "sha256:eadf78ad1a4914f11fdc8449eb1323468c72c6391922c45a350730eaa98a9c94",
+  "count": 8219,
+  "buildDate": "2026-11-10",
+  "source": {
+    "id": "lichess-puzzle-db",
+    "title": "Lichess puzzle database",
+    "url": "https://database.lichess.org/#puzzles",
+    "license": "CC0-1.0",
+    "rawFile": "lichess_db_puzzle.csv.zst",
+    "rawSha256": "7b0d235fa40cfd7fdb7df1fec56a96b3b6ee1496b32ed2eb05be90d0ebf94253",
+    "rawRows": 6193530
+  },
+  "selection": {
+    "minPopularity": 80,
+    "minPlays": 300,
+    "maxRatingDeviation": 90,
+    "maxPlies": 8,
+    "ratingBands": [
+      400,
+      2400
+    ],
+    "perThemeBand": 36,
+    "perOpeningBand": 30,
+    "order": "popularity desc, plays desc, id asc",
+    "scan": {
+      "rows": 6193530,
+      "skip_quality": 2767252,
+      "skip_rd": 515593,
+      "skip_band": 65412,
+      "skip_long": 45752,
+      "candidates": 12139
+    }
+  },
+  "verification": {
+    "engine": "Stockfish 19",
+    "limit": {
+      "nodes": 150000
+    },
+    "options": {
+      "Threads": 1,
+      "Hash": 32,
+      "MultiPV": 2
+    },
+    "policy": "Every solver move must be the engine's first choice and beat the second-best move by >= 20.0 expected-score points (Lichess win% sigmoid), or deliver checkmate (the app accepts any mating move). Puzzles failing this are excluded.",
+    "checked": 12139,
+    "passed": 11670,
+    "outcomes": {
+      "ok": 11670,
+      "ambiguous": 457,
+      "not-best": 12
+    }
+  },
+  "counts": {
+    "byTheme": {
+      "advancedPawn": 1076,
+      "attraction": 524,
+      "backRankMate": 497,
+      "bishopEndgame": 391,
+      "capturingDefender": 311,
+      "defensiveMove": 601,
+      "deflection": 519,
+      "discoveredAttack": 481,
+      "doubleCheck": 355,
+      "exposedKing": 474,
+      "fork": 745,
+      "hangingPiece": 472,
+      "intermezzo": 319,
+      "kingsideAttack": 818,
+      "knightEndgame": 370,
+      "mateIn1": 1095,
+      "mateIn2": 1275,
+      "pawnEndgame": 706,
+      "pin": 547,
+      "promotion": 536,
+      "queenEndgame": 372,
+      "quietMove": 466,
+      "rookEndgame": 595,
+      "sacrifice": 1114,
+      "skewer": 431,
+      "smotheredMate": 289,
+      "trappedPiece": 316,
+      "xRayAttack": 334,
+      "zugzwang": 336
+    },
+    "byOpening": {
+      "Caro-Kann_Defense": 326,
+      "Italian_Game": 311
+    },
+    "byBand": {
+      "400": 609,
+      "600": 880,
+      "800": 920,
+      "1000": 905,
+      "1200": 873,
+      "1400": 827,
+      "1600": 818,
+      "1800": 787,
+      "2000": 828,
+      "2200": 772
+    }
+  }
+}
