@@ -7,6 +7,7 @@ import { getMeta, recordAttempt, recordLessonEvent, setMeta } from '../db/db';
 import { useDb, useFocusMode } from '../app/store';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
+import { useItem } from './Stage';
 
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
@@ -19,6 +20,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   hideBefore?: boolean;
 }) {
   const db = useDb();
+  const stage = useItem(onDone);
   const [ply, setPly] = useState(0);
   const [fen, setFen] = useState(step.fen);
   const [lastMove, setLastMove] = useState<string | null>(null);
@@ -154,7 +156,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       <div className="actions dock split">
         {back}
         {!finished && <button disabled={!armed} onClick={reveal}>Show the move</button>}
-        {finished && <button className="primary" data-testid="lesson-next" disabled={!armed} onClick={onDone}>Continue</button>}
+        {finished && <button className="primary" data-testid="lesson-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Continue'}</button>}
       </div>
     </div>
   );

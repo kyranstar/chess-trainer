@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportBackup, importBackup, parseBackup, serializeBackup } from './backup';
-import { deleteDb, getDeviceId, getMeta, openDb, recordAttempt, recordLessonEvent, saveSession, setMeta, type TrainerDB, updateSession, ensureReviewPolicy } from './db';
+import { deleteDb, getDeviceId, getMeta, openDb, rebuildReviews, recordAttempt, recordLessonEvent, saveSession, setMeta, type TrainerDB, updateSession, ensureReviewPolicy } from './db';
 import type { AttemptDraft, SessionRecord } from './types';
 
 const DAY = 86_400_000;
@@ -39,6 +39,23 @@ describe('attempt log', () => {
     const b = await recordAttempt(db, draft({ ts: T0 + 3 * DAY }));
     expect(b.fresh).toBe(false);
     expect(b.daysSinceLast).toBe(3);
+  });
+
+  it('a position from his own games is one item whichever exercise asks it (review policy v3)', async () => {
+    const db = fresh();
+    const P = 'a8493137de45d955:34';
+    const miss = await recordAttempt(db, draft({ exerciseId: `move:${P}`, exerciseKind: 'own-move', outcome: 'fail' }));
+    expect(miss.fresh).toBe(true);
+    // The same position as a missed-move drill two days later: not a first look, and it is the scheduled review.
+    const again = await recordAttempt(db, draft({ exerciseId: `game:${P}`, exerciseKind: 'own-game', outcome: 'success', ts: T0 + 2 * DAY }));
+    expect(again.fresh).toBe(false);
+    expect(again.daysSinceLast).toBe(2);
+    expect(again.scheduledReview).toBe(true);
+    const states = await db.reviewStates.toArray();
+    expect(states.map((x) => [x.itemId, x.ask])).toEqual([[`pos:${P}`, `game:${P}`]]);
+    // Rebuilding from the log gives the same single schedule.
+    await rebuildReviews(db);
+    expect((await db.reviewStates.toArray()).map((x) => [x.itemId, x.ask])).toEqual([[`pos:${P}`, `game:${P}`]]);
   });
 
   it('a failed puzzle is queued, and its next due attempt is a scheduled review', async () => {

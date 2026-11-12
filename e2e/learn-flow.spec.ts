@@ -45,7 +45,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await failPuzzle(page);
   // The wrong move is followed up unasked: the built-in engine's reply is played on the board
   // as evidence, from the wrong move on, and can be stepped back and on.
-  await expect(page.getByTestId('engine-reply')).toContainText('the engine’s answer', { timeout: 30_000 });
+  await expect(page.getByTestId('engine-reply')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/);
   await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
   expect(Number(await page.getByTestId('line-steps').getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
@@ -57,8 +57,12 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await page.getByRole('button', { name: 'Show solution' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   const solution = page.getByTestId('line-steps');
+  await expect(solution).toHaveAttribute('data-line', 'best');
   await expect(solution).toHaveAttribute('data-playing', 'false');
   await expect(solution).toHaveAttribute('data-step', (await solution.getAttribute('data-length'))!);
+  // The wrong move stands beside the solution as a chip of its own, to be compared.
+  await expect(page.getByTestId('line-you')).toBeVisible();
+  await expect(page.getByTestId('line-best')).toContainText('Solution');
   await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', start!);
   await page.getByTestId('replay').click();
   await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);

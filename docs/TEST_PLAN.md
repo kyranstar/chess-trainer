@@ -25,6 +25,7 @@
 - Export full user-owned data to JSON/ZIP with schema version; reimport into clean device reproduces attempts, review due dates and dashboard derived values.
 - Corrupted import shows error and does not damage existing data; migrate old schema successfully.
 - Navigation, board taps, voiceover labels, color contrasts, move feedback, portrait/landscape; avoid excessive scrolling for main session.
+- The result as moves (ADR-052, `e2e/games.spec.ts`, `e2e/layout.spec.ts`): after an own-game answer the board shows the position asked with one arrow per move; chips You / Game / Best in that order, merged when the same move; each bar carries the expected score; a tapped line plays to where it is decided, each move can be gone back to and one step before the first is the position asked; the mark and the ring appear on the learner's own move; nothing scrolls at 390 by 664; a solved puzzle can be stepped back through; the control in the bar returns the previous position exactly as left, with one exercise in the document, and its main button does not advance the run.
 - Exercise layout (ADR-051, `e2e/layout.spec.ts`): the board's place and size are the same through question, wrong move, replay, solution and the next position; the main button is in one place; nothing scrolls while a position is being asked; the flip control in the bar turns the board. The churn suite starts watching for unwanted movement only once a line that plays itself has come to rest.
 
 ## Cost/security

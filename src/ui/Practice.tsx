@@ -15,6 +15,7 @@ import { MixRun } from './Mix';
 import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { RunFrame } from './Stage';
+import { seenPositions } from '../schedule/position';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
 
@@ -136,8 +137,12 @@ function OwnMoveRunFromGames({ learner, paceOverride }: { learner: Learner; pace
   const games = useGames();
   const items = useMemo(() => (games ? moveItems(games) : null), [games]);
   const done = useRef<Set<string> | null>(null);
-  if (done.current === null && learner.ready) done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
-  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} pace={paceOverride} onFinished={() => go('practice')} />;
+  const met = useRef<Set<string> | null>(null);
+  if (done.current === null && learner.ready) {
+    done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
+    met.current = seenPositions(learner.attempts);
+  }
+  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} met={met.current ?? undefined} pace={paceOverride} onFinished={() => go('practice')} />;
 }
 
 export function PracticeRun({ route, learner }: { route: Route; learner: Learner }) {

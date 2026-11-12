@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDb, useFocusMode } from '../app/store';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { isLegalUci, positionFromFen, sameMove, sanOf } from '../chess/rules';
+import { fenAfter, isLegalUci, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
-import { lineAt } from '../chess/line';
+import { lineAt, mergeLines } from '../chess/line';
 import { bestLineFor } from '../engine/interactive';
-import { DEVICE_NODES, lineSan } from '../games/analyse';
-import { describeFree, describeLoose, freeTag, gradeMove, isPunishingReply, looseNote, moveHeadline, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade } from '../games/ownmove';
+import { DEVICE_NODES } from '../games/analyse';
+import { freeTag, GRADE_MARK, gradeHeadline, gradeMove, isPunishingReply, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade, reallyLoose } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
-import { useLineSteps } from './LineSteps';
-import { Ask, gameRef } from './Stage';
+import { useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, useItem } from './Stage';
 
 type Phase = 'move' | 'predict' | 'checking' | 'done';
 /** Both searches behind a rating use the same budget as the game analysis on this device. */
@@ -20,8 +20,9 @@ const MIN_SHOWN_MS = 1000;
 
 /**
  * "Your move": play your own move in a position from one of your games, then the reply you
- * had to reckon with. The app answers with exact facts about captures and mate in one, and
- * the engine's line as evidence. See src/games/ownmove.ts for what is and is not scored.
+ * had to reckon with. The result is the move's rating in a word and three moves side by side
+ * on the board: yours, the one you played in the game, and the engine's first choice, each
+ * with what follows it (see ./Lines.tsx). See src/games/ownmove.ts for what is scored.
  */
 export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, onDone }: {
   item: MoveItem; sessionId: string | null; context: AttemptContext; onRecorded?: (a: Attempt) => void; onDone: () => void;
@@ -30,6 +31,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
 }) {
   const db = useDb();
   useFocusMode();
+  const stage = useItem(onDone);
   const [phase, setPhase] = useState<Phase>('move');
   const phaseRef = useRef<Phase>('move');
   phaseRef.current = phase;
@@ -46,6 +48,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   // Time is measured, not counted in ticks: the milliseconds the app has been on screen in
   // this phase. A slow tick cannot give extra time, and time in the background is not counted.
   const visibleMs = useRef(0);
+  const activeRef = useRef(stage.active);
+  activeRef.current = stage.active;
   const lastTick = useRef(performance.now());
   useEffect(() => {
     visibleMs.current = 0;
@@ -53,7 +57,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     if (phase !== 'move' && phase !== 'predict') return;
     const t = setInterval(() => {
       const now = performance.now();
-      if (document.visibilityState === 'visible') visibleMs.current += now - lastTick.current;
+      // Time spent looking back at the last position is not time spent on this one.
+      if (document.visibilityState === 'visible' && activeRef.current) visibleMs.current += now - lastTick.current;
       lastTick.current = now;
       if (phase === 'move' && pace > 0 && !retrying) {
         const remaining = Math.max(0, pace - visibleMs.current / 1000);
@@ -65,13 +70,23 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   }, [pace, phase, retrying]);
   const elapsedInPhase = () => Math.round(visibleMs.current + (document.visibilityState === 'visible' ? performance.now() - lastTick.current : 0));
   const [named, setNamed] = useState<{ uci: string; san: string } | null>(null);
-  const [result, setResult] = useState<{ verdict: MoveGrade; line: string | null; wp: number | null; pv: string[]; captureCost: number | null; loss: number | null; bestSan: string | null; bestWp: number | null } | null>(null);
-  // The engine's first choice for the position is searched for while the learner thinks.
+  const [result, setResult] = useState<{
+    verdict: MoveGrade; wp: number | null; pv: string[]; captureCost: number | null;
+    best: { uci: string; wp: number; pv: string[] } | null; game: { wp: number | null; pv: string[] | null };
+  } | null>(null);
+  // The engine's first choice for the position is searched for while the learner thinks, and
+  // after it the reply to the move he played in the game, so that all three are there to compare.
   const bestSearch = useRef<ReturnType<typeof bestLineFor> | null>(null);
   bestSearch.current ??= bestLineFor(item.fen, RATE_NODES);
-  // After the answer a line can be played through on the board, a move at a time: the
-  // engine's own, or (asked for) what happens if the piece that can be taken is taken.
-  const [taken, setTaken] = useState<{ state: 'loading' } | { state: 'shown'; pv: string[]; san: string } | null>(null);
+  const gameSearch = useRef<ReturnType<typeof bestLineFor> | null>(null);
+  gameSearch.current ??= (() => {
+    try {
+      const after = fenAfter(item.fen, [item.played]);
+      return positionFromFen(after).isEnd() ? Promise.resolve(null) : bestLineFor(after, RATE_NODES);
+    } catch {
+      return Promise.resolve(null);
+    }
+  })();
   // A second try after seeing the facts is practice, not a result: it is never recorded.
   const recorded = useRef(false);
   useScreenChange(`${item.id}|${phase}`);
@@ -114,10 +129,13 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     // A third when something of his can be taken afterwards: what that capture is worth to the
     // opponent, so that "can be taken" is not left standing beside a piece that is not really hanging.
     const captureUci = f.mateInOne ? null : f.captures.map((c) => (isLegalUci(end, c) ? c : isLegalUci(end, `${c}q`) ? `${c}q` : null)).find((c): c is string => !!c) ?? null;
-    const [best, line, afterCapture] = await Promise.all([
+    // His move is the one from the game as often as not: that search is already running.
+    const asInGame = sameMove(start, my.uci, item.played);
+    const [best, line, afterCapture, afterGame] = await Promise.all([
       bestSearch.current,
-      end.isEnd() ? Promise.resolve(null) : bestLineFor(f.afterFen, RATE_NODES),
+      end.isEnd() ? Promise.resolve(null) : asInGame ? gameSearch.current : bestLineFor(f.afterFen, RATE_NODES),
       captureUci && f.loose.length ? bestLineFor(lineAt(f.afterFen, [captureUci], 1).fen, RATE_NODES) : Promise.resolve(null),
+      gameSearch.current,
     ]);
     // Points of expected score the capture gives up for the opponent against his best reply.
     const captureCost = line && afterCapture ? Math.round(line.wp - (100 - afterCapture.wp)) : null;
@@ -132,8 +150,11 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     const grade = gradeMove(f, rating, my.uci);
     const verdict = grade;
     setResult({
-      captureCost, verdict, line: line && line.pv.length ? lineSan(f.afterFen, line.pv) : null, wp: myWp === null ? null : Math.round(myWp), pv: line ? line.pv.slice(0, 10) : [],
-      loss: rating ? Math.round(rating.loss) : null, bestSan: best && bestUci ? sanOf(start, bestUci) : null, bestWp: best ? Math.round(best.wp) : null,
+      captureCost, verdict, wp: myWp,
+      // With no answer from the engine a mate in one that the move allows is still known, and shown.
+      pv: line?.pv.length ? line.pv.slice(0, 10) : f.mateInOne ? [f.mateInOne.uci] : [],
+      best: best && bestUci ? { uci: bestUci, wp: best.wp, pv: best.pv.slice(1, 11) } : null,
+      game: { wp: afterGame ? 100 - afterGame.wp : null, pv: afterGame ? afterGame.pv.slice(0, 10) : null },
     });
     setPhase('done');
     if (recorded.current) return;
@@ -149,7 +170,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
         ...(timedOut.current ? ['late'] : []),
         ...(interrupted.current ? ['interrupted'] : []),
         ...(replyMs.current !== null ? [`reply-ms:${replyMs.current}`] : []),
-        ...[freeTag(f, grade, my.uci)].filter((t): t is NonNullable<typeof t> => !!t),
+        ...[freeTag(f, my.uci, bestUci ?? null)].filter((t): t is NonNullable<typeof t> => !!t),
         ...(f.threatsBefore.length ? [f.dealtWith.length === f.threatsBefore.length ? 'threat-met' : 'threat-left'] : []),
       ],
       rating: null, ts: Date.now(), elapsedMs: decisionMs.current, firstMove: my.uci, played: reply ? [my.uci, reply.uci] : [my.uci], mistakes: outcomeOfGrade(grade) === 'fail' ? 1 : 0, hints: 0,
@@ -189,34 +210,24 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     setFacts(null);
     setNamed(null);
     setResult(null);
-    setTaken(null);
   }
-  // The capture the facts speak of, as a move that can be played (a capture that promotes gets its queen).
-  const capture = (() => {
-    if (!facts || facts.mateInOne) return null;
-    const pos = positionFromFen(facts.afterFen);
-    for (const c of facts.captures) {
-      const uci = isLegalUci(pos, c) ? c : isLegalUci(pos, `${c}q`) ? `${c}q` : null;
-      if (uci) return uci;
-    }
-    return null;
-  })();
   // Whether the engine's own reply is to take what can be taken.
   const engineTakes = !!facts && !!result && !!result.pv[0] && facts.captures.includes(result.pv[0].slice(0, 4));
-  async function showTaken() {
-    if (!facts || !capture || taken) return;
-    setTaken({ state: 'loading' });
-    const pos = positionFromFen(facts.afterFen);
-    const san = sanOf(pos, capture);
-    const after = lineAt(facts.afterFen, [capture], 1).fen;
-    const best = await bestLineFor(after, RATE_NODES);
-    setTaken({ state: 'shown', pv: [capture, ...(best?.pv.slice(0, 9) ?? [])], san });
-  }
-  const line = phase === 'done' && facts && result ? (taken?.state === 'shown' ? { from: facts.afterFen, pv: taken.pv, before: item.fen } : { from: facts.afterFen, pv: result.pv, before: item.fen }) : null;
-  const steps = useLineSteps(line, taken?.state === 'shown' ? { initial: 1, testid: 'own-move-line', me: item.color, cap: 6 } : { initial: 0, startLabel: 'Engine’s line', testid: 'own-move-line', me: item.color, cap: 6 });
-  const shown = steps.pos && steps.step > 0 ? { fen: steps.pos.fen, last: steps.pos.last, marks: steps.marks } : { fen, last: lastMove, marks: [] as string[] };
-  const passed = result ? outcomeOfGrade(result.verdict) === 'success' : false;
-  const looseWords = result && facts && facts.loose.length > 0 && !facts.mateInOne && result.verdict !== 'unrated' ? looseNote({ passed, engineTakes, captureCost: result.captureCost }) : null;
+  // The three moves to compare, once the answer is in: his, the game's, the engine's.
+  const lines = useMemo(() => (phase === 'done' && result && mine ? mergeLines(item.fen, [
+    { who: 'you', uci: mine.uci, score: result.wp, pv: result.pv },
+    { who: 'game', uci: item.played, score: result.game.wp, pv: result.game.pv },
+    ...(result.best ? [{ who: 'best' as const, uci: result.best.uci, score: result.best.wp, pv: result.best.pv }] : []),
+  ]) : []), [phase, result, mine, item.fen, item.played]);
+  const shownLines = useResultLines(phase === 'done' && lines.length ? item.fen : null, lines, { me: item.color, compare: true, nodes: RATE_NODES, testid: 'own-move-line' });
+  const onMine = !!shownLines.selected?.who.includes('you') && shownLines.step === 1;
+  // A piece of his that can now be taken is ringed on the board, with a thin arrow from what
+  // takes it, while his move stands there: only if it is really hanging (see reallyLoose).
+  const loose = result && facts && facts.loose.length > 0 && !facts.mateInOne && reallyLoose({ engineTakes, captureCost: result.captureCost }) ? facts.loose : [];
+  const mark = result ? GRADE_MARK[result.verdict] : null;
+  const shown = phase === 'done' && shownLines.board
+    ? { fen: shownLines.board.fen, last: shownLines.board.lastMove, marks: shownLines.board.marks, arrows: shownLines.board.arrows, line: shownLines.board.line }
+    : { fen, last: lastMove, marks: [] as string[], arrows: [], line: null };
   // The engine's reply to his move, to set beside the reply he named.
   const replySan = (() => {
     try {
@@ -225,14 +236,19 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
       return null;
     }
   })();
-  const gameSan = sanOf(positionFromFen(item.fen), item.played);
   const them = item.color === 'white' ? 'Black' : 'White';
   const source = gameRef(item.date, item.ply);
   const good = result?.verdict === 'best' || result?.verdict === 'good';
   const bad = result?.verdict === 'mistake' || result?.verdict === 'blunder';
   return (
-    <section className="puzzle" data-testid="own-move" data-phase={phase} data-verdict={result?.verdict ?? ''} data-fen={fen}>
-      <Board fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove} flash={phase === 'done' && result ? `${good ? 'right' : bad ? 'wrong' : 'none'}:${item.id}:${retrying}` : null} />
+    <section className="puzzle" data-testid="own-move" data-phase={phase} data-verdict={result?.verdict ?? ''} data-fen={fen} data-loose={loose.map((l) => l.square).join(' ')}>
+      <Board
+        fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove}
+        arrows={shown.arrows} line={shown.line}
+        rings={onMine ? loose.map((l) => ({ square: l.square, from: l.by.from })) : []}
+        badge={onMine && mark && mine ? { square: mine.uci.slice(2, 4), ...mark } : null}
+        flash={phase === 'done' && result ? `${good ? 'right' : bad ? 'wrong' : 'none'}:${item.id}:${retrying}` : null}
+      />
       <div className="say" aria-live="polite">
         {phase === 'move' && (
           <Ask title={`${me} to move`} meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : `Play your own move. ${source}.`}>
@@ -247,64 +263,59 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
           <Ask title={`${them}’s reply to ${mine?.san}?`} meta={phase === 'checking' ? 'Checking your move' : 'Play the reply you had to reckon with.'} />
         )}
         {phase === 'done' && result && facts && mine && (
-          <div className={`verdict ${good ? 'right' : bad ? 'wrong' : 'neutral'}`} data-testid="own-move-verdict">
-            <strong data-testid="own-move-grade">{moveHeadline({ grade: result.verdict, san: mine.san, bestSan: result.bestSan, loss: result.loss, mateAllowed: facts.mateInOne && !facts.mateUnavoidable ? facts.mateInOne.san : null, late: timedOut.current ? pace : null })}</strong>
+          <div className="result" data-testid="own-move-verdict">
+            <p className="result-head">
+              {mark && <span className={`grade-mark is-${mark.tone}`} aria-hidden>{mark.text}</span>}
+              <strong data-testid="own-move-grade">{gradeHeadline({ grade: result.verdict, late: timedOut.current ? pace : null })}</strong>
+              {!good && <button className="result-side" data-testid="own-move-retry" disabled={!armed} onClick={retry}>Try another move</button>}
+            </p>
+            {shownLines.chips}
+            {shownLines.ribbon}
+            {shownLines.note}
             {facts.mateInOne && facts.mateUnavoidable && <p>Every move allowed mate in one ({facts.mateInOne.san}).</p>}
-            {facts.mateBefore && mine.uci !== facts.mateBefore.uci && <p data-testid="own-move-free">You had mate in one: {facts.mateBefore.san}.</p>}
-            {facts.loose.map((l, i) => (
-              <p key={l.square} data-testid="own-move-loose">
-                {describeLoose(l)}
-                {i === 0 && looseWords && <span data-testid="own-move-loose-note"> {looseWords}</span>}
-              </p>
-            ))}
-            {freeTag(facts, result.verdict, mine.uci) === 'free-left' && !facts.mateBefore && facts.freeBefore.slice(0, 1).map((l) => <p key={`free-${l.square}`} data-testid="own-move-free">{describeFree(l)}</p>)}
-            {facts.dealtWith.length > 0 && <p data-testid="own-move-met">You dealt with the threat to {facts.dealtWith.join(' and ')}.</p>}
-            {named && (replySan && sameMove(positionFromFen(facts.afterFen), named.uci, result.pv[0]!)
-              ? <p data-testid="own-move-named">You named it: {named.san}.</p>
-              : <p data-testid="own-move-named">You expected {named.san}{replySan ? `; the engine plays ${replySan}` : ''}.</p>)}
-            {taken?.state === 'shown' && <p data-testid="own-move-taken">If taken: {taken.san}{taken.pv.length > 1 ? ` ${lineSan(lineAt(facts.afterFen, taken.pv.slice(0, 1), 1).fen, taken.pv.slice(1))}` : ''}</p>}
-            {steps.note}
-            {mine.uci !== item.played && <p className="definition-small">In the game you played {gameSan}.</p>}
+            {named && !shownLines.selected && (replySan && sameMove(positionFromFen(facts.afterFen), named.uci, result.pv[0]!)
+              ? <p className="muted" data-testid="own-move-named">You named the reply: {named.san}.</p>
+              : <p className="muted" data-testid="own-move-named">You expected {named.san}{replySan ? `; the engine plays ${replySan}` : ''}.</p>)}
           </div>
         )}
       </div>
       <div className="actions dock">
         {phase === 'predict' && facts && mine && <button data-testid="own-move-no-reply" disabled={!armed} onClick={() => void conclude(facts, mine, null)}>No particular reply</button>}
-        {phase === 'done' && steps.controls}
-        {phase === 'done' && result && capture && !engineTakes && facts && facts.loose.length > 0 && (
-          taken?.state === 'shown'
-            ? <button data-testid="own-move-engine-line" onClick={() => setTaken(null)}>Engine’s line</button>
-            : <button data-testid="own-move-if-taken" disabled={taken?.state === 'loading'} onClick={() => void showTaken()}>{taken?.state === 'loading' ? 'Asking the engine' : 'If it is taken'}</button>
-        )}
-        {phase === 'done' && result && !good && <button data-testid="own-move-retry" disabled={!armed} onClick={retry}>Try another move</button>}
-        {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={onDone}>Next</button>}
+        {phase === 'done' && <button className="primary" data-testid="own-move-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );
 }
 
 /** "Your move" on its own: positions not yet tried, newest games first, each chosen once and kept. */
-export function OwnMoveRun({ items, done, pace, onFinished }: { items: MoveItem[] | null; done: Set<string>; /** A clock for every position, for trying one out; normally null. */ pace: number | null; onFinished: () => void }) {
+export function OwnMoveRun({ items, done, met, pace, onFinished }: {
+  items: MoveItem[] | null; done: Set<string>;
+  /** Positions already met in any exercise ("<game>:<ply>"): not asked again as new ones. */
+  met?: Set<string>;
+  /** A clock for every position, for trying one out; normally null. */
+  pace: number | null; onFinished: () => void;
+}) {
   const [n, setN] = useState(0);
   const latch = useRef<{ n: number; item: MoveItem; pace: number } | null>(null);
   const shown = useRef(new Set<string>());
   if (!items) return <p className="muted">Loading your games</p>;
   if (latch.current?.n !== n) {
     // Newest game first; within a game, in the order the positions arose.
-    const next = items.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.gameId === b.gameId ? a.ply - b.ply : a.gameId < b.gameId ? -1 : 1)).find((m) => !done.has(m.id) && !shown.current.has(m.id));
+    const next = items.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.gameId === b.gameId ? a.ply - b.ply : a.gameId < b.gameId ? -1 : 1)).find((m) => !done.has(m.id) && !shown.current.has(m.id) && !met?.has(`${m.gameId}:${m.ply}`));
     if (next) {
       latch.current = { n, item: next, pace: pace ?? (isTimed(next.id) ? TIMED_SECONDS : 0) };
       shown.current.add(next.id);
     } else latch.current = null;
   }
   const item = latch.current?.item;
-  if (!item) {
-    return (
-      <div className="empty" data-testid="own-move-done">
-        <p>{items.length === 0 ? 'These positions come from your own games at moves 10 to 19, once the games have been fetched and analysed on this device. There are none yet.' : 'No untried positions are left for now; more appear as you play.'}</p>
-        <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
-      </div>
-    );
-  }
-  return <OwnMoveDrill key={item.id} item={item} sessionId={null} context="practice" pace={latch.current!.pace} onDone={() => setN((x) => x + 1)} />;
+  return (
+    <KeepLast>
+      {item ? <OwnMoveDrill key={item.id} item={item} sessionId={null} context="practice" pace={latch.current!.pace} onDone={() => setN((x) => x + 1)} /> : (
+        <div className="empty" data-testid="own-move-done">
+          <p>{items.length === 0 ? 'These positions come from your own games at moves 10 to 19, once the games have been fetched and analysed on this device. There are none yet.' : 'No untried positions are left for now; more appear as you play.'}</p>
+          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+        </div>
+      )}
+    </KeepLast>
+  );
 }

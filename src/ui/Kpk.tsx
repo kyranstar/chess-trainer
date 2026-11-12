@@ -6,7 +6,7 @@ import type { Attempt } from '../db/types';
 import { distanceKpk, evaluateMove, fastestWin, HOLD_MOVES, keepingMoves, KPK_DRILLS, KPK_VERSION, type KpkOutcome, learnerColor, opponentReply, outcomeAfter, WIN_MOVE_CAP } from '../endgames/kpk';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { Ask } from './Stage';
+import { Ask, KeepLast, useItem } from './Stage';
 
 export type KpkGoal = 'win' | 'hold';
 export const kpkId = (goal: KpkGoal, fen: string) => `kpk:${goal}:${fen}`;
@@ -25,6 +25,7 @@ export function KpkDrill({ start, goal, sessionId, context = 'practice', allowSh
 }) {
   const db = useDb();
   useFocusMode();
+  const stage = useItem(onDone);
   const me = useMemo(() => learnerColor(start, goal), [start, goal]);
   const [fen, setFen] = useState(start);
   const [lastMove, setLastMove] = useState<string | null>(null);
@@ -126,7 +127,7 @@ export function KpkDrill({ start, goal, sessionId, context = 'practice', allowSh
       <div className="actions dock">
         {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show a move that keeps it</button>}
         {end && !end.ok && context !== 'check' && <button data-testid="kpk-retry" disabled={!armed} onClick={retry}>Try again</button>}
-        {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={onDone}>Next</button>}
+        {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );
@@ -143,15 +144,16 @@ export function KpkRun({ learner, onFinished }: { learner: Learner; onFinished: 
   const hold = fresh('hold');
   const goal: KpkGoal = n % 2 === 0 ? (win.length > n / 2 ? 'win' : 'hold') : hold.length > (n - 1) / 2 ? 'hold' : 'win';
   const start = (goal === 'win' ? win : hold)[Math.floor(n / 2)];
-  if (!start) {
-    return (
-      <div className="empty" data-testid="kpk-done">
-        <p>No unseen king-and-pawn starts are left in this set.</p>
-        <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
-      </div>
-    );
-  }
-  return <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} onDone={() => setN(n + 1)} />;
+  return (
+    <KeepLast>
+      {start ? <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} onDone={() => setN(n + 1)} /> : (
+        <div className="empty" data-testid="kpk-done">
+          <p>No unseen king-and-pawn starts are left in this set.</p>
+          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+        </div>
+      )}
+    </KeepLast>
+  );
 }
 
 /** Unseen starts for a check: three to win, two to hold, in the table's fixed order. */

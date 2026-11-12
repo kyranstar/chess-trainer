@@ -12,6 +12,7 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
 import type { GameRecord } from '../games/types';
 import type { RepertoireEntry } from '../openings/repertoire';
+import { reviewKey, sameItemIds } from '../schedule/position';
 import { applyAttempt, isDue, rebuildReviewStates, SCHEDULER_VERSION } from '../schedule/review';
 import type { Attempt, AttemptDraft, GameJournalDraft, GameJournalEntry, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
 
@@ -89,11 +90,12 @@ export async function getDeviceId(db: TrainerDB): Promise<string> {
 export async function recordAttempt(db: TrainerDB, draft: AttemptDraft): Promise<Attempt> {
   const deviceId = await getDeviceId(db);
   return db.transaction('rw', db.attempts, db.reviewStates, async () => {
-    const earlier = await db.attempts.where('exerciseId').equals(draft.exerciseId).toArray();
+    // A position from his own games counts as seen whichever exercise showed it.
+    const earlier = await db.attempts.where('exerciseId').anyOf(sameItemIds(draft.exerciseId)).toArray();
     // The gap is measured from the last time the position was actually answered; a showing
     // that was skipped or left is exposure, not practice.
     const last = earlier.filter((a) => a.outcome !== 'skipped').reduce<Attempt | undefined>((m, a) => (!m || a.ts > m.ts ? a : m), undefined);
-    const state = await db.reviewStates.get(draft.exerciseId);
+    const state = await db.reviewStates.get(reviewKey(draft.exerciseId));
     const attempt: Attempt = {
       ...draft,
       uuid: newUuid(),

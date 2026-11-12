@@ -143,6 +143,7 @@ export function movePicture(fen: string, uci: string): MovePicture {
   const from = uci.slice(0, 2);
   const to = uci.slice(2, 4);
   const stillLoose = (square: string) => after.loose.some((l) => l.square === square);
+  const givesCheck = positionFromFen(after.afterFen).isCheck();
   return {
     ...after,
     threatsBefore,
@@ -152,7 +153,14 @@ export function movePicture(fen: string, uci: string): MovePicture {
     // with something that is then lost is not it.
     tookFree: mine.captures.includes(`${from}${to}`),
     mateUnavoidable: !!after.mateInOne && allMovesAllowMate(pos),
-    dealtWith: threatsBefore.filter((t) => (t.square === from ? !stillLoose(to) : !stillLoose(t.square))).map((t) => t.square),
+    dealtWith: threatsBefore.filter((t) => {
+      const moved = t.square === from;
+      // A check only puts the capture off by a move: the opponent must answer it first, so
+      // the piece does not show as takeable, and it is taken a move later all the same. With
+      // a check the threat counts as met only if the piece itself left or its attacker was taken.
+      if (givesCheck && !moved && to !== t.by.from) return false;
+      return moved ? !stillLoose(to) : !stillLoose(t.square);
+    }).map((t) => t.square),
   };
 }
 
@@ -206,45 +214,56 @@ export const GRADE_LABEL: Record<MoveGrade, string> = { best: 'Best move', good:
 export const OWN_MOVE_OPEN = { lo: 25, hi: UNDECIDED.hi };
 
 /**
- * Whether a capture that was free for the taking counts as taken, missed, or passed up for a
- * move that was at least as good. The audit found "you could have taken the rook" shown, and
- * counted as a miss, beside a move the engine rated as its first choice.
+ * Whether a capture that was free for the taking counts as taken, missed, or passed up.
+ * It is a miss only when taking was the engine's own first choice (or a mate in one was
+ * there). The first audit found "you could have taken the rook" counted against a move the
+ * engine rated best; the second found it shown beside a blunder where taking was no better
+ * than the move played (49 against 50 out of 100, with the best move at 90). `bestUci` is the
+ * engine's first choice in the position, or null when it did not answer.
  */
-export function freeTag(facts: MovePicture, grade: MoveGrade, uci: string): 'free-taken' | 'free-left' | 'free-declined' | null {
+export function freeTag(facts: MovePicture, uci: string, bestUci: string | null): 'free-taken' | 'free-left' | 'free-declined' | null {
   if (!facts.mateBefore && facts.freeBefore.length === 0) return null;
   if (facts.tookFree || uci === facts.mateBefore?.uci) return 'free-taken';
   // A mate in one passed up is a miss whatever else was played.
   if (facts.mateBefore) return 'free-left';
-  return grade === 'best' || grade === 'good' ? 'free-declined' : 'free-left';
+  const bestIsFree = !!bestUci && facts.freeBefore.some((l) => l.by.from === bestUci.slice(0, 2) && captureSquare(l, bestUci));
+  return bestIsFree ? 'free-left' : 'free-declined';
+}
+
+/** Whether `uci` is the capture of that loose piece (en passant lands beside the pawn it takes). */
+function captureSquare(l: Loose, uci: string): boolean {
+  const to = uci.slice(2, 4);
+  return to === l.square || (l.piece === 'pawn' && l.by.piece === 'pawn' && to[0] === l.square[0] && to[1] !== l.square[1]);
 }
 
 /**
- * What to say about a piece that can be taken after the move, beyond the bare fact.
- * `captureCost` is how many points of expected score the capture gives up for the opponent
- * against the engine's best reply (null when it was not checked).
+ * Whether a piece that can be taken after the move is marked on the board. A piece that
+ * "can be taken" is not always hanging: the audit found two where taking would have been the
+ * opponent's mistake. It is marked when the engine's own reply takes it, when taking costs
+ * the opponent under ten points against his best reply, or when that could not be checked.
  */
-export function looseNote(x: { passed: boolean; engineTakes: boolean; captureCost: number | null }): string | null {
-  if (x.engineTakes) return x.passed ? 'The engine takes it and your move still holds.' : 'The engine takes it.';
-  if (x.captureCost !== null && x.captureCost >= 10) return `Not really hanging: taking it costs your opponent ${Math.round(x.captureCost)}.`;
-  if (x.captureCost !== null && x.captureCost < 3) return 'It is hanging: taking it is as good as the engine’s reply.';
-  return null; // in between, or not checked: nothing is known that is worth a sentence
+export function reallyLoose(x: { engineTakes: boolean; captureCost: number | null }): boolean {
+  return x.engineTakes || x.captureCost === null || x.captureCost < 10;
 }
 
+/** The standard annotation for each rating, and whether it reads as good, middling or bad. */
+export const GRADE_MARK: Record<MoveGrade, { text: string; tone: 'good' | 'mid' | 'bad' } | null> = {
+  best: { text: '★', tone: 'good' },
+  good: { text: '✓', tone: 'good' },
+  inaccuracy: { text: '?!', tone: 'mid' },
+  mistake: { text: '?', tone: 'bad' },
+  blunder: { text: '??', tone: 'bad' },
+  unrated: null,
+};
+
 /**
- * The result of a move in one line: right or not, by how much, and what was better. The owner
- * asked for exactly this and nothing that is not about the case in hand (2026-11-11). Numbers
- * are points of expected score out of 100, by the built-in engine.
+ * The rating of a move in a word. What was better, and by how much, is shown by the moves
+ * side by side and their bars, not said (owner decision, 2026-11-12).
  */
-export function moveHeadline(x: { grade: MoveGrade; san: string; bestSan: string | null; loss: number | null; mateAllowed: string | null; late: number | null }): string {
+export function gradeHeadline(x: { grade: MoveGrade; late: number | null }): string {
   const late = x.late ? ` Late: over ${x.late} s.` : '';
-  if (x.mateAllowed) return `Blunder: ${x.san} allows mate in one, ${x.mateAllowed}.${late}`;
   if (x.grade === 'unrated') return `Not rated: the engine did not answer.${late}`;
-  if (x.grade === 'best') return `Best move.${late}`;
-  const label = { good: 'Good', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder' }[x.grade];
-  const loss = Math.round(x.loss ?? 0);
-  if (!x.bestSan) return `${label}.${late}`;
-  if (loss === 0) return `${label}: as strong as ${x.bestSan}.${late}`;
-  return `${label}. Best was ${x.bestSan}, ${loss} point${loss === 1 ? '' : 's'} better.${late}`;
+  return `${{ best: 'Best move', good: 'Good', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder' }[x.grade]}.${late}`;
 }
 
 export interface MoveItem {

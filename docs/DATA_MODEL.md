@@ -8,7 +8,7 @@
 - `Exercise(id, concept_ids[], source_id, source_position_fen, side_to_move, setup_moves[], accepted_moves_or_policy, solution_pv[], difficulty, verification_metadata, revision)`.
 - `RepertoirePosition(key, canonical_fen, transposition_group)` and `RepertoireDecision(id, position_key, learner_side, response_edges[], acceptable_alternatives[], rationale_refs[], contexts[], reviewer_status)`.
 - `TrainingAttempt(uuid, device_id, session_id, exercise_id, content_version, timestamp, first_move, attempt_sequence, hints, time_elapsed, unassisted_success, evaluation, scheduler_version)` (append-only).
-- `ReviewState(item_id, algorithm_version, derived_state, last_event_uuid, next_due_at)` (rebuildable from attempts).
+- `ReviewState(item_id, algorithm_version, derived_state, last_event_uuid, next_due_at)` (rebuildable from attempts). Since review policy v3 (ADR-052) a position from the learner's own games is one item whichever exercise asked it: `item_id` is `pos:<game>:<ply>` and `ask` holds the exercise id it was last answered as; every other item keeps its exercise id.
 - `Game(id, source, source_url, pgn, time_control, white, black, result, player_side, date, source_hash, imported_at)`.
 - `GameAnalysis(game_id, engine_version, engine_parameters, positions_covered, analyzed_at, blunder_events[], tactical_opportunities[], evidence_id, analysis_version)`.
 - `SkillObservation(uuid, concept_id, attempt_or_game_id, evidence_type, outcome, confidence, observed_at, skill_model_version)`.

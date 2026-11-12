@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { href } from '../app/router';
 import { type Learner, useDb, useFocusMode } from '../app/store';
-import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
+import { applyUci, fenAfter, fenOf, positionFromFen, sanOf } from '../chess/rules';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext } from '../db/types';
 import { bestLineFor } from '../engine/interactive';
@@ -10,9 +9,10 @@ import type { GameRecord } from '../games/types';
 import { Board } from './Board';
 import { useGames } from './Games';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { ucisOfSanLine } from '../chess/line';
-import { useLineSteps } from './LineSteps';
-import { Ask, gameRef } from './Stage';
+import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
+import { useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, useItem } from './Stage';
+import { seenPositions } from '../schedule/position';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
 export function senseItemsFrom(games: GameRecord[]): SenseItem[] {
@@ -31,7 +31,11 @@ const MIN_SHOWN_MS = 1000;
 type Phase = 'ask' | 'play' | 'checking' | 'done';
 
 
-/** One yes/no question about a real position from the learner's own games. */
+/**
+ * One yes/no question about a real position from the learner's own games. After the answer
+ * the moves stand side by side on the board: the one played in the game, the engine's best
+ * where there was something to see, and his own if he played one (see ./Lines.tsx).
+ */
 export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
   item: SenseItem; sessionId: string | null; context: AttemptContext; onRecorded?: (a: Attempt) => void; onDone: () => void;
 }) {
@@ -44,6 +48,9 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
   const [lastMove, setLastMove] = useState<string | null>(null);
   const [grade, setGrade] = useState<SenseGrade | null>(null);
   const [playedSan, setPlayedSan] = useState<string | null>(null);
+  // The move he played for himself ("there is something": this one), and what the engine answered if it was asked.
+  const [mine, setMine] = useState<{ uci: string; pv: string[] | null; wp: number | null } | null>(null);
+  const stage = useItem(onDone);
   const started = useRef(Date.now());
   const me = item.color === 'white' ? 'White' : 'Black';
   useScreenChange(`${item.id}|${phase}`);
@@ -98,40 +105,57 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
     setFen(afterFen);
     setLastMove(uci);
     let g = safety ? gradeSafety(item, 'unsafe', uci) : gradeChance(item, 'something', uci);
+    let answer: Awaited<ReturnType<typeof bestLineFor>> = null;
     if (g.needsEngine) {
       // A different move from the stored one: judged by what it does on the board (mate, or
       // material at the end of the engine's line), never by the score alone. A mate needs no engine.
       let verified = verifyReply(item, uci, null);
       if (verified === 'unresolved') {
         setPhase('checking');
-        verified = verifyReply(item, uci, await bestLineFor(afterFen));
+        answer = await bestLineFor(afterFen);
+        verified = verifyReply(item, uci, answer);
       }
       g = safety ? gradeSafety(item, 'unsafe', uci, verified) : gradeChance(item, 'something', uci, verified);
     }
+    // His own move for himself is one of the moves compared afterwards, with the engine's answer to it.
+    if (!safety) setMine({ uci, pv: answer ? answer.pv.slice(0, 10) : null, wp: answer ? 100 - answer.wp : null });
     await finish(g, uci);
   }
 
-  // When there was something to see, the stored line is played through on the board: it opens
-  // on its first move, and can be stepped on to where the material goes or the mate falls.
-  // A different winning move of the learner's own stays on the board until the line is asked for.
-  const line = useMemo(() => {
-    if (!item.truth) return null;
-    const from = safety ? item.afterFen! : item.fen;
-    const first = safety ? item.replyUci! : item.best!;
-    const pv = ucisOfSanLine(from, (safety ? item.replyLine : item.bestLine) ?? '');
-    return { from, pv: pv[0] === first ? pv : [first], before: safety ? item.fen : undefined };
-  }, [item, safety]);
-  const keepMine = !safety && grade?.response === 'hit' && !!grade.alternative;
-  // The line plays itself to where it is decided: what the answer means is seen on the board.
-  const steps = useLineSteps(phase === 'done' ? line : null, { initial: keepMine ? 0 : 1, startLabel: 'Engine’s line', me: item.color });
-  const onLine = phase === 'done' && steps.pos && !(keepMine && steps.step === 0);
+  // The moves to compare once the answer is in. What follows the game's move is on record when
+  // it was an error; otherwise it is asked for when that line is opened.
+  const lines = useMemo(() => {
+    if (phase !== 'done') return [];
+    const follow = (uci: string, line: string | undefined): string[] | null => {
+      try {
+        const pv = line ? ucisOfSanLine(fenAfter(item.fen, [uci]), line) : [];
+        return pv.length ? pv : null;
+      } catch {
+        return null;
+      }
+    };
+    const candidates: Candidate[] = [];
+    if (mine) candidates.push({ who: 'you', uci: mine.uci, score: mine.wp, pv: mine.pv });
+    if (item.played) candidates.push({ who: 'game', uci: item.played, score: item.playedWp ?? null, pv: follow(item.played, item.replyLine) });
+    if (item.best) {
+      const pv = ucisOfSanLine(item.fen, item.bestLine ?? '');
+      candidates.push({ who: 'best', uci: item.best, score: item.bestWp ?? null, pv: pv[0] === item.best ? pv.slice(1) : [] });
+    }
+    return mergeLines(item.fen, candidates);
+  }, [phase, item, mine]);
+  const shown = useResultLines(phase === 'done' ? item.fen : null, lines, { me: item.color, compare: true });
   const words = grade ? senseWords(item, grade, playedSan) : null;
   const them = item.color === 'white' ? 'Black' : 'White';
   const source = gameRef(item.date, item.ply);
   const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
+  const unscored = grade?.response === 'unverified-reply' || grade?.response === 'label-disputed';
   return (
     <section className="puzzle" data-testid="sense-drill" data-kind={item.kind} data-truth={item.truth} data-phase={phase} data-expected={phase === 'play' ? (safety ? item.replyUci : item.best) : ''} data-response={grade?.response ?? ''}>
-      <Board fen={onLine ? steps.pos!.fen : fen} orientation={item.color} movable={mover} lastMove={onLine ? steps.pos!.last : lastMove} marks={onLine ? steps.marks : []} arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} flash={grade ? `${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'none' : 'wrong'}:${item.id}` : null} />
+      <Board
+        fen={shown.board ? shown.board.fen : fen} orientation={item.color} movable={mover} lastMove={shown.board ? shown.board.lastMove : lastMove}
+        marks={shown.board?.marks ?? []} arrows={shown.board?.arrows ?? []} line={shown.board?.line ?? null}
+        arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} flash={grade ? `${grade.correct ? 'right' : unscored ? 'none' : 'wrong'}:${item.id}` : null}
+      />
       <div className="say" aria-live="polite">
         {phase === 'ask' && (safety
           ? <Ask title={`Is ${item.proposedSan} safe for ${me}?`} meta={`${source}.`} />
@@ -140,10 +164,15 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
           <Ask title={safety ? `Play ${them}’s reply that punishes it` : 'Play the winning move'} meta={phase === 'checking' ? 'Checking your move with the engine' : undefined} />
         )}
         {grade && (
-          <div className={`verdict ${grade.correct ? 'right' : grade.response === 'unverified-reply' || grade.response === 'label-disputed' ? 'neutral' : 'wrong'}`} data-testid="sense-verdict" data-correct={grade.correct}>
-            <strong>{words!.title}</strong>
+          <div className="result" data-testid="sense-verdict" data-correct={grade.correct}>
+            <p className="result-head">
+              {!unscored && <span className={`grade-mark is-${grade.correct ? 'good' : 'bad'}`} aria-hidden>{grade.correct ? '✓' : '✗'}</span>}
+              <strong>{words!.title}</strong>
+            </p>
             {words!.detail && <p>{words!.detail}</p>}
-            {onLine && steps.note}
+            {shown.chips}
+            {shown.ribbon}
+            {shown.note}
           </div>
         )}
       </div>
@@ -155,13 +184,7 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
           </>
         )}
         {phase === 'play' && <button data-testid="sense-giveup" disabled={!armed} onClick={() => void finish(safety ? gradeSafety(item, 'unsafe', null, 'no') : gradeChance(item, 'something', null, 'no'), null)}>I cannot find it</button>}
-        {phase === 'done' && steps.controls}
-        {phase === 'done' && (
-          <>
-            {item.truth && <a className="button" href={href(`progress/game-event/${item.gameId}/${item.ply}`)}>In the game</a>}
-            <button className="primary" data-testid="sense-next" disabled={!armed} onClick={onDone}>Next</button>
-          </>
-        )}
+        {phase === 'done' && <button className="primary" data-testid="sense-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );
@@ -175,6 +198,9 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
   const items = useMemo(() => (games ? senseItemsFrom(games) : null), [games]);
   const seenAtStart = useRef<Set<string> | null>(null);
   if (seenAtStart.current === null && learner.ready) seenAtStart.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId));
+  // A position already met in another exercise is not asked as a new question (see src/schedule/position.ts).
+  const metAtStart = useRef<Set<string> | null>(null);
+  if (metAtStart.current === null && learner.ready) metAtStart.current = seenPositions(learner.attempts);
   // The question for turn `n` is chosen once and kept. The games list changes underneath all
   // the time (a game is fetched or its analysis finishes every few seconds while the app is
   // open); choosing again on every change swapped the position out from under the learner
@@ -189,7 +215,7 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
     current = null;
     for (const kind of kinds) {
       // Ask for a pair so truth alternates over time; take the first.
-      const pick = pickSense(items, kind, seen, 2, `sense|${n}`)[0];
+      const pick = pickSense(items.filter((x) => !metAtStart.current!.has(`${x.gameId}:${x.ply}`)), kind, seen, 2, `sense|${n}`)[0];
       if (pick) {
         current = pick;
         break;
@@ -199,14 +225,15 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
     if (current) latch.current = { n, item: current };
   }
   if (current === undefined) return <p className="muted">Loading your games</p>;
-  if (current === null) {
-    return (
-      <div className="empty" data-testid="sense-done">
-        <p>{items && items.length === 0 ? 'These questions are built from your own analysed games, and there are none on this device yet. They appear once your games have been fetched and analysed.' : 'No unseen questions are left for now; more appear as you play.'}</p>
-        <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
-      </div>
-    );
-  }
-  shown.current.add(current.id);
-  return <SenseDrill key={current.id} item={current} sessionId={null} context="practice" onDone={() => setN(n + 1)} />;
+  if (current) shown.current.add(current.id);
+  return (
+    <KeepLast>
+      {current ? <SenseDrill key={current.id} item={current} sessionId={null} context="practice" onDone={() => setN(n + 1)} /> : (
+        <div className="empty" data-testid="sense-done">
+          <p>{items && items.length === 0 ? 'These questions are built from your own analysed games, and there are none on this device yet. They appear once your games have been fetched and analysed.' : 'No unseen questions are left for now; more appear as you play.'}</p>
+          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+        </div>
+      )}
+    </KeepLast>
+  );
 }

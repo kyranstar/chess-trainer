@@ -63,7 +63,7 @@ test('OBSERVATION: the list of error positions while analysis adds rows', async 
   console.log(`rows over 12 s: ${samples.join(',')}; the first three rows changed ${moved} times; measured ${m.measured}/${m.total}`);
 });
 
-test('own-game question: "See it in the game" after answering', async ({ page }) => {
+test('own-game question: the move from the game is a chip on the result, and nothing on it leaves the exercise', async ({ page }) => {
   await mockChessCom(page, clones(40));
   await page.clock.install({ time: START });
   await openApp(page, '#/progress');
@@ -76,27 +76,29 @@ test('own-game question: "See it in the game" after answering', async ({ page })
     await expect(drill).toHaveAttribute('data-phase', 'ask');
     const truth = await drill.getAttribute('data-truth');
     const kind = await drill.getAttribute('data-kind');
+    const asked = await drill.locator('.board').getAttribute('data-fen');
     await page.getByTestId('sense-no').click();
     await expect(page.getByTestId('sense-verdict')).toBeVisible();
-    const link = page.getByRole('link', { name: 'In the game' });
-    if (truth !== 'true') {
-      // Nothing was there, so there is no position to show and no link that would lead nowhere.
-      await expect(link).toHaveCount(0);
-      seen.push(`${kind}/truth=${truth}: no link`);
-      await page.getByTestId('sense-next').click();
-      continue;
+    // The link "In the game" used to leave the run, and coming back lost the result (ADR-052).
+    await expect(page.getByRole('link', { name: 'In the game' })).toHaveCount(0);
+    // The result rests on the position asked, and the game's move is one of the chips.
+    await expect(drill.locator('.board')).toHaveAttribute('data-fen', asked!);
+    const game = page.locator('[data-testid^="line-"][data-who~="game"]');
+    await expect(game).toHaveCount(1);
+    if (truth === 'true') {
+      // Something was there: its line is on record and plays on the board when the chip is tapped.
+      await game.click();
+      await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
+      await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', asked!);
+      await expect(page.getByTestId('line-best')).toHaveCount(1);
     }
-    await link.click();
-    await page.waitForTimeout(400);
-    const found = (await page.getByTestId('game-event').count()) > 0;
-    seen.push(`${kind}/truth=${truth}: ${found ? 'position shown' : JSON.stringify((await page.locator('main').innerText()).slice(0, 60))}`);
-    await page.goBack();
-    // Going back remounts the run; the answered question is not asked again.
-    await expect(drill).toHaveAttribute('data-phase', 'ask');
+    seen.push(`${kind}/truth=${truth}: game chip`);
+    await page.getByTestId('sense-next').click();
   }
   console.log(seen.join('\n'));
-  expect(seen.filter((s) => s.includes('not found')), seen.join('\n')).toHaveLength(0);
+  expect(new Set(seen.map((x) => x.split(':')[0])).size).toBeGreaterThan(1);
 });
+
 
 test('SYNTHETIC: a review item from an own game whose analysis changes while it is on screen', async ({ page }) => {
   // Simulates what a re-analysis does (new engine setting after an app update, or a deeper

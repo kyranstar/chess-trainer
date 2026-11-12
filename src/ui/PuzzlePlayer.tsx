@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { applyUci, fenOf, positionFromFen, sanOf } from '../chess/rules';
+import { type Candidate, mergeLines } from '../chess/line';
 import { THEMES } from '../content';
 import { recordAttempt } from '../db/db';
 import type { Attempt, AttemptContext, Outcome } from '../db/types';
@@ -10,8 +11,8 @@ import { Board } from './Board';
 import { bestLineFor } from '../engine/interactive';
 import { lineSan } from '../games/analyse';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { useLineSteps } from './LineSteps';
-import { Ask } from './Stage';
+import { useResultLines } from './Lines';
+import { Ask, useItem } from './Stage';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -33,6 +34,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const { puzzle, allowHints } = props;
   const db = useDb();
   useFocusMode();
+  const stage = useItem(props.onNext);
   const initial = useMemo(() => startRun(puzzle), [puzzle]);
   const [run, setRun] = useState<PuzzleRun>(initial);
   const [phase, setPhase] = useState<Phase>('setup');
@@ -174,7 +176,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     if (busy) return;
     void decide(run.hints > 0 ? 'assisted' : 'fail', run);
     setPhase('revealed');
-    setMarks([expectedMove(run).slice(0, 2), expectedMove(run).slice(2, 4)]);
+    setMarks([]);
   }
 
   /** Back to the position as it was asked, after a wrong move and what it led to. */
@@ -206,56 +208,75 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   }, [run]);
 
   const solver = initial.solver;
-  const solutionSan = useMemo(() => {
-    if (phase !== 'revealed') return '';
-    let pos = positionFromFen(run.fen);
-    const out: string[] = [];
-    for (const u of remainingLine(run)) {
-      out.push(sanOf(pos, u));
-      pos = applyUci(pos, u);
-    }
-    return out.join(' ');
-  }, [phase, run]);
-
   const done = phase === 'solved' || phase === 'revealed';
-  // What is played through on the board: the solution once it has been shown, or the wrong
-  // move followed by the engine's answer to it.
-  const line = phase === 'revealed'
-    ? { from: run.fen, pv: remainingLine(run) }
-    : phase === 'solving' && wrongSan && reply
-      ? { from: reply.from, pv: [reply.uci, ...(reply.pv ?? [])] }
-      : null;
-  const steps = useLineSteps(line, phase === 'revealed' ? { initial: 99, startLabel: 'Play the solution', me: initial.solver, stopThere: false } : { initial: 2, me: reply?.state === 'shown' && reply.pv ? initial.solver : undefined, cap: 6 });
-  const stepping = !!steps.pos && steps.step > 0;
+  // What is played through on the board (see ./Lines.tsx):
+  //   after a wrong move, that move and the engine's answer to it, shown unasked;
+  //   once the solution is shown, the solution, beside the wrong move if one was made here;
+  //   once solved, the moves just played, so that they can be gone back through.
+  const wrongHere = !!reply && reply.from === run.fen;
+  const view = useMemo((): { start: string; candidates: Candidate[]; compare: boolean } | null => {
+    if (phase === 'solving' && wrongSan && reply) return { start: reply.from, candidates: [{ who: 'you', uci: reply.uci, score: null, pv: reply.pv ?? [] }], compare: false };
+    if (phase === 'revealed') {
+      const rest = remainingLine(run);
+      if (!rest[0]) return null;
+      const solution: Candidate = { who: 'best', label: 'Solution', uci: rest[0], score: null, pv: rest.slice(1) };
+      return wrongHere ? { start: run.fen, candidates: [{ who: 'you', uci: reply!.uci, score: null, pv: reply!.pv ?? [] }, solution], compare: true } : { start: run.fen, candidates: [solution], compare: false };
+    }
+    if (phase === 'solved' && run.played[0]) return { start: initial.fen, candidates: [{ who: 'best', label: 'Solution', uci: run.played[0], score: null, pv: run.played.slice(1) }], compare: false };
+    return null;
+  }, [phase, wrongSan, reply, run, wrongHere, initial.fen]);
+  const lines = useMemo(() => (view ? mergeLines(view.start, view.candidates) : []), [view]);
+  const shown = useResultLines(view && lines.length ? view.start : null, lines, {
+    me: solver, compare: view?.compare, stopThere: phase === 'solving',
+    open: phase === 'solving' ? { kind: 'you', to: 'decided', fallback: 2 } : phase === 'revealed' ? { kind: 'best', to: 'end' } : { kind: 'best', to: 'end', play: false },
+    startLast: phase === 'solved' ? initial.setupMove : null,
+  });
   const side = solver === 'white' ? 'White' : 'Black';
   const themes = puzzle.themes.filter((t) => THEMES[t]).map((t) => THEMES[t]!.name).join(', ');
+  const board = shown.board;
   return (
     <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' && !wrongSan ? expectedMove(run) : ''}>
-      <Board fen={stepping ? steps.pos!.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !wrongSan ? solver : null} lastMove={stepping ? steps.pos!.last : lastMove} marks={stepping ? steps.marks : marks} onMove={onMove} resetKey={resetKey} flash={flash} />
+      <Board
+        fen={board ? board.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !wrongSan ? solver : null}
+        lastMove={board ? board.lastMove : lastMove} marks={board ? board.marks : marks} arrows={board?.arrows ?? []} line={board?.line ?? null} onMove={onMove} resetKey={resetKey} flash={flash}
+      />
 
       <div className="say" aria-live="polite">
         {(phase === 'setup' || (phase === 'solving' && !wrongSan)) && (
           <Ask title={`${side} to move`} meta={outcome === 'assisted' ? 'Hint used: counts as assisted.' : replaying ? 'Second go: not recorded.' : `Find the best move.${props.heading ? ` ${props.heading}.` : ''}`} />
         )}
         {phase === 'solving' && wrongSan && (
-          <div className="verdict wrong" data-testid="verdict-wrong">
-            <strong>{wrongSan} is not the move.</strong>
-            {reply?.state === 'loading' && <p className="muted">Asking the engine what it leads to</p>}
-            {reply?.state === 'shown' && <p data-testid="engine-reply" data-line={reply.line ?? ''}>{reply.pv ? 'On the board: the engine’s answer to it.' : 'The engine did not answer on this device.'}</p>}
-            {steps.note}
-          </div>
+          <>
+            <div className="verdict wrong" data-testid="verdict-wrong">
+              <strong>{wrongSan} is not the move.</strong>
+              {reply?.state === 'loading' && <p className="muted">Asking the engine what it leads to</p>}
+              {reply?.state === 'shown' && !reply.pv && <p data-testid="engine-none">The engine did not answer on this device.</p>}
+              {shown.note}
+            </div>
+            {/* The engine's answer to the wrong move: on the board, and here as moves to step through. */}
+            <div data-testid={reply?.state === 'shown' && reply.pv ? 'engine-reply' : undefined} data-line={reply?.line ?? ''}>{shown.ribbon}</div>
+          </>
         )}
         {phase === 'solved' && (
-          <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
-            <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : outcome === 'assisted' ? 'Solved with a hint: counts as assisted.' : 'Solved after a wrong move: counts as a miss.'}</strong>
-            {run.acceptedAlternative && <p>Your checkmate also counts.</p>}
-            {replaying && <p data-testid="replay-note">The first attempt stays {outcome === 'assisted' ? 'assisted' : 'a miss'}.</p>}
-          </div>
+          <>
+            <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
+              <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : outcome === 'assisted' ? 'Solved with a hint: counts as assisted.' : 'Solved after a wrong move: counts as a miss.'}</strong>
+              {run.acceptedAlternative && <p>Your checkmate also counts.</p>}
+              {replaying && <p data-testid="replay-note">The first attempt stays {outcome === 'assisted' ? 'assisted' : 'a miss'}.</p>}
+            </div>
+            {shown.ribbon}
+          </>
         )}
         {phase === 'revealed' && (
-          <div className="verdict neutral" data-testid="verdict-revealed">
-            <strong>Solution: {solutionSan}</strong>
-            {steps.note}
+          <div className="result" data-testid="verdict-revealed">
+            <p className="result-head">
+              <strong>Solution</strong>
+              {/* A check is a fixed set of first tries: no second go there. */}
+              {props.context !== 'check' && <button className="result-side" data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
+            </p>
+            {shown.chips}
+            {shown.ribbon}
+            {shown.note}
           </div>
         )}
         {done && (
@@ -269,7 +290,6 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
       <div className="actions dock">
         {phase === 'solving' && (
           <>
-            {wrongSan && steps.controls}
             {allowHints && !wrongSan && <button onClick={hint} disabled={!armed || busy || marks.length > 0}>Show which piece</button>}
             {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show solution</button>}
             {/* A check is a fixed set of positions: skipping one would shrink it. */}
@@ -277,10 +297,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
             {wrongSan && <button className="primary" data-testid="try-again" disabled={!armed} onClick={tryAgain}>Try again</button>}
           </>
         )}
-        {phase === 'revealed' && steps.controls}
-        {/* A check is a fixed set of first tries: no second go there. */}
-        {phase === 'revealed' && props.context !== 'check' && <button data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
-        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={props.onNext}>{props.nextLabel ?? 'Next'}</button>}
+        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? props.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );

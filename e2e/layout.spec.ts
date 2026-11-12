@@ -73,3 +73,58 @@ test('the flip control is in the bar and turns the board on screen; the pawn end
   await expect(drill).toHaveAttribute('data-keeping', /.+/);
   expect(await boardBox(page)).toEqual(asked);
 });
+
+test('a solved position can be stepped back through, and the one before can be gone back to exactly as it was left (ADR-052)', async ({ page }) => {
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  const puzzle = page.getByTestId('puzzle');
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  const asked = await boardBox(page);
+  const first = (await puzzle.getAttribute('data-puzzle-id'))!;
+  const board = puzzle.locator('.board');
+  const start = await board.getAttribute('data-fen');
+  // Nothing to go back to on the first position.
+  await expect(page.getByTestId('last-item')).toHaveCount(0);
+  await solvePuzzle(page);
+  // The moves just played are under the verdict: one step back is the position before the last move.
+  const steps = page.getByTestId('line-steps');
+  await expect(steps).toHaveAttribute('data-step', (await steps.getAttribute('data-length'))!);
+  const solved = await board.getAttribute('data-fen');
+  await page.getByTestId('line-prev').click();
+  await expect(board).toHaveAttribute('data-fen', start!);
+  expect(await boardBox(page)).toEqual(asked);
+  await page.getByTestId('line-next').click();
+  await expect(board).toHaveAttribute('data-fen', solved!);
+
+  // On to the next position, then back to the last one from the bar.
+  await page.getByTestId('next').click();
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  const second = (await puzzle.getAttribute('data-puzzle-id'))!;
+  expect(second).not.toBe(first);
+  expect(await boardBox(page)).toEqual(asked); // the control in the bar does not push the board down
+  await page.getByTestId('last-item').click();
+  // Exactly as it was left: the same position, solved, on its last move; and only one exercise is on the page.
+  await expect(page.getByTestId('puzzle')).toHaveCount(1);
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', first);
+  await expect(puzzle).toHaveAttribute('data-phase', 'solved');
+  await expect(board).toHaveAttribute('data-fen', solved!);
+  expect(await boardBox(page)).toEqual(asked);
+  await page.getByTestId('line-prev').click();
+  await expect(board).toHaveAttribute('data-fen', start!);
+  // Its main button does not move the run on a second time: it returns to where he was.
+  await expect(page.getByTestId('next')).toHaveText('Back to where you were');
+  await page.getByTestId('next').click();
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', second);
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  expect(await boardBox(page)).toEqual(asked);
+  // The position gone back to can be reached again, and the one on screen was not answered meanwhile.
+  await page.getByTestId('last-item').click();
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', first);
+  await page.getByTestId('last-item').click();
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', second);
+  await solvePuzzle(page);
+  await page.getByTestId('next').click();
+  await expect(puzzle).toHaveAttribute('data-phase', 'solving');
+  // "Last" is now the second position.
+  await page.getByTestId('last-item').click();
+  await expect(puzzle).toHaveAttribute('data-puzzle-id', second);
+});

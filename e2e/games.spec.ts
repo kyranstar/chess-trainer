@@ -64,19 +64,39 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await playMove(page, 'h5e5');
   await expect(page.getByTestId('own-verdict')).toHaveAttribute('data-ok', 'false');
   // Another move is checked by the built-in engine before anything is recorded against it; this one loses the queen.
-  await expect(page.getByTestId('own-verdict')).toContainText(/Qxe5\+ is \d+ points worse\./, { timeout: 30_000 });
-  // What his move leads to can be put on the board and stepped through, then the engine's line again
-  // (found missing by the practice audit: this drill only printed the answer).
-  const start = await drill.locator('.board').getAttribute('data-fen');
-  await page.getByTestId('own-see-mine').click();
-  await expect(page.getByTestId('own-mine-line')).toContainText('Qxe5+ and the reply');
-  // It plays itself: his move, the reply, and on to where the line is decided.
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
-  expect(Number(await page.getByTestId('line-steps').getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
+  await expect(page.getByTestId('own-verdict')).toContainText('Missed.', { timeout: 30_000 });
+  // The result is three moves side by side (ADR-052): the one just tried, the one from the game
+  // (here the same move, so one chip carries both names) and the best one. Nothing is said in
+  // notation, and the result rests on the position that was asked, with an arrow for each move.
+  const board = drill.locator('.board');
+  const start = await board.getAttribute('data-fen');
+  await expect(page.getByTestId('line-you')).toHaveAttribute('data-who', 'you game');
+  await expect(page.getByTestId('line-you')).toContainText('You · Game');
+  await expect(page.getByTestId('line-you')).toContainText('Qxe5+');
+  await expect(page.getByTestId('line-best')).toContainText('Qxf7#');
+  await expect(page.getByTestId('own-verdict')).not.toContainText(/points worse|In the game you played|Best:/);
+  await expect(board).toHaveAttribute('data-arrows', 'you:h5e5 best:h5f7');
+  // The bar under each move is how good the position is after it: fuller is better.
+  const score = async (id: string) => Number(await page.getByTestId(id).locator('.line-bar').getAttribute('data-score'));
+  expect(await score('line-you')).toBeLessThan(await score('line-best'));
+  // His move plays itself on to where the line is decided, and each move of it can be gone back to.
+  await page.getByTestId('line-you').click();
+  const steps = page.getByTestId('line-steps');
+  await expect(steps).toHaveAttribute('data-line', 'you');
+  await expect(steps).toHaveAttribute('data-playing', 'false');
+  expect(Number(await steps.getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
+  await expect(board).not.toHaveAttribute('data-fen', start!);
+  await page.getByTestId('line-move').first().click();
+  await expect(steps).toHaveAttribute('data-step', '1');
+  await expect(board).toHaveAttribute('data-badge', /^\?\??@e5$/);
+  // One step back from the first move is the position that was asked.
   await page.getByTestId('line-prev').click();
-  await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', start!);
-  await page.getByTestId('own-see-best').click();
-  await expect(page.getByTestId('line-steps')).toHaveAttribute('data-step', '1');
+  await expect(board).toHaveAttribute('data-fen', start!);
+  await expect(page.getByTestId('line-steps')).toHaveCount(0);
+  // The best move is a chip like the others: tapped, it is played on the board.
+  await page.getByTestId('line-best').click();
+  await expect(page.getByTestId('lines')).toHaveAttribute('data-selected', 'best');
+  await expect(page.getByTestId('line-consequence')).toHaveText('Checkmate.');
   // A second go at once is practice: it is not recorded (the review count below is still one).
   await page.getByTestId('own-retry').click();
   await expect(page.getByTestId('own-retry-note')).toBeVisible();
@@ -223,6 +243,7 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(drill).toHaveAttribute('data-phase', 'move');
   await expect(drill).toContainText('White to move');
   await expect(drill).toContainText('Play your own move.');
+  const asked = await drill.locator('.board').getAttribute('data-fen');
   // Move 10 of the game. Taking the pawn on e5 puts the knight where the d6 pawn takes it.
   await playMove(page, 'f3e5');
   await expect(drill).toHaveAttribute('data-phase', 'predict');
@@ -230,31 +251,51 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(drill).toContainText('Play the reply you had to reckon with');
   await playMove(page, 'd6e5');
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
-  await expect(page.getByTestId('own-move-loose')).toContainText('Your knight on e5 can be taken by the pawn on d6, and nothing can take back at once.');
-  await expect(page.getByTestId('own-move-verdict')).toContainText('You named it: dxe5.');
-  // What the engine does about the piece that can be taken is said, so the fact and the rating cannot seem to disagree.
-  await expect(page.getByTestId('own-move-loose-note')).toContainText('The engine takes it.');
-  await expect(page.getByTestId('own-move-verdict')).toContainText('In the game you played Nbd2.');
-  // Judged plainly: giving a knight for a pawn is rated by the engine, with both numbers.
+  const board = drill.locator('.board');
+  const size = async () => { const b = (await board.boundingBox())!; return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width) }; };
+  // The result (ADR-052): the rating in a word, and the three moves side by side on the board that
+  // was asked about: his, the one from the game, the engine's. No sentences in notation.
   expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));
-  // One line: the verdict, what was better, and by how much.
-  await expect(page.getByTestId('own-move-grade')).toHaveText(/^(Mistake|Blunder)\. Best was \S+, \d+ points better\.$/);
-  // Nothing generic: no explanation of the rating scale, no "recorded as".
-  await expect(page.getByTestId('own-move-verdict')).not.toContainText(/Recorded as|Ratings are|built-in engine/);
-  // The consequence can be played through on the board ...
-  const afterMine = await drill.getAttribute('data-fen');
-  await page.getByTestId('line-next').click();
-  await expect(drill.locator('.board')).not.toHaveAttribute('data-fen', afterMine!);
-  // ... it plays itself, and the replay stops where it is decided, marks the square and says what went: here the knight.
+  await expect(page.getByTestId('own-move-grade')).toHaveText(/^(Mistake|Blunder)\.$/);
+  await expect(page.getByTestId('own-move-verdict')).not.toContainText(/Best was|points better|In the game you played|can be taken|Recorded as|Ratings are|built-in engine/);
+  await expect(page.getByTestId('line-you')).toContainText('Nxe5');
+  const inGame = page.locator('[data-testid^="line-"][data-who~="game"]');
+  await expect(inGame).toContainText('Nbd2');
+  await expect(page.getByTestId('line-best')).toBeVisible();
+  await expect(board).toHaveAttribute('data-fen', asked!); // the position asked, not the one after his move
+  await expect(board).toHaveAttribute('data-arrows', /^you:f3e5 .*b1d2/);
+  const score = async (id: string) => Number(await page.getByTestId(id).locator('.line-bar').getAttribute('data-score'));
+  expect(await score('line-you')).toBeLessThan(await score('line-best'));
+  // The reply he named is the one fact still said, in a line.
+  await expect(page.getByTestId('own-move-named')).toHaveText('You named the reply: dxe5.');
+  const rest = await size();
+  // His own line, tapped: it plays itself and stops where it is decided, marks the square and says what went.
+  await page.getByTestId('line-you').click();
   const stepper = page.getByTestId('own-move-line');
+  await expect(stepper).toHaveAttribute('data-playing', 'false');
   const length = Number(await stepper.getAttribute('data-length'));
   await expect(stepper).toHaveAttribute('data-step', String(length));
-  await expect(stepper).toHaveAttribute('data-playing', 'false');
   await expect(page.getByTestId('line-next')).toBeDisabled();
-  await expect(page.getByTestId('line-consequence')).toContainText('Knight taken on e5');
-  await expect(page.getByTestId('line-consequence')).toContainText('you come out 2 points behind');
-  for (let i = 0; i < length; i++) await page.getByTestId('line-prev').click();
+  await expect(page.getByTestId('line-consequence')).toHaveText('Knight taken on e5. You end 2 points behind.');
+  // Nothing has moved and nothing needs scrolling: board, chips, moves and the note fit above the button.
+  expect(await size()).toEqual(rest);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // On his move itself the piece that can now be taken is ringed, and the move carries its mark.
+  await page.getByTestId('line-move').first().click();
+  await expect(stepper).toHaveAttribute('data-step', '1');
+  await expect(drill).toHaveAttribute('data-loose', 'e5');
+  await expect(board).toHaveAttribute('data-rings', 'e5');
+  await expect(board).toHaveAttribute('data-badge', /^\?\??@e5$/);
   await expect(page.getByTestId('line-consequence')).toHaveCount(0);
+  // One step back from the first move is the position that was asked, with the arrows again.
+  await page.getByTestId('line-prev').click();
+  await expect(page.getByTestId('own-move-line')).toHaveCount(0);
+  await expect(board).toHaveAttribute('data-arrows', /you:f3e5/);
+  // The game's move was not an error, so its line is asked for when it is opened.
+  await inGame.click();
+  await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-step', /[1-9]/);
+  await expect(page.getByTestId('line-move').nth(1)).toBeVisible({ timeout: 30_000 });
+  await expect(board).not.toHaveAttribute('data-fen', asked!);
   // ... and the move taken back for another try, which is not recorded.
   await page.getByTestId('own-move-retry').click();
   await expect(drill).toHaveAttribute('data-phase', 'move');

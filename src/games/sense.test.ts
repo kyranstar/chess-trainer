@@ -289,29 +289,52 @@ describe('cases from the outside reviewer: grading and item supply', () => {
 
 import { senseWords } from './sense';
 
-describe('the result of a question in one line (owner: no paragraphs)', () => {
-  const safe = (truth: boolean): SenseItem => ({ id: 's', kind: 'safe-or-not', gameId: 'g', ply: 20, fen: '', color: 'white', truth, date: '2026-11-01', proposed: 'd4d5', proposedSan: 'Nxd5', ...(truth ? { replyUci: 'c6d5', replyLine: '10... cxd5 11. Bb5+', loss: 38 } : {}) });
+describe('the result of a question in a few words; the lines are shown as moves, not printed', () => {
+  const safe = (truth: boolean, label = 'loses-material'): SenseItem => ({ id: 's', kind: 'safe-or-not', gameId: 'g', ply: 20, fen: '', color: 'white', truth, date: '2026-11-01', proposed: 'd4d5', proposedSan: 'Nxd5', ...(truth ? { replyUci: 'c6d5', replyLine: '10... cxd5 11. Bb5+', loss: 38, label } : {}) });
   const chance = (truth: boolean): SenseItem => ({ id: 'c', kind: 'chance-or-not', gameId: 'g', ply: 20, fen: '', color: 'white', truth, date: '2026-11-01', ...(truth ? { best: 'd1h5', bestSan: 'Qh5+', bestLine: '18. Qh5+ Ke7 19. Qxe5+', bestWp: 90 } : {}) });
   const g = (response: string, alternative = false) => ({ response, correct: response === 'hit' || response === 'correct-rejection', alternative }) as unknown as Parameters<typeof senseWords>[1];
 
   it('is it safe to play', () => {
-    expect(senseWords(safe(true), g('hit'), 'cxd5')).toEqual({ title: 'Correct: Nxd5 loses to 10... cxd5 11. Bb5+', detail: 'It cost 38 points in the game.' });
-    expect(senseWords(safe(true), g('hit', true), 'Qxd5')).toEqual({ title: 'Correct: Nxd5 loses to 10... cxd5 11. Bb5+', detail: 'Your Qxd5 also works. It cost 38 points in the game.' });
-    expect(senseWords(safe(true), g('miss'), null)).toEqual({ title: 'Wrong: Nxd5 loses to 10... cxd5 11. Bb5+', detail: 'It cost 38 points in the game.' });
-    expect(senseWords(safe(true), g('wrong-reply'), 'Kh8').title).toBe('Right that Nxd5 is unsafe, but not Kh8. It is 10... cxd5 11. Bb5+');
-    expect(senseWords(safe(true), g('unverified-reply'), 'Kh8').title).toBe('Right that Nxd5 is unsafe. Kh8 could not be checked: not scored. The engine’s reply: 10... cxd5 11. Bb5+');
+    expect(senseWords(safe(true), g('hit'), 'cxd5')).toEqual({ title: 'Correct: Nxd5 loses material.', detail: null });
+    expect(senseWords(safe(true, 'allows-mate'), g('hit'), 'Qh2#')).toEqual({ title: 'Correct: Nxd5 allows mate.', detail: null });
+    expect(senseWords(safe(true), g('hit', true), 'Qxd5')).toEqual({ title: 'Correct: Nxd5 loses material.', detail: 'Your Qxd5 also works.' });
+    expect(senseWords(safe(true), g('miss'), null)).toEqual({ title: 'Wrong: Nxd5 loses material.', detail: null });
+    expect(senseWords(safe(true), g('wrong-reply'), 'Kh8').title).toBe('Unsafe, but not by Kh8.');
+    expect(senseWords(safe(true), g('unverified-reply'), 'Kh8').title).toBe('Unsafe. Kh8 could not be checked: not scored.');
     expect(senseWords(safe(false), g('correct-rejection'), null)).toEqual({ title: 'Correct: Nxd5 is safe.', detail: null });
     expect(senseWords(safe(false), g('false-alarm'), 'Kh8')).toEqual({ title: 'Wrong: Nxd5 is safe.', detail: null });
     expect(senseWords(safe(false), g('label-disputed'), 'Qxd5').title).toBe('Qxd5 does win something: the question was wrong. Not scored.');
   });
 
   it('is there something to win', () => {
-    expect(senseWords(chance(true), g('hit'), 'Qh5+')).toEqual({ title: 'Correct: 18. Qh5+ Ke7 19. Qxe5+', detail: null });
-    expect(senseWords(chance(true), g('hit', true), 'Bb5+')).toEqual({ title: 'Correct: Bb5+ wins too.', detail: 'The engine’s line: 18. Qh5+ Ke7 19. Qxe5+' });
-    expect(senseWords(chance(true), g('miss'), null)).toEqual({ title: 'Missed: 18. Qh5+ Ke7 19. Qxe5+', detail: null });
-    expect(senseWords(chance(true), g('wrong-reply'), 'c5').title).toBe('Right that something is there, but not c5. It is 18. Qh5+ Ke7 19. Qxe5+');
+    expect(senseWords(chance(true), g('hit'), 'Qh5+')).toEqual({ title: 'Correct: Qh5+.', detail: null });
+    expect(senseWords(chance(true), g('hit', true), 'Bb5+')).toEqual({ title: 'Correct: Bb5+ wins too.', detail: null });
+    expect(senseWords(chance(true), g('miss'), null)).toEqual({ title: 'Missed: Qh5+.', detail: null });
+    expect(senseWords(chance(true), g('wrong-reply'), 'c5').title).toBe('Something is there, but not c5.');
     expect(senseWords(chance(false), g('correct-rejection'), null)).toEqual({ title: 'Correct: nothing to win here.', detail: null });
     expect(senseWords(chance(false), g('false-alarm'), 'c5')).toEqual({ title: 'Wrong: there was nothing to win.', detail: null });
+    for (const r of ['hit', 'miss', 'wrong-reply', 'unverified-reply']) expect(senseWords(chance(true), g(r), 'c5').title).not.toMatch(/\d+\.\s/);
   });
 });
 
+import { UNSAFE_MIN_LOSS } from './sense';
+
+describe('what the second practice audit found (12 November)', () => {
+  it('a move is not asked about as unsafe when it cost almost nothing, unless it allows mate', () => {
+    const g = games.find((x) => safetyItems([x]).some((i) => i.truth && i.proposedSan === 'Nf6'))!;
+    const ply = safetyItems([g]).find((i) => i.truth && i.proposedSan === 'Nf6')!.ply;
+    const cheap = (target: 'material' | 'mate'): GameRecord => ({ ...g, measure: { ...g.measure!, events: g.measure!.events.map((e) => (e.ply === ply ? { ...e, loss: UNSAFE_MIN_LOSS - 4, target } : e)) } });
+    // The owner answered "safe" to such a move, was right on a deep search, and was marked wrong.
+    expect(safetyItems([cheap('material')]).some((i) => i.ply === ply)).toBe(false);
+    expect(safetyItems([cheap('mate')]).some((i) => i.truth && i.ply === ply)).toBe(true);
+  });
+
+  it('every question carries the move played in the game, and an unsafe one the engine\'s best move too', () => {
+    const nf6 = safetyItems(games).find((i) => i.truth && i.proposedSan === 'Nf6')!;
+    expect(nf6.played).toBe(nf6.proposed);
+    expect(nf6.best).toBeDefined();
+    expect(nf6.bestWp).toBeGreaterThan(nf6.playedWp!);
+    for (const i of chanceItems(games)) expect(i.played).toBeDefined();
+    for (const i of safetyItems(games).filter((x) => !x.truth)) expect(i.playedWp).toBeGreaterThanOrEqual(0);
+  });
+});

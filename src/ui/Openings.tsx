@@ -13,7 +13,7 @@ import type { Doubtful } from '../openings/fromGames';
 import { entriesFromPgn, repertoireToPgn } from '../openings/pgn';
 import { classifyMove, type Decision, drillId, makeEntry, type MoveEvidence, type OpeningBook, type RepertoireEntry, type Side, SOUND_MARGIN, walkRepertoire } from '../openings/repertoire';
 import { Board } from './Board';
-import { Ask, useRunNote } from './Stage';
+import { Ask, useItem, useRunNote } from './Stage';
 
 let bookCache: OpeningBook | null | undefined;
 
@@ -93,6 +93,7 @@ export function OpeningDrill({ entry, book, band, sessionId, onDone }: {
 }) {
   const db = useDb();
   useFocusMode();
+  const stage = useItem(onDone);
   const [result, setResult] = useState<{ ok: boolean; playedSan: string | null; ev: MoveEvidence | null; shown: boolean } | null>(null);
   const [fen, setFen] = useState(entry.fen);
   const [resetKey, setResetKey] = useState(0);
@@ -147,7 +148,7 @@ export function OpeningDrill({ entry, book, band, sessionId, onDone }: {
         {result && !result.ok && !adopted && entry.source && result.playedSan && result.ev?.verdict === 'sound' && (
           <button data-testid="drill-adopt" onClick={() => void adopt()}>Make {result.playedSan} my move</button>
         )}
-        {result && <button className="primary" data-testid="drill-next" onClick={onDone}>Next</button>}
+        {result && <button className="primary" data-testid="drill-next" onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );

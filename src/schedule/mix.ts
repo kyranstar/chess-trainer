@@ -38,7 +38,7 @@ export function nextMixKind(available: Record<MixKind, boolean>, history: MixKin
   return kinds[kinds.length - 1]!;
 }
 
-const RANK: [string, number][] = [['move:', 0], ['sense:', 0], ['game:', 0], ['lesson:', 1], ['opening:', 2], ['kpk:', 3]];
+const RANK: [string, number][] = [['pos:', 0], ['move:', 0], ['sense:', 0], ['game:', 0], ['lesson:', 1], ['opening:', 2], ['kpk:', 3]];
 const rankOf = (id: string) => RANK.find(([p]) => id.startsWith(p))?.[1] ?? 4;
 
 /**

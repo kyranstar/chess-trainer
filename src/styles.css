@@ -20,6 +20,13 @@
   --flag-soft: #f9e4e1;
   --good: #26734a;
   --good-soft: #dff0e4;
+  /* The three moves compared after an answer: yours, the one from your game, the engine's. */
+  --you: #96600a;
+  --you-soft: #fbf0cf;
+  --game: #55626e;
+  --game-soft: #e7eaed;
+  --best: #1d5fa8;
+  --best-soft: #dfeaf7;
   --ui: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --book: 'Literata Variable', Literata, Georgia, 'Times New Roman', serif;
   --tabs-h: 3.5rem;
@@ -39,6 +46,12 @@
     --flag-soft: #3b1d1a;
     --good: #86d3a4;
     --good-soft: #163423;
+    --you: #e8b23c;
+    --you-soft: #3a3115;
+    --game: #aab5bf;
+    --game-soft: #262f37;
+    --best: #8ab8ef;
+    --best-soft: #1b2c40;
   }
 }
 
@@ -139,6 +152,13 @@ button:disabled { opacity: 0.45; cursor: default; }
 .run-side .flip-bar { text-decoration: none; font-size: 1.2rem; min-width: 2rem; }
 .page.run:not(:has(.board)) .flip-bar { display: none; }
 .run-note { font-variant-numeric: tabular-nums; }
+.run-bar .back { white-space: nowrap; }
+.run-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.run-side .last-item { min-width: 2.4rem; min-height: 2.4rem; padding: 0; border-radius: 99px; font-size: 1.25rem; font-weight: 600; line-height: 1; color: var(--ink); }
+.run-side .last-item[aria-pressed='true'] { background: var(--pencil-soft); border-color: var(--pencil); }
+/* One exercise on the page at a time; the one before it is kept off the page (see KeepLast). */
+.keep, .keep-host, .keep-item { flex: 1; display: flex; flex-direction: column; gap: 0.45rem; min-height: 0; }
+.keep-host[hidden] { display: none; }
 .run-confirm { background: var(--pencil-soft); border-radius: 8px; padding: 0.6rem 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
 
 /* Board */
@@ -310,10 +330,47 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 /* "Your move" on the clock: plain, and red only once the time is up. */
 .move-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
 .move-clock.is-up { color: var(--flag); }
-.line-steps { display: inline-flex; gap: 0.4rem; align-items: center; }
-.line-steps button { min-height: 2.75rem; padding: 0.4rem 0.8rem; font-size: 0.97rem; }
-.line-steps button.step { min-width: 2.75rem; padding: 0.2rem; font-size: 1.5rem; line-height: 1; }
-.line-count { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+/*
+ * The result as moves on one board. Chips: you, game, best, always in that order and those
+ * colours; the bar under a move is how good the position is for you after it, fuller is
+ * better. Under the chips the moves of the line on the board, which are also the stepper.
+ */
+.result { display: flex; flex-direction: column; gap: 0.2rem; animation: verdict-in 180ms ease-out; }
+.result-head { display: flex; align-items: center; gap: 0.5rem; min-height: 2.4rem; }
+/* The lesser action on a result (another try) sits at the end of its first line: the pinned button below stays alone. */
+.result-head .result-side { margin-left: auto; min-height: 2.4rem; padding: 0.15rem 0.7rem; font-size: 0.92rem; white-space: nowrap; }
+.result-head strong { font-size: 1.12rem; line-height: 1.25; }
+.result-head .result-more { color: var(--muted); font-size: 0.92rem; }
+.result p { font-size: 0.92rem; }
+.grade-mark { flex: none; min-width: 1.6rem; height: 1.6rem; padding: 0 0.3rem; border-radius: 0.8rem; display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; line-height: 1; color: var(--surface); background: var(--muted); }
+.grade-mark.is-good { background: var(--good); }
+.grade-mark.is-mid { background: var(--you); }
+.grade-mark.is-bad { background: var(--flag); }
+.lines { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.4rem; }
+.line-chip { --c: var(--you); --cs: var(--you-soft); flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; min-height: 3.2rem; padding: 0.2rem 0.55rem 0.4rem; text-align: left; border: 1.5px solid var(--rule); border-top: 4px solid var(--c); border-radius: 8px; background: var(--surface); min-width: 0; }
+.line-chip.is-game { --c: var(--game); --cs: var(--game-soft); }
+.line-chip.is-best { --c: var(--best); --cs: var(--best-soft); }
+.line-chip[aria-pressed='true'] { background: var(--cs); border-color: var(--c); }
+.line-who { font-size: 0.7rem; line-height: 1.25; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line-san { font-size: 1.08rem; font-weight: 700; white-space: nowrap; line-height: 1.15; }
+.line-bar { display: block; height: 0.4rem; margin-top: 0.2rem; border-radius: 0.2rem; background: var(--rule); overflow: hidden; }
+.line-bar i { display: block; height: 100%; border-radius: 0.2rem; background: var(--c); transition: width 240ms ease-out; }
+.line-steps { --c: var(--pencil); --cs: var(--pencil-soft); display: flex; align-items: center; gap: 0.25rem; min-height: 2.5rem; }
+.line-steps.is-you { --c: var(--you); --cs: var(--you-soft); }
+.line-steps.is-game { --c: var(--game); --cs: var(--game-soft); }
+.line-steps.is-best { --c: var(--best); --cs: var(--best-soft); }
+.line-steps button.step { flex: none; min-width: 2.75rem; min-height: 2.5rem; padding: 0.1rem; font-size: 1.5rem; line-height: 1; }
+.line-moves { flex: 1; min-width: 0; display: flex; align-items: center; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.line-moves::-webkit-scrollbar { display: none; }
+.line-move { flex: none; min-height: 2.5rem; padding: 0.2rem 0.35rem; border: 0; border-radius: 6px; background: transparent; font-weight: 500; font-size: 1rem; gap: 0.2rem; }
+.line-move.is-on { background: var(--cs); font-weight: 700; box-shadow: inset 0 -3px 0 var(--c); }
+.line-no { color: var(--muted); font-size: 0.82rem; font-weight: 500; }
+.line-wait { color: var(--muted); padding: 0 0.4rem; }
+/* The last move of a line being played through is tinted in that line's colour. */
+.board-wrap[data-line='best'] cg-board square.last-move { background-color: rgba(21, 87, 176, 0.42); }
+.board-wrap[data-line='game'] cg-board square.last-move { background-color: rgba(63, 74, 85, 0.45); }
+@media (prefers-reduced-motion: reduce) { .line-bar i { transition: none; } }
 
 /* Folded sections: one thing to do on the screen, the rest a tap away. */
 details.today-options, details.all-numbers, details.source-details { display: flex; flex-direction: column; gap: 0.8rem; }
@@ -324,4 +381,4 @@ details.today-options > summary::-webkit-details-marker, details.all-numbers > s
 details.today-options > summary::before, details.all-numbers > summary::before, details.source-details > summary::before { content: '+'; display: inline-block; width: 1ch; text-decoration: none; }
 details[open].today-options > summary::before, details[open].all-numbers > summary::before, details[open].source-details > summary::before { content: '−'; }
 details.all-numbers[open] > * + *, details.today-options[open] > * + *, details.source-details[open] > * + * { margin-top: 0.8rem; }
-.line-note { font-weight: 600; border-left: 4px solid var(--pencil); padding-left: 0.6rem; }
+.line-note { font-weight: 600; border-left: 4px solid var(--pencil); padding-left: 0.5rem; line-height: 1.3; }

@@ -3,7 +3,7 @@ import { parseSan } from 'chessops/san';
 import type { Chess } from 'chessops/chess';
 import type { Color, Role } from 'chessops/types';
 import { makeSquare, makeUci, parseUci } from 'chessops/util';
-import { applyUci, canonicalUci, fenOf, positionFromFen } from './rules';
+import { applyUci, canonicalUci, fenOf, positionFromFen, sanOf } from './rules';
 
 /**
  * A printed line ("12. Nf3 Nc6 13. Bd3" or "12... Nc6 13. Bd3") back into moves from `fen`.
@@ -126,6 +126,101 @@ export function consequenceOf(fromFen: string, pv: string[], me: Color, beforeFe
   // follows it is an even exchange, and the replay should not run on through that.
   const it = changes.find((c) => c.balance === now)!;
   const points = Math.abs(net);
-  return { ply: it.ply, kind: 'material', square: it.square, text: `${it.what}. Over these moves you come out ${points} point${points === 1 ? '' : 's'} ${net > 0 ? 'ahead' : 'behind'}.` };
+  return { ply: it.ply, kind: 'material', square: it.square, text: `${it.what}. You end ${points} point${points === 1 ? '' : 's'} ${net > 0 ? 'ahead' : 'behind'}.` };
 }
 
+
+/** Whose move a line starts with: the learner's just now, his in the game, or the engine's first choice. */
+export type Who = 'you' | 'game' | 'best';
+
+export interface Candidate {
+  who: Who;
+  uci: string;
+  /** Expected score (0-100) for the learner after this move; null when it is not known. */
+  score: number | null;
+  /** What follows the move; null when it has not been searched yet. */
+  pv: string[] | null;
+  /** Shown instead of the usual name ("Solution" for a puzzle's move). */
+  label?: string;
+}
+
+/** One move from a position and what follows it, with everyone who played it. */
+export interface MoveLine {
+  /** Which colour it carries: the engine's when it is the best move, else the learner's own, else the game's. */
+  kind: Who;
+  who: Who[];
+  label: string;
+  uci: string;
+  san: string;
+  score: number | null;
+  pv: string[] | null;
+}
+
+const WHO_ORDER: Who[] = ['you', 'game', 'best'];
+const WHO_NAME: Record<Who, string> = { you: 'You', game: 'Game', best: 'Best' };
+
+/**
+ * The moves to compare after an answer, always in the order you, game, best. The same move
+ * played by two of them is one line carrying both names ("You · Game"), so that "what I
+ * played is what I played in the game" is seen and not said. A move that cannot be played in
+ * the position is left out.
+ */
+export function mergeLines(fen: string, candidates: Candidate[]): MoveLine[] {
+  let pos: Chess;
+  try {
+    pos = positionFromFen(fen);
+  } catch {
+    return [];
+  }
+  const out: (MoveLine & { labels: string[] })[] = [];
+  for (const who of WHO_ORDER) {
+    const c = candidates.find((x) => x.who === who);
+    if (!c) continue;
+    let canon: string;
+    let san: string;
+    try {
+      canon = canonicalUci(pos, c.uci);
+      san = sanOf(pos, canon);
+    } catch {
+      continue;
+    }
+    const same = out.find((l) => l.uci === canon);
+    if (!same) {
+      out.push({ kind: who, who: [who], label: '', labels: [c.label ?? WHO_NAME[who]], uci: canon, san, score: c.score, pv: c.pv });
+      continue;
+    }
+    same.who.push(who);
+    same.labels.push(c.label ?? WHO_NAME[who]);
+    // The engine's own figures stand for a move it also chose; a searched line stands over none.
+    if (who === 'best') {
+      same.kind = 'best';
+      if (c.score !== null) same.score = c.score;
+    } else if (same.score === null) same.score = c.score;
+    if (!same.pv?.length && c.pv) same.pv = c.pv;
+  }
+  return out.map(({ labels, ...l }) => ({ ...l, label: labels.join(' · ') }));
+}
+
+/** A line as it is written: each move in notation with its number ("18." before White's, "18…" where Black starts). */
+export function numberedSans(fen: string, pv: string[]): { san: string; no: string | null }[] {
+  const out: { san: string; no: string | null }[] = [];
+  let pos: Chess;
+  try {
+    pos = positionFromFen(fen);
+  } catch {
+    return out;
+  }
+  for (const uci of pv) {
+    const white = pos.turn === 'white';
+    const no = white ? `${pos.fullmoves}.` : out.length === 0 ? `${pos.fullmoves}…` : null;
+    let san: string;
+    try {
+      san = sanOf(pos, uci);
+      pos = applyUci(pos, uci);
+    } catch {
+      break;
+    }
+    out.push({ san, no });
+  }
+  return out;
+}

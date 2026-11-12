@@ -36,6 +36,13 @@ const LOSES = 2;
 export const SAFE_CONTROL_FLOOR = 25;
 /** An own move counts as a safe control only if it lost at most this much expected score. */
 export const SAFE_LOSS = 3;
+/**
+ * A move is asked about as unsafe only if it also cost at least this much expected score
+ * (a move that allows mate is asked whatever it cost). The second practice audit found a move
+ * stored as losing material that had cost 6 points on the phone and 1 on a deep search: the
+ * short line was wrong, the owner answered "safe" and was marked wrong for it.
+ */
+export const UNSAFE_MIN_LOSS = 10;
 /** A chance must be clearly better than the next move to be asked as a chance. */
 export const CHANCE_GAP = 10;
 
@@ -50,13 +57,15 @@ export interface SenseItem {
   /** True when there IS something: the proposed move is unsafe, or a chance exists. */
   truth: boolean;
   date: string;
+  /** The move the owner played here in the game, and the expected score it left him with. */
+  played?: string;
+  playedWp?: number;
   // safe-or-not
   proposed?: string;
   proposedSan?: string;
   afterFen?: string;
   replyUci?: string;
   replyLine?: string;
-  playedWp?: number;
   loss?: number;
   label?: string;
   // chance-or-not
@@ -112,15 +121,19 @@ export function safetyItems(games: GameRecord[], opts: { minControlPly?: number 
       const f = factAt.get(ply);
       if (!fen || !uci || !f) continue;
       const e = byPly.get(ply);
-      const base = { id: `sense:safe-or-not:${g.id}:${ply}`, kind: 'safe-or-not' as const, gameId: g.id, ply, fen, color: g.color, date: g.endDate, proposed: uci };
+      const base = { id: `sense:safe-or-not:${g.id}:${ply}`, kind: 'safe-or-not' as const, gameId: g.id, ply, fen, color: g.color, date: g.endDate, proposed: uci, played: uci };
       if (e?.target) {
         if (!e.refutation) continue;
+        if (e.target !== 'mate' && e.loss < UNSAFE_MIN_LOSS) continue;
         const afterFen = fenOf(applyUci(positionFromFen(fen), uci));
         const replyUci = firstUciOfLine(afterFen, e.refutation);
         if (!replyUci) continue;
-        out.push({ ...base, truth: true, proposedSan: e.playedSan, afterFen, replyUci, replyLine: e.refutation, playedWp: e.playedWp, loss: e.loss, label: e.target === 'mate' ? 'allows-mate' : 'loses-material' });
+        out.push({
+          ...base, truth: true, proposedSan: e.playedSan, afterFen, replyUci, replyLine: e.refutation, playedWp: e.playedWp, loss: e.loss, label: e.target === 'mate' ? 'allows-mate' : 'loses-material',
+          best: e.best, bestSan: e.bestSan, bestLine: e.bestLine, bestWp: e.bestWp,
+        });
       } else if (!f.mated && !f.unsure && f.played >= 0 && f.best >= 0 && f.wp >= SAFE_CONTROL_FLOOR && f.wp <= UNDECIDED.hi && loss <= SAFE_LOSS && ply >= minPly) {
-        out.push({ ...base, truth: false, proposedSan: sanOf(positionFromFen(fen), uci), loss });
+        out.push({ ...base, truth: false, proposedSan: sanOf(positionFromFen(fen), uci), loss, playedWp: Math.max(0, f.wp - loss) });
       }
     }
   }
@@ -144,12 +157,17 @@ export function chanceItems(games: GameRecord[], opts: { minControlPly?: number 
     if (!m?.facts) continue;
     const fens = fensOf(g);
     const byPly = new Map(m.events.map((e) => [e.ply, e]));
+    const lossAt = new Map(m.decisions.map(([p, loss]) => [p, loss]));
     for (const f of m.facts) {
       const ply = f.ply;
       const fen = fens[ply];
       if (!fen) continue;
       const e = byPly.get(ply);
-      const base = { id: `sense:chance-or-not:${g.id}:${ply}`, kind: 'chance-or-not' as const, gameId: g.id, ply, fen, color: g.color, date: g.endDate };
+      const loss = lossAt.get(ply);
+      const base = {
+        id: `sense:chance-or-not:${g.id}:${ply}`, kind: 'chance-or-not' as const, gameId: g.id, ply, fen, color: g.color, date: g.endDate,
+        played: g.moves[ply], playedWp: e ? e.playedWp : loss === undefined ? undefined : Math.max(0, f.wp - loss), replyLine: e?.refutation ?? undefined,
+      };
       if (e?.opportunity) {
         // Asked only where the evidence holds: a second move to compare with; for material, a
         // settled line and a clear margin; for mate, a short one (a mate in nine is not a chance
@@ -334,35 +352,34 @@ export function senseStats(attempts: Attempt[], since?: number): Record<SenseKin
 }
 
 /**
- * The result of a question in one line, with at most one more fact about this very case.
- * The owner asked for no paragraphs: right or wrong, and what the answer was (2026-11-11).
+ * The result of a question in one line. The lines themselves (the move asked about, the best
+ * move, what follows each) are shown as moves on the board, not printed (2026-11-12).
  * `playedSan` is the move he played on the board, if he played one.
  */
 export function senseWords(item: SenseItem, grade: SenseGrade, playedSan: string | null): { title: string; detail: string | null } {
   const mine = playedSan ?? 'that move';
+  const Mine = `${mine[0]!.toUpperCase()}${mine.slice(1)}`;
   if (item.kind === 'safe-or-not') {
     const p = item.proposedSan ?? 'the move';
-    const reply = item.replyLine ?? '';
-    const cost = item.truth && item.loss !== undefined ? `It cost ${Math.round(item.loss)} points in the game.` : null;
+    const what = item.label === 'allows-mate' ? 'allows mate' : 'loses material';
     switch (grade.response) {
-      case 'hit': return { title: `Correct: ${p} loses to ${reply}`, detail: [grade.alternative && playedSan ? `Your ${playedSan} also works.` : null, cost].filter(Boolean).join(' ') || null };
-      case 'miss': return { title: `Wrong: ${p} loses to ${reply}`, detail: cost };
-      case 'wrong-reply': return { title: `Right that ${p} is unsafe, but not ${mine}. It is ${reply}`, detail: cost };
-      case 'unverified-reply': return { title: `Right that ${p} is unsafe. ${mine[0]!.toUpperCase()}${mine.slice(1)} could not be checked: not scored. The engine’s reply: ${reply}`, detail: null };
+      case 'hit': return { title: `Correct: ${p} ${what}.`, detail: grade.alternative && playedSan ? `Your ${playedSan} also works.` : null };
+      case 'miss': return { title: `Wrong: ${p} ${what}.`, detail: null };
+      case 'wrong-reply': return { title: `Unsafe, but not by ${mine}.`, detail: null };
+      case 'unverified-reply': return { title: `Unsafe. ${Mine} could not be checked: not scored.`, detail: null };
       case 'correct-rejection': return { title: `Correct: ${p} is safe.`, detail: null };
       case 'false-alarm': return { title: `Wrong: ${p} is safe.`, detail: null };
-      default: return { title: `${mine[0]!.toUpperCase()}${mine.slice(1)} does win something: the question was wrong. Not scored.`, detail: null };
+      default: return { title: `${Mine} does win something: the question was wrong. Not scored.`, detail: null };
     }
   }
-  const line = item.bestLine ?? '';
+  const best = item.bestSan ?? 'the move';
   switch (grade.response) {
-    case 'hit': return grade.alternative && playedSan ? { title: `Correct: ${playedSan} wins too.`, detail: `The engine’s line: ${line}` } : { title: `Correct: ${line}`, detail: null };
-    case 'miss': return { title: `Missed: ${line}`, detail: null };
-    case 'wrong-reply': return { title: `Right that something is there, but not ${mine}. It is ${line}`, detail: null };
-    case 'unverified-reply': return { title: `Right that something is there. ${mine[0]!.toUpperCase()}${mine.slice(1)} could not be checked: not scored. The engine’s line: ${line}`, detail: null };
+    case 'hit': return { title: grade.alternative && playedSan ? `Correct: ${playedSan} wins too.` : `Correct: ${best}.`, detail: null };
+    case 'miss': return { title: `Missed: ${best}.`, detail: null };
+    case 'wrong-reply': return { title: `Something is there, but not ${mine}.`, detail: null };
+    case 'unverified-reply': return { title: `Something is there. ${Mine} could not be checked: not scored.`, detail: null };
     case 'correct-rejection': return { title: 'Correct: nothing to win here.', detail: null };
     case 'false-alarm': return { title: 'Wrong: there was nothing to win.', detail: null };
-    default: return { title: `${mine[0]!.toUpperCase()}${mine.slice(1)} does win something: the question was wrong. Not scored.`, detail: null };
+    default: return { title: `${Mine} does win something: the question was wrong. Not scored.`, detail: null };
   }
 }
-

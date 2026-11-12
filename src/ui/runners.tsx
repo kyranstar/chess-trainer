@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import { CONCEPT_BY_ID, conceptOpenings, conceptThemes, LESSON_BY_ID } from '../content';
 import type { Concept } from '../content/types';
 import { recordLessonEvent } from '../db/db';
@@ -19,7 +19,7 @@ import { LessonTry } from './LessonPlayer';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { SenseDrill, senseItemById } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
-import { Ask, useRunNote } from './Stage';
+import { Ask, KeepLast, useRunNote } from './Stage';
 
 export type Picker = (exclude: Set<string>, index: number) => Puzzle | null;
 
@@ -72,14 +72,17 @@ export function PuzzleStream(props: {
   if (!pool || current === undefined) return <p className="muted">Loading positions</p>;
   if (current === null) {
     return (
-      <div className="empty" data-testid="stream-empty">
-        <p>No unseen positions are left for this selection in the installed pack.</p>
-        <div className="actions"><button className="primary" onClick={() => props.onFinished('exhausted')}>Continue</button></div>
-      </div>
+      <KeepLast>
+        <div className="empty" data-testid="stream-empty">
+          <p>No unseen positions are left for this selection in the installed pack.</p>
+          <div className="actions"><button className="primary" onClick={() => props.onFinished('exhausted')}>Continue</button></div>
+        </div>
+      </KeepLast>
     );
   }
   const conceptId = typeof props.conceptId === 'function' ? props.conceptId(current) : props.conceptId;
   return (
+    <KeepLast>
     <PuzzlePlayer
       key={current.id}
       puzzle={current}
@@ -97,6 +100,7 @@ export function PuzzleStream(props: {
         next(n);
       }}
     />
+    </KeepLast>
   );
 }
 
@@ -264,7 +268,8 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
   const games = useGames();
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
   // Own-game positions first: review minutes are few and that is where the rating is lost.
-  const queue = useRef(reviewOrder(due).map((d) => d.itemId));
+  // A position from his own games is asked in the form it was last answered in (see src/schedule/position.ts).
+  const queue = useRef(reviewOrder(due).map((d) => d.ask ?? d.itemId));
   const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition; move?: MoveItem } | null>(null);
   const [i, setI] = useState(0);
   const leftNow = queue.current.length - i;
@@ -277,64 +282,68 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
     setI((x) => x + 1);
   };
   const itemId = queue.current[i];
-  if (itemId === undefined) {
+  // One exercise at a time, keyed by what it is; anything without a key is a notice in its place.
+  const body = (): ReactElement => {
+    if (itemId === undefined) {
+      return (
+        <div className="empty" data-testid="review-empty">
+          <p>{queue.current.length === 0 ? 'Nothing is due for review.' : 'Review queue cleared for now.'}</p>
+          <div className="actions"><button className="primary" onClick={() => onFinished('done')}>Continue</button></div>
+        </div>
+      );
+    }
+    if (itemId.startsWith('lichess:')) {
+      const puzzle = pool.byId.get(itemId.slice(8));
+      if (!puzzle) return <RetiredItem onNext={advance} />;
+      return (
+        <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
+          allowHints={false} onRecorded={onAttempt} onNext={advance} />
+      );
+    }
+    if (itemId.startsWith('sense:')) {
+      if (!games) return <p className="muted">Loading your games</p>;
+      // Looked up once per queue position and kept: the games table changes while games are
+      // analysed, and a question on screen must not turn into "no longer available" mid-answer.
+      if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
+      const item = held.current.sense;
+      if (!item) return <RetiredItem onNext={advance} />;
+      return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" onDone={advance} />;
+    }
+    if (itemId.startsWith('move:')) {
+      if (!games) return <p className="muted">Loading your games</p>;
+      if (held.current?.id !== itemId) held.current = { id: itemId, move: moveItems(games, { fromMove: 1, toMove: 200 }).find((m) => m.id === itemId) };
+      const move = held.current.move;
+      if (!move) return <RetiredItem onNext={advance} />;
+      return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" onRecorded={onAttempt} onDone={advance} />;
+    }
+    if (itemId.startsWith('kpk:')) {
+      const [, goal, ...rest] = itemId.split(':');
+      return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} onDone={advance} />;
+    }
+    if (itemId.startsWith('game:')) {
+      if (!games) return <p className="muted">Loading your games</p>;
+      if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
+      const drill = held.current.drill;
+      if (!drill) return <RetiredItem onNext={advance} />;
+      return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} onDone={advance} />;
+    }
+    if (itemId.startsWith('opening:')) {
+      const entry = repertoire.find((e) => drillId(e) === itemId);
+      if (!entry) return <RetiredItem onNext={advance} />;
+      return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} onDone={advance} />;
+    }
+    const [, lessonId, stepNo] = itemId.split(':');
+    const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
+    const step = lesson?.steps[Number(stepNo) - 1];
+    if (!lesson || !step || step.type !== 'try') return <RetiredItem onNext={advance} />;
     return (
-      <div className="empty" data-testid="review-empty">
-        <p>{queue.current.length === 0 ? 'Nothing is due for review.' : 'Review queue cleared for now.'}</p>
-        <div className="actions"><button className="primary" onClick={() => onFinished('done')}>Continue</button></div>
-      </div>
+      <section className="lesson-review" key={itemId}>
+        <Ask title={CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title} />
+        <LessonTry lesson={lesson} stepIndex={Number(stepNo) - 1} step={step} hideBefore sessionId={sessionId} context="review" onDone={advance} />
+      </section>
     );
-  }
-  if (itemId.startsWith('lichess:')) {
-    const puzzle = pool.byId.get(itemId.slice(8));
-    if (!puzzle) return <RetiredItem onNext={advance} />;
-    return (
-      <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
-        allowHints={false} onRecorded={onAttempt} onNext={advance} />
-    );
-  }
-  if (itemId.startsWith('sense:')) {
-    if (!games) return <p className="muted">Loading your games</p>;
-    // Looked up once per queue position and kept: the games table changes while games are
-    // analysed, and a question on screen must not turn into "no longer available" mid-answer.
-    if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
-    const item = held.current.sense;
-    if (!item) return <RetiredItem onNext={advance} />;
-    return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" onDone={advance} />;
-  }
-  if (itemId.startsWith('move:')) {
-    if (!games) return <p className="muted">Loading your games</p>;
-    if (held.current?.id !== itemId) held.current = { id: itemId, move: moveItems(games, { fromMove: 1, toMove: 200 }).find((m) => m.id === itemId) };
-    const move = held.current.move;
-    if (!move) return <RetiredItem onNext={advance} />;
-    return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" onRecorded={onAttempt} onDone={advance} />;
-  }
-  if (itemId.startsWith('kpk:')) {
-    const [, goal, ...rest] = itemId.split(':');
-    return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} onDone={advance} />;
-  }
-  if (itemId.startsWith('game:')) {
-    if (!games) return <p className="muted">Loading your games</p>;
-    if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
-    const drill = held.current.drill;
-    if (!drill) return <RetiredItem onNext={advance} />;
-    return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} onDone={advance} />;
-  }
-  if (itemId.startsWith('opening:')) {
-    const entry = repertoire.find((e) => drillId(e) === itemId);
-    if (!entry) return <RetiredItem onNext={advance} />;
-    return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} onDone={advance} />;
-  }
-  const [, lessonId, stepNo] = itemId.split(':');
-  const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
-  const step = lesson?.steps[Number(stepNo) - 1];
-  if (!lesson || !step || step.type !== 'try') return <RetiredItem onNext={advance} />;
-  return (
-    <section className="lesson-review">
-      <Ask title={CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title} />
-      <LessonTry key={itemId} lesson={lesson} stepIndex={Number(stepNo) - 1} step={step} hideBefore sessionId={sessionId} context="review" onDone={advance} />
-    </section>
-  );
+  };
+  return <KeepLast>{body()}</KeepLast>;
 }
 
 function RetiredItem({ onNext }: { onNext: () => void }) {

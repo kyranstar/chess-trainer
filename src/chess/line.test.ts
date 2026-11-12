@@ -43,9 +43,9 @@ describe('where a line is decided', () => {
     const c = consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6', 'f1c4'], 'white', BEFORE)!;
     expect(c).toMatchObject({ ply: 1, kind: 'material', square: 'e5' });
     // A pawn won, a knight lost: two points behind, not three.
-    expect(c.text).toBe('Knight taken on e5. Over these moves you come out 2 points behind.');
+    expect(c.text).toBe('Knight taken on e5. You end 2 points behind.');
     // The same line seen from the other side.
-    expect(consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6'], 'black', BEFORE)!.text).toBe('Knight taken on e5. Over these moves you come out 2 points ahead.');
+    expect(consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6'], 'black', BEFORE)!.text).toBe('Knight taken on e5. You end 2 points ahead.');
   });
 
   it('claims nothing when the line stops on a capture: the recapture may be next', () => {
@@ -66,14 +66,14 @@ describe('where a line is decided', () => {
     const start = 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3';
     const c = consequenceOf(start, ['f3e5', 'c6e5', 'd2d4', 'e5c6'], 'white')!;
     expect(c).toMatchObject({ ply: 2, square: 'e5' });
-    expect(c.text).toBe('Knight taken on e5. Over these moves you come out 2 points behind.');
+    expect(c.text).toBe('Knight taken on e5. You end 2 points behind.');
   });
 
   it('stops at the capture that cost the piece, not at an even exchange that follows it', () => {
     // 3...dxe5 wins the knight; then bishop is exchanged for bishop on e6. The knight is the point.
     const c = consequenceOf(AFTER, ['d6e5', 'f1c4', 'c8e6', 'c4e6', 'f7e6', 'd2d3'], 'white', BEFORE)!;
     expect(c).toMatchObject({ ply: 1, square: 'e5' });
-    expect(c.text).toBe('Knight taken on e5. Over these moves you come out 2 points behind.');
+    expect(c.text).toBe('Knight taken on e5. You end 2 points behind.');
   });
 
   it('stops at checkmate and marks the king', () => {
@@ -87,11 +87,56 @@ describe('where a line is decided', () => {
   it('counts a promotion, and an en passant capture as a pawn', () => {
     const promo = consequenceOf('8/4P1k1/8/8/8/8/6K1/8 w - - 0 1', ['e7e8q', 'g7f6', 'e8e4'], 'white')!;
     expect(promo).toMatchObject({ ply: 1, square: 'e8' });
-    expect(promo.text).toBe('The pawn queens on e8. Over these moves you come out 8 points ahead.');
+    expect(promo.text).toBe('The pawn queens on e8. You end 8 points ahead.');
     // White pawn on e5, Black has just played d7-d5: exd6 e.p. takes the pawn on d5.
     const ep = consequenceOf('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2', ['e5d6', 'e8d7', 'e1e2'], 'white')!;
     expect(ep).toMatchObject({ ply: 1, square: 'd6' });
-    expect(ep.text).toBe('Pawn taken on d5. Over these moves you come out 1 point ahead.');
+    expect(ep.text).toBe('Pawn taken on d5. You end 1 point ahead.');
   });
 });
 
+
+import { mergeLines, numberedSans } from './line';
+
+describe('the moves compared after an answer: you, the game, the best (ADR-052)', () => {
+  // The owner's game of 9 November, move 19, White: he tried Bb5+, had played Qe4, best was Bh5+.
+  const fen = '2qrkb1r/1pp3p1/p3bp1p/5n2/1P6/2N1Q1B1/P1P1BPPP/3R1RK1 w k - 1 19';
+  const you = { who: 'you' as const, uci: 'e2b5', score: 11, pv: ['a6b5'] };
+  const game = { who: 'game' as const, uci: 'e3e4', score: 76, pv: null };
+  const best = { who: 'best' as const, uci: 'e2h5', score: 97, pv: ['e8e7', 'e3c5'] };
+
+  it('three different moves are three lines, always in the order you, game, best', () => {
+    const lines = mergeLines(fen, [best, game, you]);
+    expect(lines.map((l) => [l.kind, l.label, l.san, l.score])).toEqual([['you', 'You', 'Bb5+', 11], ['game', 'Game', 'Qe4', 76], ['best', 'Best', 'Bh5+', 97]]);
+    expect(lines[1]!.pv).toBeNull(); // not searched yet: asked for when the line is opened
+  });
+
+  it('the move from the game played again is one line carrying both names', () => {
+    const lines = mergeLines(fen, [{ ...you, uci: 'e3e4', score: 75, pv: ['f8d6'] }, game, best]);
+    expect(lines.map((l) => l.label)).toEqual(['You · Game', 'Best']);
+    expect(lines[0]).toMatchObject({ kind: 'you', who: ['you', 'game'], score: 75, pv: ['f8d6'] });
+  });
+
+  it('the best move found is one line in the engine\'s colour, with the engine\'s figures and line', () => {
+    const lines = mergeLines(fen, [{ ...you, uci: 'e2h5', score: 95, pv: [] }, game, best]);
+    expect(lines.map((l) => l.label)).toEqual(['You · Best', 'Game']);
+    expect(lines[0]).toMatchObject({ kind: 'best', score: 97, pv: ['e8e7', 'e3c5'] });
+    // All three the same move: one line.
+    expect(mergeLines(fen, [{ ...you, uci: 'e2h5' }, { ...game, uci: 'e2h5' }, best]).map((l) => l.label)).toEqual(['You · Game · Best']);
+  });
+
+  it('castling written either way is the same move; a move that cannot be played is left out; a puzzle names its own', () => {
+    const castle = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1';
+    expect(mergeLines(castle, [{ who: 'you', uci: 'e1h1', score: null, pv: [] }, { who: 'best', uci: 'e1g1', score: null, pv: [] }]).map((l) => l.label)).toEqual(['You · Best']);
+    expect(mergeLines(fen, [{ ...you, uci: 'a1a8' }, best]).map((l) => l.label)).toEqual(['Best']);
+    expect(mergeLines(fen, [{ ...best, label: 'Solution' }])[0]!.label).toBe('Solution');
+    expect(mergeLines('not a position', [best])).toEqual([]);
+  });
+
+  it('a line is written with its move numbers, whichever side starts', () => {
+    expect(numberedSans(fen, ['e2h5', 'e8e7', 'e3c5'])).toEqual([{ san: 'Bh5+', no: '19.' }, { san: 'Ke7', no: null }, { san: 'Qc5+', no: '20.' }]);
+    expect(numberedSans(BLACK_TO_MOVE, ['e7e5', 'g1f3'])).toEqual([{ san: 'e5', no: '1…' }, { san: 'Nf3', no: '2.' }]);
+    // It stops at a move that cannot be played rather than guessing.
+    expect(numberedSans(fen, ['e2h5', 'a1a8']).map((t) => t.san)).toEqual(['Bh5+']);
+  });
+});

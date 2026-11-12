@@ -19,7 +19,8 @@ import { type MoveItem, moveItems } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { OwnMoveDrill } from './OwnMove';
 import { RunSummaryRows } from './Mix';
-import { RunFrame } from './Stage';
+import { KeepLast, RunFrame } from './Stage';
+import { seenPositions } from '../schedule/position';
 
 /** A small stable hash for choosing among a few candidates by turn. */
 function hashOf(text: string): number {
@@ -344,7 +345,9 @@ export function SessionRun({ learner }: { learner: Learner }) {
     let pick: { item: MoveItem; pace: number } | null = null;
     if (Math.floor(testIndex / 2) % 3 !== 2) {
       const done = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId), ...senseShown.current]);
-      const left = moveItems(games).filter((m) => !done.has(m.id));
+      // A position already met in another exercise is not asked again as a new one (see src/schedule/position.ts).
+      const met = seenPositions([...learner.attempts, ...[...senseShown.current].map((exerciseId) => ({ exerciseId }))]);
+      const left = moveItems(games).filter((m) => !done.has(m.id) && !met.has(`${m.gameId}:${m.ply}`));
       // Newest games first, with some variety among them.
       const item = left.length ? left[left.length - 1 - (hashOf(`${session.id}|${testIndex}`) % Math.min(8, left.length))] : undefined;
       if (item) pick = { item, pace: isTimed(item.id) ? TIMED_SECONDS : 0 };
@@ -359,7 +362,8 @@ export function SessionRun({ learner }: { learner: Learner }) {
     const seen = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'sense').map((a) => a.exerciseId), ...senseShown.current]);
     const kind = Math.floor(testIndex / 2) % 2 === 0 ? 'safe-or-not' : 'chance-or-not';
     if (senseLatch.current?.index === testIndex) return senseLatch.current.item;
-    const all = senseItemsFrom(games);
+    const met = seenPositions([...learner.attempts, ...[...senseShown.current].map((exerciseId) => ({ exerciseId }))]);
+    const all = senseItemsFrom(games).filter((x) => !met.has(`${x.gameId}:${x.ply}`));
     const other = kind === 'safe-or-not' ? 'chance-or-not' : 'safe-or-not';
     // If one kind has run out, the other is asked instead of ending the turn empty.
     const item = pickSense(all, kind, seen, 2, `${session.id}|${testIndex}`)[0] ?? pickSense(all, other, seen, 2, `${session.id}|${testIndex}`)[0] ?? null;
@@ -402,34 +406,37 @@ export function SessionRun({ learner }: { learner: Learner }) {
       )}
 
       {leaving && <p className="muted" data-testid="leaving-block">Moving on</p>}
-      {block.kind === 'apply' && moveTurn && (
-        <OwnMoveDrill key={moveTurn.item.id} item={moveTurn.item} sessionId={session.id} context="apply" pace={moveTurn.pace} onRecorded={onAttempt} onDone={nextTestItem} />
-      )}
-      {block.kind === 'apply' && senseTurn && (
-        <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" onRecorded={onAttempt} onDone={nextTestItem} />
-      )}
-      {block.kind === 'apply' && !leaving && !moveTurn && !senseTurn && concept && pool && (
-        <PuzzleStream
-          key={`apply-${concept.id}-${testIndex}`}
-          limit={1}
-          pick={conceptPicker(pool.puzzles, concept, learner.level.level - 100, `${seed}|${testIndex}`)}
-          context="apply" conceptId={concept.id} sessionId={session.id} allowHints seen={learner.seen}
-          heading={concept.title} onAttempt={onAttempt}
-          onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
-        />
-      )}
-      {block.kind === 'apply' && !leaving && !moveTurn && !senseTurn && !concept && (
-        <div className="empty" data-testid="practice-empty">
-          <p>{games && games.length > 0 ? 'No unseen questions from your games are left for now. More appear as new games are fetched and analysed.' : block.reason}</p>
-          <div className="actions"><button className="primary" onClick={() => void finish()}>Continue</button></div>
-        </div>
+      {/* One exercise at a time; the one before it stays reachable through "Last" in the bar. */}
+      {block.kind === 'apply' && !leaving && (
+        <KeepLast>
+          {moveTurn ? (
+            <OwnMoveDrill key={moveTurn.item.id} item={moveTurn.item} sessionId={session.id} context="apply" pace={moveTurn.pace} onRecorded={onAttempt} onDone={nextTestItem} />
+          ) : senseTurn ? (
+            <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="apply" onRecorded={onAttempt} onDone={nextTestItem} />
+          ) : concept ? (pool ? (
+            <PuzzleStream
+              key={`apply-${concept.id}-${testIndex}`}
+              limit={1}
+              pick={conceptPicker(pool.puzzles, concept, learner.level.level - 100, `${seed}|${testIndex}`)}
+              context="apply" conceptId={concept.id} sessionId={session.id} allowHints seen={learner.seen}
+              heading={concept.title} onAttempt={onAttempt}
+              onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
+            />
+          ) : null) : (
+            <div className="empty" data-testid="practice-empty">
+              <p>{games && games.length > 0 ? 'No unseen questions from your games are left for now. More appear as new games are fetched and analysed.' : block.reason}</p>
+              <div className="actions"><button className="primary" onClick={() => void finish()}>Continue</button></div>
+            </div>
+          )}
+        </KeepLast>
       )}
 
       {block.kind === 'test' && pool && activeCheck && (
         <CheckRunner key={`check-${activeCheck.id}`} concept={activeCheck} learner={learner} sessionId={session.id} onDone={() => { checkConcept.current = null; setTestPhase('mixed'); }} />
       )}
       {block.kind === 'test' && pool && !activeCheck && !leaving && (
-        senseTurn ? (
+        <KeepLast>
+        {senseTurn ? (
           <SenseDrill key={senseTurn.id} item={senseTurn} sessionId={session.id} context="test" onRecorded={onAttempt} onDone={nextTestItem} />
         ) : (
           <PuzzleStream
@@ -445,7 +452,8 @@ export function SessionRun({ learner }: { learner: Learner }) {
             sessionId={session.id} allowHints={false} seen={learner.seen}
             onAttempt={onAttempt} onFinished={nextTestItem}
           />
-        )
+        )}
+        </KeepLast>
       )}
 
       {block.kind === 'play' && <PlayBlock onFinished={() => void finish()} />}

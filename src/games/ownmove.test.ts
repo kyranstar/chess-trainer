@@ -170,47 +170,58 @@ describe('cases from the outside reviewer (fourth pass)', () => {
   });
 });
 
-import { freeTag, looseNote, moveHeadline } from './ownmove';
+import { freeTag, gradeHeadline, GRADE_MARK, reallyLoose } from './ownmove';
 
-describe('what the practice audit found in the messages', () => {
+describe('what the practice audits found in the messages', () => {
   // Black to move; a white knight on e5 can be taken for nothing by the d6 pawn.
   const fen = 'rnbqk1nr/ppp2ppp/3p4/4N3/1b2P3/P7/1PPP1PPP/RNBQKB1R b KQkq - 0 4';
 
-  it('a free capture he passed up is a miss only when his move was rated worse than good', () => {
+  it('a free capture he passed up is a miss only when taking was the engine\'s first choice', () => {
     const quiet = movePicture(fen, 'g8f6');
     const took = movePicture(fen, 'd6e5');
-    expect(freeTag(took, 'best', 'd6e5')).toBe('free-taken');
-    // He played another move that the engine rates as its first choice or close to it: nothing was missed.
-    expect(freeTag(quiet, 'best', 'g8f6')).toBe('free-declined');
-    expect(freeTag(quiet, 'good', 'g8f6')).toBe('free-declined');
-    expect(freeTag(quiet, 'inaccuracy', 'g8f6')).toBe('free-left');
-    expect(freeTag(quiet, 'blunder', 'g8f6')).toBe('free-left');
-    expect(freeTag(quiet, 'unrated', 'g8f6')).toBe('free-left'); // no rating: the plain fact stands
+    expect(freeTag(took, 'd6e5', 'd6e5')).toBe('free-taken');
+    // The engine's first choice was to take: passing it up is a miss.
+    expect(freeTag(quiet, 'g8f6', 'd6e5')).toBe('free-left');
+    // The engine preferred something else, so nothing was missed by not taking (second audit:
+    // "you could have taken the knight" stood beside a blunder where taking was no better).
+    expect(freeTag(quiet, 'g8f6', 'b4c5')).toBe('free-declined');
+    expect(freeTag(quiet, 'g8f6', null)).toBe('free-declined');
     // Nothing was free: no tag at all.
-    expect(freeTag(movePicture('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'e2e4'), 'best', 'e2e4')).toBeNull();
+    expect(freeTag(movePicture('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'e2e4'), 'e2e4', 'e2e4')).toBeNull();
   });
 
-  it('says in a few words whether a piece that can be taken is really hanging, and nothing when it does not know', () => {
-    expect(looseNote({ passed: true, engineTakes: true, captureCost: null })).toBe('The engine takes it and your move still holds.');
-    expect(looseNote({ passed: false, engineTakes: true, captureCost: null })).toBe('The engine takes it.');
-    expect(looseNote({ passed: true, engineTakes: false, captureCost: 50 })).toBe('Not really hanging: taking it costs your opponent 50.');
-    expect(looseNote({ passed: true, engineTakes: false, captureCost: 2 })).toBe('It is hanging: taking it is as good as the engine’s reply.');
-    expect(looseNote({ passed: true, engineTakes: false, captureCost: null })).toBeNull();
-    expect(looseNote({ passed: false, engineTakes: false, captureCost: 6 })).toBeNull();
+  it('a mate in one passed up is a miss whatever the engine preferred', () => {
+    const mate = 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4';
+    expect(freeTag(movePicture(mate, 'd2d3'), 'd2d3', 'h5f7')).toBe('free-left');
+    expect(freeTag(movePicture(mate, 'h5f7'), 'h5f7', 'h5f7')).toBe('free-taken');
   });
 
-  it('the result in one line: right or not, by how much, and what was better (owner: no paragraphs)', () => {
-    const h = (over: Partial<Parameters<typeof moveHeadline>[0]>) => moveHeadline({ grade: 'good', san: 'Qe6', bestSan: 'Rad1', loss: 3, mateAllowed: null, late: null, ...over });
-    expect(h({ grade: 'best', bestSan: 'Qe6', loss: 0 })).toBe('Best move.');
-    expect(h({})).toBe('Good. Best was Rad1, 3 points better.');
-    expect(h({ loss: 0 })).toBe('Good: as strong as Rad1.');
-    expect(h({ grade: 'inaccuracy', loss: 8, bestSan: 'd5' })).toBe('Inaccuracy. Best was d5, 8 points better.');
-    expect(h({ grade: 'mistake', loss: 13, bestSan: 'Bd6' })).toBe('Mistake. Best was Bd6, 13 points better.');
-    expect(h({ grade: 'blunder', loss: 89, bestSan: 'O-O' })).toBe('Blunder. Best was O-O, 89 points better.');
-    expect(h({ grade: 'good', loss: 1 })).toBe('Good. Best was Rad1, 1 point better.');
-    expect(h({ grade: 'blunder', mateAllowed: 'Qxf7#', loss: 60 })).toBe('Blunder: Qe6 allows mate in one, Qxf7#.');
-    expect(h({ grade: 'unrated', bestSan: null, loss: null })).toBe('Not rated: the engine did not answer.');
-    expect(h({ grade: 'mistake', loss: 13, bestSan: 'Bd6', late: 30 })).toBe('Mistake. Best was Bd6, 13 points better. Late: over 30 s.');
+  it('the owner\'s position of 19 October, move 18: a check does not deal with a threat, it puts it off', () => {
+    // The bishop on f3 attacks the rook on d1. Qc5+ leaves both where they are.
+    const pos = '1r1q1k1r/3B1pbp/4p1p1/p3P2n/1nQ2B2/2N2b2/PP3PPP/3R1RK1 w - - 1 18';
+    expect(movePicture(pos, 'c4c5').threatsBefore.map((t) => t.square)).toEqual(['d1']);
+    expect(movePicture(pos, 'c4c5').dealtWith).toEqual([]);
+    // Taking the attacker deals with it, and so does moving the rook away.
+    expect(movePicture(pos, 'g2f3').dealtWith).toEqual(['d1']);
+    expect(movePicture(pos, 'd1d2').dealtWith).toEqual(['d1']);
+  });
+
+  it('a piece that can be taken is marked only when it is really hanging, or when that is not known', () => {
+    expect(reallyLoose({ engineTakes: true, captureCost: 40 })).toBe(true);
+    expect(reallyLoose({ engineTakes: false, captureCost: 2 })).toBe(true);
+    expect(reallyLoose({ engineTakes: false, captureCost: null })).toBe(true);
+    expect(reallyLoose({ engineTakes: false, captureCost: 50 })).toBe(false);
+  });
+
+  it('the rating is one word and a mark; what was better is shown, not said (owner, 12 November)', () => {
+    expect(gradeHeadline({ grade: 'best', late: null })).toBe('Best move.');
+    expect(gradeHeadline({ grade: 'good', late: null })).toBe('Good.');
+    expect(gradeHeadline({ grade: 'inaccuracy', late: null })).toBe('Inaccuracy.');
+    expect(gradeHeadline({ grade: 'mistake', late: 30 })).toBe('Mistake. Late: over 30 s.');
+    expect(gradeHeadline({ grade: 'blunder', late: null })).toBe('Blunder.');
+    expect(gradeHeadline({ grade: 'unrated', late: null })).toBe('Not rated: the engine did not answer.');
+    expect(GRADE_MARK.blunder).toEqual({ text: '??', tone: 'bad' });
+    expect(GRADE_MARK.best?.tone).toBe('good');
+    expect(GRADE_MARK.unrated).toBeNull();
   });
 });
-

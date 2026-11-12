@@ -11,16 +11,20 @@
  *  - success -> Good; fail or assisted -> Again; skipped -> no change;
  *  - no same-day learning steps: an item is never due again on the day it was seen, so a
  *    review always tests recall after at least one night, not short-term rehearsal.
+ *
+ * Policy v3: a position from the learner's own games has one schedule, whichever exercise
+ * asked about it (see ./position.ts). It comes back in the form it was last answered in.
  */
 import { type Card, createEmptyCard, fsrs, FSRSVersion, generatorParameters, type Grade, Rating } from 'ts-fsrs';
 import type { Attempt, ReviewState, SerializedCard } from '../db/types';
+import { reviewKey } from './position';
 
 /** A recalled item leaves active review once the gap before a successful recall reaches this many days. */
 export const GRADUATE_AFTER_DAYS = 14;
 /** Misses after which an item is set aside. */
 export const SET_ASIDE_AFTER_MISSES = 4;
 
-export const SCHEDULER_VERSION = `review-v2/ts-fsrs-${FSRSVersion}`;
+export const SCHEDULER_VERSION = `review-v3/ts-fsrs-${FSRSVersion}`;
 
 const scheduler = fsrs(
   generatorParameters({ request_retention: 0.9, maximum_interval: 365, enable_fuzz: false, enable_short_term: false }),
@@ -64,7 +68,9 @@ export function applyAttempt(state: ReviewState | undefined, a: Attempt): Review
   const now = new Date(a.ts);
   const card = state ? deserialize(state.card) : createEmptyCard(now);
   const next = scheduler.next(card, now, grade).card;
-  const out: ReviewState = { itemId: a.exerciseId, algo: SCHEDULER_VERSION, due: next.due.getTime(), card: serialize(next), lastAttemptUuid: a.uuid };
+  const key = reviewKey(a.exerciseId);
+  const out: ReviewState = { itemId: key, algo: SCHEDULER_VERSION, due: next.due.getTime(), card: serialize(next), lastAttemptUuid: a.uuid };
+  if (key !== a.exerciseId) out.ask = a.exerciseId;
   if (!recall) {
     // Graduation: recalled after two weeks or more. The item leaves active review (its history
     // stays; a later miss brings it back). This says nothing about the skill being mastered.
@@ -80,8 +86,9 @@ export function rebuildReviewStates(attempts: Attempt[]): Map<string, ReviewStat
   const sorted = [...attempts].sort((x, y) => x.ts - y.ts || (x.uuid < y.uuid ? -1 : x.uuid > y.uuid ? 1 : 0));
   const out = new Map<string, ReviewState>();
   for (const a of sorted) {
-    const next = applyAttempt(out.get(a.exerciseId), a);
-    if (next) out.set(a.exerciseId, next);
+    const key = reviewKey(a.exerciseId);
+    const next = applyAttempt(out.get(key), a);
+    if (next) out.set(key, next);
   }
   return out;
 }
@@ -140,12 +147,13 @@ export function reviewCalibration(attempts: Attempt[], since?: number): Calibrat
   const states = new Map<string, ReviewState>();
   const rows: Calibration['rows'] = [];
   for (const a of sorted) {
-    const before = states.get(a.exerciseId);
+    const key = reviewKey(a.exerciseId);
+    const before = states.get(key);
     if (before && a.scheduledReview && a.outcome !== 'skipped' && (since === undefined || a.ts >= since)) {
       rows.push({ uuid: a.uuid, itemId: a.exerciseId, ts: a.ts, predicted: predictedRecall(before, a.ts), recalled: a.outcome === 'success' });
     }
     const next = applyAttempt(before, a);
-    if (next) states.set(a.exerciseId, next);
+    if (next) states.set(key, next);
   }
   const n = rows.length;
   return {

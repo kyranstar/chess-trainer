@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { href, type Route } from '../app/router';
 import { type Learner, useDb, useDueReviews, useFocusMode, useNow } from '../app/store';
 import { STARTING_PROFILE } from '../app/profile';
-import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
+import { applyUci, fenAfter, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { runSyncRound, useSyncState } from '../app/useAutoSync';
 import { DEFAULT_USERNAME } from '../games/autosync';
@@ -16,9 +16,10 @@ import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { bestLineFor } from '../engine/interactive';
-import { ucisOfSanLine } from '../chess/line';
-import { useLineSteps } from './LineSteps';
-import { Ask, gameRef, useRunNote } from './Stage';
+import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
+import { useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, useItem, useRunNote } from './Stage';
+import { reviewKey } from '../schedule/position';
 import { localDate } from '../schedule/session';
 
 export function useGames(): GameRecord[] | undefined {
@@ -242,24 +243,26 @@ export function GameEventView({ gameId, ply }: { gameId: string; ply: number }) 
   );
 }
 
-/** One position from the learner's own game where the engine found a single clearly best move. */
+/**
+ * One position from the learner's own game where the engine found a single clearly best move.
+ * After the answer the three moves stand side by side: the one just tried, the one played in
+ * the game and the best one, each with what follows it (see ./Lines.tsx).
+ */
 export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPosition; sessionId: string | null; onDone: () => void }) {
   const db = useDb();
   useFocusMode();
+  const stage = useItem(onDone);
   const { game, event } = drill;
   const [result, setResult] = useState<{ ok: boolean; playedSan: string | null; shown: boolean } | null>(null);
   useScreenChange(`${drill.id}|${!!result}`);
   const armed = useArmed();
-  const [fen, setFen] = useState(event.fen);
   const [resetKey, setResetKey] = useState(0);
   const [checking, setChecking] = useState(false);
   const [other, setOther] = useState<'worse' | 'not-faulted' | 'unchecked' | null>(null);
   const started = useRef(Date.now());
-  // After the answer the lines can be played through on the board: the engine's, and what
-  // follows the move he played. A second go is practice and is never recorded.
-  const [mine, setMine] = useState<{ uci: string; pv: string[] } | null>(null);
-  const [worseBy, setWorseBy] = useState<number | null>(null);
-  const [view, setView] = useState<'best' | 'mine'>('best');
+  // The move he tried, what the engine answers to it, and what it leaves him with.
+  const [mine, setMine] = useState<{ uci: string; pv: string[]; wp: number | null } | null>(null);
+  // A second go is practice and is never recorded.
   const recorded = useRef(false);
   const [retrying, setRetrying] = useState(false);
   function retry() {
@@ -267,8 +270,6 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
     setResult(null);
     setOther(null);
     setMine(null);
-    setView('best');
-    setFen(event.fen);
     setResetKey((k) => k + 1);
   }
 
@@ -283,13 +284,11 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
       setChecking(true);
       const line = await bestLineFor(fenOf(applyUci(pos, uci)));
       setChecking(false);
-      setMine({ uci, pv: line?.pv ?? [] });
+      setMine({ uci, pv: line?.pv.slice(0, 10) ?? [], wp: line ? 100 - line.wp : null });
       other = !line ? 'unchecked' : 100 - line.wp >= event.bestWp - 10 ? 'not-faulted' : 'worse';
-      setWorseBy(line ? Math.round(event.bestWp - (100 - line.wp)) : null);
-    }
+    } else if (uci) setMine({ uci, pv: [], wp: null });
     setOther(other);
     setResult({ ok, playedSan: uci ? sanOf(pos, uci) : null, shown });
-    setFen(fenOf(applyUci(pos, event.best)));
     setResetKey((k) => k + 1);
     if (recorded.current) return;
     recorded.current = true;
@@ -300,16 +299,43 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
     });
   }
 
-  const bestPv = (() => {
-    const pv = ucisOfSanLine(event.fen, event.bestLine ?? '');
-    return pv[0] && sameMove(positionFromFen(event.fen), pv[0], event.best) ? pv : [event.best];
-  })();
-  const line = !result ? null : view === 'mine' && mine ? { from: event.fen, pv: [mine.uci, ...mine.pv] } : { from: event.fen, pv: bestPv };
-  const steps = useLineSteps(line, view === 'mine' ? { initial: 2, me: game.color, cap: 6 } : { initial: 1, me: game.color, stopThere: false, startLabel: 'Best line' });
+  const lines = useMemo(() => {
+    if (!result) return [];
+    const bestPv = ucisOfSanLine(event.fen, event.bestLine ?? '');
+    const afterBest = bestPv[0] && sameMove(positionFromFen(event.fen), bestPv[0], event.best) ? bestPv.slice(1) : [];
+    // What followed the move from the game is on record when the move was an error; otherwise it is asked for when the line is opened.
+    let afterGame: string[] | null = null;
+    try {
+      const pv = event.refutation ? ucisOfSanLine(fenAfter(event.fen, [event.played]), event.refutation) : [];
+      afterGame = pv.length ? pv : null;
+    } catch {
+      afterGame = null;
+    }
+    const candidates: Candidate[] = [
+      ...(mine ? [{ who: 'you' as const, uci: mine.uci, score: mine.wp, pv: mine.pv }] : []),
+      { who: 'game', uci: event.played, score: event.playedWp, pv: afterGame },
+      { who: 'best', uci: event.best, score: event.bestWp, pv: afterBest },
+    ];
+    return mergeLines(event.fen, candidates);
+  }, [result, mine, event]);
+  const shown = useResultLines(result ? event.fen : null, lines, { me: game.color, compare: true });
+  const worseBy = mine?.wp === null || mine?.wp === undefined ? null : event.bestWp - mine.wp;
+  const head = !result ? null
+    : result.ok ? { text: 'Correct.', mark: '★', tone: 'good' }
+      : result.shown ? { text: 'Shown.', mark: null, tone: 'mid' }
+        : other === 'worse' ? { text: 'Missed.', mark: worseBy !== null && worseBy < 20 ? '?' : '??', tone: 'bad' }
+          : other === 'not-faulted' ? { text: 'About as good: not scored.', mark: '✓', tone: 'good' }
+            : { text: 'Could not be checked: not scored.', mark: null, tone: 'mid' };
+  const onMine = !!shown.selected?.who.includes('you') && shown.step === 1;
 
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>
-      <Board fen={steps.pos ? steps.pos.fen : fen} orientation={game.color} movable={result || checking ? null : game.color} lastMove={steps.pos ? steps.pos.last : null} marks={steps.marks} onMove={(u) => void record(u, false)} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : other === 'worse' ? 'wrong' : 'none'}:${drill.id}:${retrying}` : null} />
+      <Board
+        fen={shown.board ? shown.board.fen : event.fen} orientation={game.color} movable={result || checking ? null : game.color}
+        lastMove={shown.board ? shown.board.lastMove : null} marks={shown.board?.marks ?? []} arrows={shown.board?.arrows ?? []} line={shown.board?.line ?? null}
+        badge={onMine && mine && head?.mark ? { square: mine.uci.slice(2, 4), text: head.mark, tone: head.tone as 'good' | 'mid' | 'bad' } : null}
+        onMove={(u) => void record(u, false)} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : other === 'worse' ? 'wrong' : 'none'}:${drill.id}:${retrying}` : null}
+      />
       <div className="say" aria-live="polite">
         {!result && (
           <Ask
@@ -317,28 +343,22 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
             meta={checking ? 'Checking your move with the engine' : retrying ? <span data-testid="own-retry-note">Second go: not recorded.</span> : `One move is clearly best. ${gameRef(game.endDate, event.ply, game.timeClass)}.`}
           />
         )}
-        {result?.ok && <div className="verdict right" data-testid="own-verdict" data-ok="true"><strong>Correct: {event.bestSan}.</strong><p>In the game you played {event.playedSan}.</p></div>}
-        {result && !result.ok && (
-          <div className={`verdict ${other === 'worse' ? 'wrong' : 'neutral'}`} data-testid="own-verdict" data-ok="false">
-            <strong>Best: {event.bestSan}.</strong>
-            {result.playedSan && other === 'worse' && <p>{result.playedSan} is {worseBy ?? 'many'} points worse.</p>}
-            {result.playedSan && other === 'not-faulted' && <p>{result.playedSan} is about as good: not scored.</p>}
-            {result.playedSan && other === 'unchecked' && <p>{result.playedSan} could not be checked: not scored.</p>}
-            {view === 'mine' && result.playedSan && <p data-testid="own-mine-line">On the board: {result.playedSan} and the reply.</p>}
-            {steps.note}
+        {result && head && (
+          <div className="result" data-testid="own-verdict" data-ok={result.ok}>
+            <p className="result-head">
+              {head.mark && <span className={`grade-mark is-${head.tone}`} aria-hidden>{head.mark}</span>}
+              <strong>{head.text}</strong>
+              {!result.ok && <button className="result-side" data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
+            </p>
+            {shown.chips}
+            {shown.ribbon}
+            {shown.note}
           </div>
         )}
       </div>
       <div className="actions dock">
         {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
-        {result && steps.controls}
-        {result && !result.ok && mine && mine.pv.length > 0 && (
-          view === 'best'
-            ? <button data-testid="own-see-mine" onClick={() => setView('mine')}>After {result.playedSan}</button>
-            : <button data-testid="own-see-best" onClick={() => setView('best')}>Best line</button>
-        )}
-        {result && !result.ok && <button data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
-        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={onDone}>Next</button>}
+        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );
@@ -353,22 +373,24 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
   const [i, setI] = useState(0);
   // Fixed once it has something in it; while it is empty (games still being analysed) it may fill.
   if ((queue.current === null || (queue.current.length === 0 && i === 0)) && games && learner.ready) {
+    // A position is one item whichever exercise asked it (see src/schedule/position.ts).
     const queued = new Set(learner.reviews.map((r) => r.itemId));
     const dueIds = new Set(due.map((d) => d.itemId));
-    queue.current = drillPositions(games).filter((d) => !queued.has(d.id) || dueIds.has(d.id));
+    queue.current = drillPositions(games).filter((d) => !queued.has(reviewKey(d.id)) || dueIds.has(reviewKey(d.id)));
   }
   useRunNote(queue.current && queue.current.length - i > 0 ? `${queue.current.length - i} left` : null);
   if (!queue.current) return <p className="muted">Loading</p>;
   const drill = queue.current[i];
-  if (!drill) {
-    return (
-      <div className="empty" data-testid="own-done">
-        <p>{queue.current.length === 0 ? 'No positions from your games are waiting. They appear after analysed games are imported.' : `Worked through ${queue.current.length} position${queue.current.length === 1 ? '' : 's'} from your games.`}</p>
-        <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
-      </div>
-    );
-  }
-  return <OwnGameDrill key={drill.id} drill={drill} sessionId={null} onDone={() => setI(i + 1)} />;
+  return (
+    <KeepLast>
+      {drill ? <OwnGameDrill key={drill.id} drill={drill} sessionId={null} onDone={() => setI(i + 1)} /> : (
+        <div className="empty" data-testid="own-done">
+          <p>{queue.current.length === 0 ? 'No positions from your games are waiting. They appear after analysed games are imported.' : `Worked through ${queue.current.length} position${queue.current.length === 1 ? '' : 's'} from your games.`}</p>
+          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+        </div>
+      )}
+    </KeepLast>
+  );
 }
 
 const SYNC_TEXT: Record<string, string> = {

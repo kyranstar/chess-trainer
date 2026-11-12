@@ -70,7 +70,10 @@ export interface LessonEvent {
 
 /** Derived, rebuildable from attempts (see schedule/review.ts). */
 export interface ReviewState {
+  /** What the schedule is kept under: the exercise id, or `pos:<game>:<ply>` for a position from the learner's own games. */
   itemId: string;
+  /** For an own-game position: the exercise to ask it as (the form it was last answered in). */
+  ask?: string;
   algo: string;
   due: number;
   card: SerializedCard;

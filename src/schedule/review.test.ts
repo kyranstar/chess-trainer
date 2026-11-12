@@ -186,3 +186,49 @@ describe('what enters the review queue, and what leaves it (policy v2)', () => {
   });
 });
 
+
+import { positionOf, reviewKey, sameItemIds, seenPositions } from './position';
+
+describe('one schedule for a position from the learner\'s own games (policy v3)', () => {
+  const P = 'a8493137de45d955:34';
+  it('the four exercises on one position are one item; everything else keeps its own id', () => {
+    for (const form of ['move', 'game', 'sense:safe-or-not', 'sense:chance-or-not']) {
+      expect(positionOf(`${form}:${P}`)).toBe(P);
+      expect(reviewKey(`${form}:${P}`)).toBe(`pos:${P}`);
+    }
+    expect(sameItemIds(`move:${P}`).sort()).toEqual([`game:${P}`, `move:${P}`, `sense:chance-or-not:${P}`, `sense:safe-or-not:${P}`]);
+    for (const id of ['lichess:a', 'opening:white|k:e2e4', 'kpk:win:8/8/8', 'lesson:x:2']) {
+      expect(positionOf(id)).toBeNull();
+      expect(reviewKey(id)).toBe(id);
+      expect(sameItemIds(id)).toEqual([id]);
+    }
+    expect([...seenPositions([{ exerciseId: `game:${P}` }, { exerciseId: 'lichess:a' }, { exerciseId: `move:${P}` }])]).toEqual([P]);
+  });
+
+  it('the owner\'s position of 19 October: five askings in three forms give one schedule, not three', () => {
+    const asked: [string, Attempt['exerciseKind'], Attempt['outcome'], number][] = [
+      [`sense:chance-or-not:${P}`, 'sense', 'fail', 0],
+      [`sense:chance-or-not:${P}`, 'sense', 'fail', 0.25],
+      [`move:${P}`, 'own-move', 'fail', 0.7],
+      [`game:${P}`, 'own-game', 'success', 1.05],
+      [`sense:chance-or-not:${P}`, 'sense', 'success', 1.7],
+    ];
+    const states = rebuildReviewStates(asked.map(([exerciseId, exerciseKind, outcome, day], i) => att({ exerciseId, exerciseKind, outcome, ts: T0 + day * DAY, uuid: `q${i}` })));
+    expect([...states.keys()]).toEqual([`pos:${P}`]);
+    const s = states.get(`pos:${P}`)!;
+    expect(s.itemId).toBe(`pos:${P}`);
+    // It comes back in the form it was last answered in.
+    expect(s.ask).toBe(`sense:chance-or-not:${P}`);
+  });
+
+  it('a miss in one form puts the position in the queue; a later success in another form is its review', () => {
+    const miss = applyAttempt(undefined, att({ exerciseId: `move:${P}`, exerciseKind: 'own-move', outcome: 'fail' }))!;
+    expect(miss.ask).toBe(`move:${P}`);
+    const recalled = applyAttempt(miss, att({ exerciseId: `game:${P}`, exerciseKind: 'own-game', outcome: 'success', ts: miss.due, uuid: 'r' }))!;
+    expect(recalled.itemId).toBe(miss.itemId);
+    expect(recalled.ask).toBe(`game:${P}`);
+    expect(recalled.due).toBeGreaterThan(miss.due);
+    // A puzzle's state carries no separate form.
+    expect(applyAttempt(undefined, att({ outcome: 'fail' }))!.ask).toBeUndefined();
+  });
+});
