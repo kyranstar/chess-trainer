@@ -10,8 +10,8 @@ import { Board } from './Board';
 import { useGames } from './Games';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
-import { useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, useItem } from './Stage';
+import { useOtherMovesAhead, useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, ResultTitle, useItem } from './Stage';
 import { seenPositions } from '../schedule/position';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
@@ -143,6 +143,7 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
     }
     return mergeLines(item.fen, candidates);
   }, [phase, item, mine]);
+  useOtherMovesAhead(item.fen);
   const shown = useResultLines(phase === 'done' ? item.fen : null, lines, { me: item.color, compare: true });
   const words = grade ? senseWords(item, grade, playedSan) : null;
   const them = item.color === 'white' ? 'Black' : 'White';
@@ -158,8 +159,8 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
       />
       <div className="say" aria-live="polite">
         {phase === 'ask' && (safety
-          ? <Ask title={`Is ${item.proposedSan} safe for ${me}?`} meta={`${source}.`} />
-          : <Ask title={`${me} to move. Anything to win?`} meta={`${source}.`} />)}
+          ? <Ask title={`Is ${item.proposedSan} safe for ${me}?`} />
+          : <Ask title={`${me} to move. Anything to win?`} />)}
         {(phase === 'play' || phase === 'checking') && (
           <Ask title={safety ? `Play ${them}’s reply that punishes it` : 'Play the winning move'} meta={phase === 'checking' ? 'Checking your move with the engine' : undefined} />
         )}
@@ -167,7 +168,8 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
           <div className="result" data-testid="sense-verdict" data-correct={grade.correct}>
             <p className="result-head">
               {!unscored && <span className={`grade-mark is-${grade.correct ? 'good' : 'bad'}`} aria-hidden>{grade.correct ? '✓' : '✗'}</span>}
-              <strong>{words!.title}</strong>
+              {/* Where the position is from is said only now, under the verdict. */}
+              <ResultTitle about={`${source}.`}><strong>{words!.title}</strong></ResultTitle>
             </p>
             {words!.detail && <p>{words!.detail}</p>}
             {shown.chips}

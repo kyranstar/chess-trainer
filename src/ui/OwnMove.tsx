@@ -10,8 +10,8 @@ import { DEVICE_NODES } from '../games/analyse';
 import { freeTag, GRADE_MARK, gradeHeadline, gradeMove, isPunishingReply, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade, reallyLoose } from '../games/ownmove';
 import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
-import { useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, useItem } from './Stage';
+import { useOtherMovesAhead, useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, ResultTitle, useItem } from './Stage';
 
 type Phase = 'move' | 'predict' | 'checking' | 'done';
 /** Both searches behind a rating use the same budget as the game analysis on this device. */
@@ -87,6 +87,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
       return Promise.resolve(null);
     }
   })();
+  // And after those the engine's other choices in the position, shown under the three (ADR-054).
+  useOtherMovesAhead(item.fen);
   // A second try after seeing the facts is practice, not a result: it is never recorded.
   const recorded = useRef(false);
   useScreenChange(`${item.id}|${phase}`);
@@ -251,7 +253,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
       />
       <div className="say" aria-live="polite">
         {phase === 'move' && (
-          <Ask title={`${me} to move`} meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : `Play your own move. ${source}.`}>
+          <Ask title={`${me} to move`} meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : undefined}>
             {pace > 0 && !retrying && (
               <p className={`ask-meta move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
                 {left > 0 ? `${Math.ceil(left)} s for this move` : `Over ${pace} s: take your time, it is noted as late.`}
@@ -266,8 +268,9 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
           <div className="result" data-testid="own-move-verdict">
             <p className="result-head">
               {mark && <span className={`grade-mark is-${mark.tone}`} aria-hidden>{mark.text}</span>}
-              <strong data-testid="own-move-grade">{gradeHeadline({ grade: result.verdict, late: timedOut.current ? pace : null })}</strong>
-              {!good && <button className="result-side" data-testid="own-move-retry" disabled={!armed} onClick={retry}>Try another move</button>}
+              {/* Where the position is from is said only now, under the rating. */}
+              <ResultTitle about={`${source}.`}><strong data-testid="own-move-grade">{gradeHeadline({ grade: result.verdict, late: timedOut.current ? pace : null })}</strong></ResultTitle>
+              {!good && <button className="result-side" data-testid="own-move-retry" disabled={!armed} onClick={retry}>Another move</button>}
             </p>
             {shownLines.chips}
             {shownLines.ribbon}

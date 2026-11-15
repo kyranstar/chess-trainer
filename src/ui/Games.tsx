@@ -17,8 +17,8 @@ import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { bestLineFor } from '../engine/interactive';
 import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
-import { useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, useItem, useRunNote } from './Stage';
+import { useOtherMovesAhead, useResultLines } from './Lines';
+import { Ask, gameRef, KeepLast, ResultTitle, useItem, useRunNote } from './Stage';
 import { reviewKey } from '../schedule/position';
 import { localDate } from '../schedule/session';
 
@@ -318,6 +318,7 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
     ];
     return mergeLines(event.fen, candidates);
   }, [result, mine, event]);
+  useOtherMovesAhead(event.fen);
   const shown = useResultLines(result ? event.fen : null, lines, { me: game.color, compare: true });
   const worseBy = mine?.wp === null || mine?.wp === undefined ? null : event.bestWp - mine.wp;
   const head = !result ? null
@@ -340,14 +341,15 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
         {!result && (
           <Ask
             title={`${game.color === 'white' ? 'White' : 'Black'} to move`}
-            meta={checking ? 'Checking your move with the engine' : retrying ? <span data-testid="own-retry-note">Second go: not recorded.</span> : `One move is clearly best. ${gameRef(game.endDate, event.ply, game.timeClass)}.`}
+            meta={checking ? 'Checking your move with the engine' : retrying ? <span data-testid="own-retry-note">Second go: not recorded.</span> : undefined}
           />
         )}
         {result && head && (
           <div className="result" data-testid="own-verdict" data-ok={result.ok}>
             <p className="result-head">
               {head.mark && <span className={`grade-mark is-${head.tone}`} aria-hidden>{head.mark}</span>}
-              <strong>{head.text}</strong>
+              {/* Where the position is from is said only now, under the verdict. */}
+              <ResultTitle about={`${gameRef(game.endDate, event.ply, game.timeClass)}.`}><strong>{head.text}</strong></ResultTitle>
               {!result.ok && <button className="result-side" data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
             </p>
             {shown.chips}

@@ -130,8 +130,28 @@ export function consequenceOf(fromFen: string, pv: string[], me: Color, beforeFe
 }
 
 
-/** Whose move a line starts with: the learner's just now, his in the game, or the engine's first choice. */
-export type Who = 'you' | 'game' | 'best';
+/**
+ * How many moves of a line can be stepped through (`shown`), and where a replay "to where it
+ * is decided" comes to rest (`stop`). A line that is decided ends there, unless `least` asks
+ * for more: after a wrong puzzle move the engine's answer is always shown, also when the wrong
+ * move itself took something and kept it. Such a line is "decided" on the learner's own move,
+ * and stopping there showed no answer at all. `cap` limits a line that is not decided.
+ */
+export function replaySpan(x: { length: number; decidedPly: number | null; stopThere: boolean; least: number; cap: number }): { shown: number; stop: number } {
+  const least = Math.min(x.least, x.length);
+  if (x.decidedPly !== null) {
+    const shown = x.stopThere ? Math.max(x.decidedPly, least) : x.length;
+    return { shown, stop: Math.min(Math.max(x.decidedPly, least), shown) };
+  }
+  const shown = x.stopThere ? Math.min(x.length, x.cap) : x.length;
+  return { shown, stop: least > 0 ? Math.min(least, shown) : shown };
+}
+
+/**
+ * Whose move a line starts with: the learner's just now, his in the game, or the engine's
+ * first choice. 'other' is one of the engine's next choices, shown under those three.
+ */
+export type Who = 'you' | 'game' | 'best' | 'other';
 
 export interface Candidate {
   who: Who;
@@ -157,7 +177,7 @@ export interface MoveLine {
 }
 
 const WHO_ORDER: Who[] = ['you', 'game', 'best'];
-const WHO_NAME: Record<Who, string> = { you: 'You', game: 'Game', best: 'Best' };
+const WHO_NAME: Record<Who, string> = { you: 'You', game: 'Game', best: 'Best', other: 'Other' };
 
 /**
  * The moves to compare after an answer, always in the order you, game, best. The same move
@@ -223,4 +243,68 @@ export function numberedSans(fen: string, pv: string[]): { san: string; no: stri
     out.push({ san, no });
   }
   return out;
+}
+
+/** One of the engine's lines from a position, as src/engine/interactive.ts gives them. */
+export interface SearchedLine {
+  uci: string;
+  /** Expected score (0-100) for the side to move. */
+  wp: number;
+  pv: string[];
+  mate: number | null;
+}
+
+/**
+ * The engine's other choices in a position, to set under the moves already compared: its
+ * lines in its own order, without the moves that are already shown (`taken`, canonical).
+ * They carry no rank: the compared moves may have been measured by another search, and two
+ * searches need not agree on an order. The numbers say how they stand.
+ */
+export function otherMoves(fen: string, searched: SearchedLine[], taken: string[], max = 3): MoveLine[] {
+  let pos: Chess;
+  try {
+    pos = positionFromFen(fen);
+  } catch {
+    return [];
+  }
+  const out: MoveLine[] = [];
+  for (const l of searched) {
+    if (out.length >= max) break;
+    let canon: string;
+    let san: string;
+    try {
+      canon = canonicalUci(pos, l.uci);
+      san = sanOf(pos, canon);
+    } catch {
+      continue;
+    }
+    if (taken.includes(canon) || out.some((o) => o.uci === canon)) continue;
+    out.push({ kind: 'other', who: ['other'], label: WHO_NAME.other, uci: canon, san, score: l.wp, pv: l.pv.slice(1, 11) });
+  }
+  return out;
+}
+
+/** Under this many points of expected score apart, two moves are rated the same ("good"); see GRADE_BANDS in src/games/ownmove.ts. */
+export const ABOUT_EQUAL = 5;
+/** From this many points below the first choice a move would be rated a blunder. */
+export const STANDS_OUT = 20;
+
+/**
+ * How the engine's other choices stand against its first, in two words, to head the row they
+ * are shown in: "About as good" when the rating bands would not tell any of them from the
+ * first choice, "Much worse" when every one of them would be rated a blunder beside it, and
+ * plain "Others" for anything between or mixed. This is what answers "why is that the best
+ * move": often it is not much better than three others, and sometimes nothing else works.
+ * `searched` is one search of the position, best first; `shown` are the moves in the row.
+ * A statement about the engine's numbers, which stand beside it, and nothing more.
+ */
+export function othersLabel(searched: SearchedLine[], shown: { score: number | null }[]): 'About as good' | 'Much worse' | 'Others' {
+  const best = searched[0];
+  if (!best || shown.length === 0 || shown.some((o) => o.score === null)) return 'Others';
+  const gaps = shown.map((o) => best.wp - o.score!);
+  if (gaps.every((g) => g >= STANDS_OUT)) return 'Much worse';
+  // A forced mate and a large advantage are the same expected score; they are not as good as each other.
+  const mating = best.mate !== null && best.mate > 0;
+  if (!mating && gaps.every((g) => g < ABOUT_EQUAL)) return 'About as good';
+  return 'Others';
 }

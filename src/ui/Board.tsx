@@ -15,6 +15,7 @@ const LINE_BRUSH: Record<Who, { key: string; color: string; opacity: number; lin
   you: { key: 'you', color: '#e68f00', opacity: 1, lineWidth: 11 },
   game: { key: 'game', color: '#3f4a55', opacity: 0.8, lineWidth: 11 },
   best: { key: 'best', color: '#1557b0', opacity: 1, lineWidth: 11 },
+  other: { key: 'other', color: '#6b4aa8', opacity: 1, lineWidth: 11 },
 };
 const TONE = { good: '#26734a', mid: '#96600a', bad: '#b0362d' };
 

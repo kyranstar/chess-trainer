@@ -38,7 +38,11 @@ export async function playMove(scope: Page | Locator, uci: string) {
   if (uci.length === 5) {
     const name = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[uci[4] as 'q']!;
     const page = 'page' in scope ? scope.page() : scope;
-    await page.getByRole('button', { name: `Promote to ${name}` }).click();
+    // A lost tap leaves no dialog to click. Give up after a few seconds instead of waiting out
+    // the whole test, so that playUntilAccepted can tap again as it does for any other move
+    // (seen once in three full runs on 15 November; 24 promotions tapped right after a reply
+    // in a probe on both browsers lost none).
+    await page.getByRole('button', { name: `Promote to ${name}` }).click({ timeout: 5_000 });
   }
 }
 

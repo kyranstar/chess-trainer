@@ -27,6 +27,8 @@
   --game-soft: #e7eaed;
   --best: #1d5fa8;
   --best-soft: #dfeaf7;
+  --other: #6b4aa8;
+  --other-soft: #ece5f7;
   --ui: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --book: 'Literata Variable', Literata, Georgia, 'Times New Roman', serif;
   --tabs-h: 3.5rem;
@@ -52,6 +54,8 @@
     --game-soft: #262f37;
     --best: #8ab8ef;
     --best-soft: #1b2c40;
+    --other: #c0a5ee;
+    --other-soft: #2c2440;
   }
 }
 
@@ -362,6 +366,7 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .line-steps.is-you { --c: var(--you); --cs: var(--you-soft); }
 .line-steps.is-game { --c: var(--game); --cs: var(--game-soft); }
 .line-steps.is-best { --c: var(--best); --cs: var(--best-soft); }
+.line-steps.is-other { --c: var(--other); --cs: var(--other-soft); }
 .line-steps button.step { flex: none; min-width: 2.75rem; min-height: 2.5rem; padding: 0.1rem; font-size: 1.5rem; line-height: 1; }
 .line-moves { flex: 1; min-width: 0; display: flex; align-items: center; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .line-moves::-webkit-scrollbar { display: none; }
@@ -372,6 +377,33 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 /* The last move of a line being played through is tinted in that line's colour. */
 .board-wrap[data-line='best'] cg-board square.last-move { background-color: rgba(21, 87, 176, 0.42); }
 .board-wrap[data-line='game'] cg-board square.last-move { background-color: rgba(63, 74, 85, 0.45); }
+.board-wrap[data-line='other'] cg-board square.last-move { background-color: rgba(107, 74, 168, 0.42); }
+/*
+ * The engine's other choices, under the chips: a move and its number, smaller than a chip
+ * because they are there to be compared, not to be answered for. One line, which scrolls
+ * sideways if three long moves do not fit.
+ */
+.others { display: flex; align-items: center; gap: 0.3rem; min-height: 2.5rem; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.others::-webkit-scrollbar { display: none; }
+.others-label { flex: none; max-width: 4.4rem; white-space: normal; font-size: 0.7rem; line-height: 1.2; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; color: var(--other); margin-right: 0.1rem; }
+.other-move { flex: none; min-height: 2.3rem; padding: 0.1rem 0.45rem; gap: 0.3rem; border: 1.5px solid var(--rule); border-radius: 8px; background: var(--surface); font-size: 0.97rem; }
+.other-move .other-san { font-weight: 700; }
+.other-move[aria-pressed='true'] { background: var(--other-soft); border-color: var(--other); }
+/*
+ * The first line of a result: the verdict and, small under it, what the position was (where
+ * it came from, what it was about). Said only after the answer. One line each, so the head
+ * keeps its height whatever is written there.
+ */
+.result-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 0; text-align: left; }
+button.result-title { min-height: 2.4rem; padding: 0; border: 0; border-radius: 6px; background: transparent; font-weight: inherit; }
+.result-about { color: var(--muted); font-size: 0.8rem; line-height: 1.2; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-about-more { font-weight: 700; color: var(--ink); }
+/* Opened on request, so it may need scrolling to: it is brought clear of the pinned button when it opens. */
+.about-panel { font-size: 0.9rem; color: var(--muted); border-left: 4px solid var(--rule); padding-left: 0.5rem; scroll-margin-bottom: 6.5rem; }
+.about-panel dl { display: grid; gap: 0.3rem; margin: 0 0 0.3rem; }
+.about-panel dt { font-weight: 700; color: var(--ink); display: inline; }
+.about-panel dd { display: inline; margin: 0; }
+.wrong-eval { font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .line-bar i { transition: none; } }
 
 /* Folded sections: one thing to do on the screen, the rest a tap away. */

@@ -110,13 +110,15 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
   await page.getByTestId('end-block').click();
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'apply');
   const sense = page.getByTestId('sense-drill');
-  await expect(sense).toContainText('Your game,');
+  // Where the position is from is said after the answer, not before (ADR-054).
+  await expect(sense).not.toContainText('Your game,');
   await page.getByTestId('sense-no').click();
   await expect(page.getByTestId('sense-verdict')).toBeVisible(); // the answer is followed by the engine's stored line
+  await expect(page.getByTestId('about')).toContainText('Your game,');
   await page.getByTestId('sense-next').click();
 
   // Then a puzzle on a concept; the built-in engine answers a wrong move without any network.
-  await expect(page.getByTestId('puzzle')).toContainText('Find the best move.');
+  await expect(page.getByTestId('puzzle').locator('.say')).toHaveText(/^(White|Black) to move$/);
   await failPuzzle(page);
   await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/, { timeout: 30_000 });
 });

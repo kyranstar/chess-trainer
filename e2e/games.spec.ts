@@ -244,7 +244,9 @@ test('your move: play your own move in a position from your game and see exactly
   const drill = page.getByTestId('own-move');
   await expect(drill).toHaveAttribute('data-phase', 'move');
   await expect(drill).toContainText('White to move');
-  await expect(drill).toContainText('Play your own move.');
+  // Before the answer: whose move it is and nothing about what the position is or where it is from (ADR-054).
+  await expect(drill).not.toContainText(/Your game|Play your own move|game,/);
+  await expect(page.getByTestId('about')).toHaveCount(0);
   const asked = await drill.locator('.board').getAttribute('data-fen');
   // Move 10 of the game. Taking the pawn on e5 puts the knight where the d6 pawn takes it.
   await playMove(page, 'f3e5');
@@ -274,7 +276,37 @@ test('your move: play your own move in a position from your game and see exactly
   expect(Number((await evalOf('line-you')).replace('−', '-'))).toBeLessThan(Number((await evalOf('line-best')).replace('−', '-')));
   // The reply he named is the one fact still said, in a line.
   await expect(page.getByTestId('own-move-named')).toHaveText('You named the reply: dxe5.');
+  // Where the position is from is said now, under the rating.
+  await expect(page.getByTestId('about')).toHaveText(/^Your game, .+, move 10\.$/);
+  // Under the three moves, the engine's other choices with their numbers (ADR-054): none of
+  // them one of the three, best first, under a heading that says how they stand.
+  const others = page.getByTestId('others');
+  await expect(others).toHaveAttribute('data-state', 'shown', { timeout: 30_000 });
+  await expect(others).toHaveAttribute('data-label', /^(About as good|Much worse|Others)$/);
+  const other = page.getByTestId('other-move');
+  expect(await other.count()).toBeGreaterThanOrEqual(1);
+  expect(await other.count()).toBeLessThanOrEqual(3);
+  const compared = await page.locator('[data-testid^="line-"][data-uci]').evaluateAll((els) => els.map((e) => e.getAttribute('data-uci')));
+  const otherUcis = await other.evaluateAll((els) => els.map((e) => e.getAttribute('data-uci')));
+  for (const u of otherUcis) expect(compared).not.toContain(u);
+  const otherScores = await other.evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-score'))));
+  expect(otherScores).toEqual([...otherScores].sort((a, b) => b - a));
+  for (const t of await other.getByTestId('line-eval').allTextContents()) expect(t).toMatch(/^([+−]\d+\.\d+|0\.00|[+−]M)$/);
   const rest = await size();
+  // One of them, tapped: its line plays on the board in its own colour, and its moves take the row's place.
+  await other.first().click();
+  await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-line', 'other');
+  await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-playing', 'false');
+  await expect(board).not.toHaveAttribute('data-fen', asked!);
+  await expect(others).toHaveCount(0);
+  expect(await size()).toEqual(rest);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // Back to the position asked: the other choices are there again.
+  await page.getByTestId('line-move').first().click();
+  await page.getByTestId('line-prev').click();
+  await expect(board).toHaveAttribute('data-fen', asked!);
+  await expect(others).toHaveAttribute('data-state', 'shown');
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
   // His own line, tapped: it plays itself and stops where it is decided, marks the square and says what went.
   await page.getByTestId('line-you').click();
   const stepper = page.getByTestId('own-move-line');

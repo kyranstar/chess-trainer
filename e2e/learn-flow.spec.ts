@@ -29,8 +29,12 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
 
   // Apply: new positions on the concept, solved on the real board.
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'apply');
+  // The concept just studied is not named over the position: whose move it is, and no more (ADR-054).
+  await expect(page.getByTestId('puzzle').locator('.say')).toHaveText(/^(White|Black) to move$/);
   await solvePuzzle(page);
   await expect(page.getByTestId('verdict-solved')).toContainText('Solved first try');
+  // Once solved, what it was about is said.
+  await expect(page.getByTestId('about')).toContainText(/Hanging piece.*, rated \d+/);
   await page.getByTestId('end-block').click();
 
   // Test: no check on the day of the lesson. The mixed test starts at once; miss one on
@@ -39,7 +43,8 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // The test block offers no hint and does not say what the position is about.
   const missed = page.getByTestId('puzzle');
   await expect(missed).toHaveAttribute('data-phase', 'solving');
-  await expect(missed).toContainText('Find the best move.');
+  await expect(missed.locator('.say')).toHaveText(/^(White|Black) to move$/);
+  await expect(page.getByTestId('about')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Show which piece' })).toHaveCount(0);
   const start = await missed.locator('.board').getAttribute('data-fen');
   await failPuzzle(page);
@@ -47,6 +52,8 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // as evidence, from the wrong move on, and can be stepped back and on.
   await expect(page.getByTestId('engine-reply')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('engine-reply')).toHaveAttribute('data-line', /\S+/);
+  // With it the engine's number for the wrong move, and for the best one without naming it (ADR-054).
+  await expect(page.getByTestId('wrong-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M) for you(; the best move gives ([+−]\d+\.\d+|0\.00|\+M))?\.$/);
   await expect(page.getByTestId('line-steps')).toHaveAttribute('data-playing', 'false');
   expect(Number(await page.getByTestId('line-steps').getAttribute('data-step'))).toBeGreaterThanOrEqual(2);
   const asked = await missed.locator('.board').getAttribute('data-fen');
@@ -56,6 +63,12 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   // that second go is practice and changes nothing that was recorded.
   await page.getByRole('button', { name: 'Show solution' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  // The wrong move and the solution side by side, each with the engine's number; the solution's is the higher.
+  const number = async (id: string) => Number(await page.getByTestId(id).locator('.line-bar').getAttribute('data-score'));
+  await expect(page.getByTestId('line-best').getByTestId('line-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M)$/, { timeout: 30_000 });
+  await expect(page.getByTestId('line-you').getByTestId('line-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M)$/);
+  expect(await number('line-you')).toBeLessThan(await number('line-best'));
+  await expect(page.getByTestId('about')).toContainText(/rated \d+/);
   const solution = page.getByTestId('line-steps');
   await expect(solution).toHaveAttribute('data-line', 'best');
   await expect(solution).toHaveAttribute('data-playing', 'false');

@@ -179,6 +179,43 @@ export function Ask({ title, meta, children }: { title: ReactNode; meta?: ReactN
   );
 }
 
+/** Whether a folded section is open: a convenience kept in this browser only. */
+export function useRememberedFold(key: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  return [open, (next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(key, next ? '1' : '0');
+    } catch {
+      // private mode: the choice simply is not remembered
+    }
+  }];
+}
+
+/**
+ * The first line of a result: the verdict in a word and, small under it, what the position
+ * was (owner, 2026-11-15; ADR-054): where it came from, what it was about. That is said only
+ * once the position has been answered; before, an exercise says whose move it is and nothing
+ * else, as a game would. `onAbout` makes the two lines a button (a puzzle's themes open in words).
+ */
+export function ResultTitle({ children, about, onAbout, open }: { children: ReactNode; about?: ReactNode; onAbout?: () => void; open?: boolean }) {
+  const lines = (
+    <>
+      {children}
+      {about && <span className="result-about" data-testid="about">{about}{onAbout && <span className="result-about-more" aria-hidden>{open ? ' −' : ' +'}</span>}</span>}
+    </>
+  );
+  return onAbout
+    ? <button className="result-title" data-testid="about-toggle" aria-expanded={!!open} onClick={onAbout}>{lines}</button>
+    : <span className="result-title">{lines}</span>;
+}
+
 /** "Nov 6" from "2026-11-06": the year is never needed for a recent game. */
 export function shortDate(iso: string): string {
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`);

@@ -30,8 +30,6 @@ export function PuzzleStream(props: {
   conceptId: string | null | ((p: Puzzle) => string | null);
   sessionId: string | null;
   allowHints: boolean;
-  /** What the positions are about, when that is meant to be known (the concept being practised). */
-  heading?: string;
   /** A count for the run bar, given the number of positions finished so far. */
   note?: (done: number) => string;
   seen: Set<string>;
@@ -91,7 +89,6 @@ export function PuzzleStream(props: {
       sessionId={props.sessionId}
       packVersion={pool.version}
       allowHints={props.allowHints}
-      heading={props.heading}
       onRecorded={props.onAttempt}
       nextLabel={props.nextLabel}
       onNext={() => {

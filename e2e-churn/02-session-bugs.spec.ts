@@ -6,7 +6,8 @@ const DAY = 86_400_000;
 
 async function senseIdentity(page: Page) {
   const d = page.getByTestId('sense-drill');
-  return { h2: await d.locator('h2').textContent(), sub: await d.locator('.say .ask-meta').first().textContent(), fen: await d.locator('.board').getAttribute('data-fen'), kind: await d.getAttribute('data-kind') };
+  // The line naming the game is no longer under the question (ADR-054): the heading, the position and the kind identify it.
+  return { h2: await d.locator('h2').textContent(), fen: await d.locator('.board').getAttribute('data-fen'), kind: await d.getAttribute('data-kind') };
 }
 
 test('a re-check that falls due while the mixed test is on screen replaces the position in progress', async ({ page }) => {
@@ -35,7 +36,7 @@ test('a re-check that falls due while the mixed test is on screen replaces the p
   await expect(run).toHaveAttribute('data-block', 'test');
   const puzzle = page.getByTestId('puzzle');
   await expect(puzzle).toHaveAttribute('data-phase', 'solving');
-  await expect(puzzle).toContainText('Find the best move.');
+  await expect(puzzle).toContainText(/(White|Black) to move/);
   const id = await puzzle.getAttribute('data-puzzle-id');
   const fen = await puzzle.locator('.board').getAttribute('data-fen');
   const attemptsBefore = (await store(page, 'attempts')).length;

@@ -419,7 +419,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
               limit={1}
               pick={conceptPicker(pool.puzzles, concept, learner.level.level - 100, `${seed}|${testIndex}`)}
               context="apply" conceptId={concept.id} sessionId={session.id} allowHints seen={learner.seen}
-              heading={concept.title} onAttempt={onAttempt}
+              onAttempt={onAttempt}
               onFinished={(why) => (why === 'exhausted' ? void finish() : nextTestItem())}
             />
           ) : null) : (

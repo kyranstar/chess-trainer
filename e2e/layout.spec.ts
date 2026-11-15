@@ -89,11 +89,32 @@ test('a solved position can be stepped back through, and the one before can be g
   const steps = page.getByTestId('line-steps');
   await expect(steps).toHaveAttribute('data-step', (await steps.getAttribute('data-length'))!);
   const solved = await board.getAttribute('data-fen');
+  // The move he played is the solution: one chip says both, with the engine's number for it (ADR-054).
+  const chip = page.getByTestId('line-best');
+  await expect(chip).toHaveAttribute('data-who', 'you best');
+  await expect(chip).toContainText('You · Solution');
+  await expect(chip.getByTestId('line-eval')).toHaveText('+M', { timeout: 30_000 });
+  // What the position was about is said now and was not before: its themes and rating, under the verdict.
+  await expect(page.getByTestId('about')).toContainText(/Mate in 1.*, rated \d+/);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
   await page.getByTestId('line-prev').click();
   await expect(board).toHaveAttribute('data-fen', start!);
   expect(await boardBox(page)).toEqual(asked);
-  await page.getByTestId('line-next').click();
+  // On the position asked the engine's other choices stand under the solution; beside a mate they are no match.
+  const others = page.getByTestId('others');
+  await expect(others).toHaveAttribute('data-state', 'shown', { timeout: 30_000 });
+  await expect(others).not.toHaveAttribute('data-label', 'About as good');
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // The themes in words, on request; closing them leaves the frame as it was.
+  await page.getByTestId('about-toggle').click();
+  await expect(page.getByTestId('about-panel')).toContainText('Deliver checkmate in one move.');
+  await expect(page.getByTestId('about-panel').getByRole('link')).toHaveAttribute('href', `https://lichess.org/training/${first}`);
+  await page.getByTestId('about-toggle').click();
+  await expect(page.getByTestId('about-panel')).toHaveCount(0);
+  // The chip plays the solution again.
+  await chip.click();
   await expect(board).toHaveAttribute('data-fen', solved!);
+  await expect(others).toHaveCount(0);
 
   // On to the next position, then back to the last one from the bar.
   await page.getByTestId('next').click();

@@ -10,6 +10,7 @@ import { Board } from './Board';
 import { walkRepertoire } from '../openings/repertoire';
 import { reviewCalibration } from '../schedule/review';
 import { DataPanel } from './Data';
+import { useRememberedFold } from './Stage';
 import { GameCards, Headline, useGames } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
@@ -64,24 +65,6 @@ function IntervalBar({ m }: { m: RateMetric }) {
 /** Whether a folded section (the long list of numbers, the data and backup) is open: a convenience kept in this browser only. */
 const SHOW_ALL_KEY = 'progress.all';
 const SHOW_DATA_KEY = 'progress.data';
-function useRememberedFold(key: string): [boolean, (open: boolean) => void] {
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(key) === '1';
-    } catch {
-      return false;
-    }
-  });
-  return [open, (next: boolean) => {
-    setOpen(next);
-    try {
-      localStorage.setItem(key, next ? '1' : '0');
-    } catch {
-      // private mode: the choice simply is not remembered
-    }
-  }];
-}
-
 export function ProgressHome({ learner }: { learner: Learner }) {
   const [period, setPeriod] = useState<PeriodKey>('all');
   const from = since(period);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { lineSan } from '../games/analyse';
-import { consequenceOf, lineAt, ucisOfSanLine } from './line';
+import { consequenceOf, lineAt, ucisOfSanLine, ABOUT_EQUAL, otherMoves, othersLabel, replaySpan, STANDS_OUT } from './line';
+import { GRADE_BANDS } from '../games/ownmove';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const BLACK_TO_MOVE = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
@@ -155,5 +156,80 @@ describe('a capture that the rest of the line takes back is not a result (ADR-05
     expect(head).not.toBeNull();
     // ... or, if something is, it is not what the first six moves alone would have said.
     expect(whole === null || whole.text !== head!.text).toBe(true);
+  });
+});
+
+describe("the engine's other choices under the compared moves (ADR-054)", () => {
+  // The owner's position of 12 October, move 10: he played Qe4 and could not see why a pawn move was "best".
+  const fen = 'rnb1qrk1/ppp1ppbp/1n4p1/4P1B1/8/2N2N2/PPP1QPPP/3RKB1R w K - 5 10';
+  const searched = [
+    { uci: 'h2h3', wp: 52.8, pv: ['h2h3', 'c8f5', 'b2b3'], mate: null },
+    { uci: 'e2e3', wp: 51.9, pv: ['e2e3', 'c8g4'], mate: null },
+    { uci: 'g5f4', wp: 51.7, pv: ['g5f4', 'c8f5'], mate: null },
+    { uci: 'e2e4', wp: 50.9, pv: ['e2e4', 'b8c6'], mate: null },
+  ];
+  it('leaves out the moves already compared and keeps the engine order', () => {
+    const others = otherMoves(fen, searched, ['e2e4', 'c3b5', 'h2h3']);
+    expect(others.map((o) => o.san)).toEqual(['Qe3', 'Bf4']);
+    expect(others.every((o) => o.kind === 'other')).toBe(true);
+    // What follows the move, without the move itself; the number is the search's own.
+    expect(others[0]).toMatchObject({ uci: 'e2e3', pv: ['c8g4'], score: 51.9 });
+  });
+  it('shows at most three, and none twice', () => {
+    expect(otherMoves(fen, [...searched, searched[1]!], []).map((o) => o.san)).toEqual(['h3', 'Qe3', 'Bf4']);
+  });
+  it('reads castling however the engine writes it, and skips a move that cannot be played', () => {
+    const castle = 'r3k2r/pppq1ppp/2n5/8/8/2N5/PPPQ1PPP/R3K2R w KQkq - 0 1';
+    const got = otherMoves(castle, [{ uci: 'e1g1', wp: 50, pv: ['e1g1'], mate: null }, { uci: 'a1a8', wp: 50, pv: ['a1a8'], mate: null }], []);
+    expect(got.map((o) => o.san)).toEqual(['O-O']);
+    // The same castling move written the other way is already taken.
+    expect(otherMoves(castle, [{ uci: 'e1h1', wp: 50, pv: ['e1h1'], mate: null }], [got[0]!.uci])).toEqual([]);
+  });
+  it('heads them "About as good" when the bands would not tell them from the first choice: the answer to "why is that one best"', () => {
+    const others = otherMoves(fen, searched, ['h2h3']);
+    expect(othersLabel(searched, others)).toBe('About as good');
+  });
+  it('heads them "Much worse" when one move stands out, and plainly when they are between or mixed', () => {
+    const at = (wp: number, mate: number | null = null) => ({ uci: 'x', wp, pv: [], mate });
+    expect(othersLabel([at(90), at(55), at(40)], [{ score: 55 }, { score: 40 }])).toBe('Much worse');
+    expect(othersLabel([at(70), at(58)], [{ score: 58 }])).toBe('Others');
+    expect(othersLabel([at(70), at(68), at(40)], [{ score: 68 }, { score: 40 }])).toBe('Others');
+    expect(othersLabel([at(70)], [])).toBe('Others');
+    expect(othersLabel([at(70), at(69)], [{ score: null }])).toBe('Others');
+  });
+  it('does not call a large advantage as good as a forced mate, though their expected scores are', () => {
+    const at = (wp: number, mate: number | null = null) => ({ uci: 'x', wp, pv: [], mate });
+    expect(othersLabel([at(100, 1), at(99.2)], [{ score: 99.2 }])).toBe('Others');
+    expect(othersLabel([at(100, 1), at(50)], [{ score: 50 }])).toBe('Much worse');
+    // Being mated either way is the same.
+    expect(othersLabel([at(0, -2), at(0, -1)], [{ score: 0 }])).toBe('About as good');
+  });
+  it('uses the same bands as the rating of a move', () => {
+    expect(ABOUT_EQUAL).toBe(GRADE_BANDS.good);
+    expect(STANDS_OUT).toBe(GRADE_BANDS.mistake);
+  });
+});
+
+describe('how far a line is shown and where its replay rests', () => {
+  const CAP = 6;
+  it('ends where it is decided, and plays to there', () => {
+    expect(replaySpan({ length: 10, decidedPly: 4, stopThere: true, least: 0, cap: CAP })).toEqual({ shown: 4, stop: 4 });
+  });
+  it('a solution is shown to its end, and its replay still rests on the decisive move when asked to', () => {
+    expect(replaySpan({ length: 10, decidedPly: 4, stopThere: false, least: 0, cap: CAP })).toEqual({ shown: 10, stop: 4 });
+  });
+  it('a line that is not decided is capped, and rests at its end or where it was asked to', () => {
+    expect(replaySpan({ length: 10, decidedPly: null, stopThere: true, least: 0, cap: CAP })).toEqual({ shown: 6, stop: 6 });
+    expect(replaySpan({ length: 10, decidedPly: null, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 6, stop: 2 });
+    expect(replaySpan({ length: 3, decidedPly: null, stopThere: false, least: 0, cap: CAP })).toEqual({ shown: 3, stop: 3 });
+  });
+  it('a wrong puzzle move that took a pawn and kept it is still answered on the board', () => {
+    // Seen in the browser suite on 15 November: "fxe4 is not the move. Pawn taken on e4. You end
+    // 1 point ahead.", with the replay resting on fxe4 and the engine's answer never shown.
+    expect(replaySpan({ length: 9, decidedPly: 1, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 2, stop: 2 });
+    // Where it is decided later, nothing changes.
+    expect(replaySpan({ length: 9, decidedPly: 3, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 3, stop: 3 });
+    // A wrong move with no answer known yet is one move long.
+    expect(replaySpan({ length: 1, decidedPly: null, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 1, stop: 1 });
   });
 });

@@ -11,8 +11,9 @@ import { Board } from './Board';
 import { bestLineFor } from '../engine/interactive';
 import { lineSan } from '../games/analyse';
 import { useArmed, useScreenChange } from '../app/tapGuard';
-import { useResultLines } from './Lines';
-import { Ask, useItem } from './Stage';
+import { evalText } from '../engine/uci';
+import { useOtherMovesAhead, useResultLines, useSearchedBest } from './Lines';
+import { Ask, ResultTitle, useItem } from './Stage';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -21,7 +22,10 @@ export interface PuzzlePlayerProps {
   sessionId: string | null;
   packVersion: string;
   allowHints: boolean;
-  /** What the position is about, when that is meant to be known (the concept being practised). */
+  /**
+   * How this attempt stands, when that has to be known before answering (a repeat that does
+   * not count). Never what the position is about: that is said after the answer (ADR-054).
+   */
   heading?: string;
   onRecorded?: (a: Attempt) => void;
   onNext: () => void;
@@ -46,7 +50,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   /** The engine's answer to the learner's wrong move: evidence about this position, played on the board as soon as it is known. */
-  const [reply, setReply] = useState<{ after: string; from: string; uci: string; state: 'loading' | 'none' | 'shown'; line?: string; pv?: string[] } | null>(null);
+  const [reply, setReply] = useState<{ after: string; from: string; uci: string; state: 'loading' | 'none' | 'shown'; line?: string; pv?: string[]; wp?: number } | null>(null);
   /** Playing the position again after seeing the solution: practice, never recorded a second time. */
   const [replaying, setReplaying] = useState(false);
   useScreenChange(`${puzzle.id}|${phase}|${wrongSan ?? ''}`);
@@ -64,6 +68,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     setWrongSan(null);
     setReply(null);
     setReplaying(false);
+    setAboutOpen(false);
     setFlash(null);
     decided.current = false;
     const t = setTimeout(() => {
@@ -161,7 +166,8 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
     const after = asked.after;
     const best = await bestLineFor(after);
     // The learner may have moved on meanwhile; only fill in the request that is still on screen.
-    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 9) } : { ...asked, state: 'shown' }) : r));
+    // What the wrong move leaves the learner with is the other side of what the engine's answer expects.
+    setReply((r) => (r && r.after === after ? (best && best.pv.length ? { ...asked, state: 'shown', line: lineSan(after, best.pv), pv: best.pv.slice(0, 9), wp: 100 - best.wp } : { ...asked, state: 'shown' }) : r));
   }
 
   function hint() {
@@ -213,26 +219,46 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   //   after a wrong move, that move and the engine's answer to it, shown unasked;
   //   once the solution is shown, the solution, beside the wrong move if one was made here;
   //   once solved, the moves just played, so that they can be gone back through.
+  //
+  // Once the position is answered the moves are compared as everywhere else (ADR-054): the
+  // solution as a chip with the engine's number, the wrong move beside it, and under them the
+  // engine's other choices with theirs. The numbers come from one search of the position,
+  // begun when it appears.
   const wrongHere = !!reply && reply.from === run.fen;
+  useOtherMovesAhead(phase === 'setup' ? null : initial.fen);
+  const bestHere = useSearchedBest(phase === 'solving' && wrongSan && reply ? reply.from : null);
   const view = useMemo((): { start: string; candidates: Candidate[]; compare: boolean } | null => {
     if (phase === 'solving' && wrongSan && reply) return { start: reply.from, candidates: [{ who: 'you', uci: reply.uci, score: null, pv: reply.pv ?? [] }], compare: false };
     if (phase === 'revealed') {
       const rest = remainingLine(run);
       if (!rest[0]) return null;
       const solution: Candidate = { who: 'best', label: 'Solution', uci: rest[0], score: null, pv: rest.slice(1) };
-      return wrongHere ? { start: run.fen, candidates: [{ who: 'you', uci: reply!.uci, score: null, pv: reply!.pv ?? [] }, solution], compare: true } : { start: run.fen, candidates: [solution], compare: false };
+      return { start: run.fen, candidates: wrongHere ? [{ who: 'you', uci: reply!.uci, score: reply!.wp ?? null, pv: reply!.pv ?? [] }, solution] : [solution], compare: true };
     }
-    if (phase === 'solved' && run.played[0]) return { start: initial.fen, candidates: [{ who: 'best', label: 'Solution', uci: run.played[0], score: null, pv: run.played.slice(1) }], compare: false };
+    // Solved: the move he played is the solution, and one chip says both. (A checkmate of his
+    // own that was accepted in place of the source's first move stands beside it instead.)
+    if (phase === 'solved' && run.played[0] && run.line[1]) return { start: initial.fen, candidates: [{ who: 'you', uci: run.played[0], score: null, pv: run.played.slice(1) }, { who: 'best', label: 'Solution', uci: run.line[1], score: null, pv: run.line.slice(2) }], compare: true };
     return null;
   }, [phase, wrongSan, reply, run, wrongHere, initial.fen]);
   const lines = useMemo(() => (view ? mergeLines(view.start, view.candidates) : []), [view]);
   const shown = useResultLines(view && lines.length ? view.start : null, lines, {
     me: solver, compare: view?.compare, stopThere: phase === 'solving',
-    open: phase === 'solving' ? { kind: 'you', to: 'decided', fallback: 2 } : phase === 'revealed' ? { kind: 'best', to: 'end' } : { kind: 'best', to: 'end', play: false },
-    startLast: phase === 'solved' ? initial.setupMove : null,
+    // Solved: the board stays on the moves he played (his own checkmate, if that was accepted in place of the source's move).
+    open: phase === 'solving' ? { kind: 'you', to: 'decided', fallback: 2 } : phase === 'revealed' ? { kind: 'best', to: 'end' } : { kind: 'you', to: 'end', play: false },
+    startLast: phase === 'solved' ? initial.setupMove : lastMove,
   });
   const side = solver === 'white' ? 'White' : 'Black';
-  const themes = puzzle.themes.filter((t) => THEMES[t]).map((t) => THEMES[t]!.name).join(', ');
+  const themes = puzzle.themes.filter((t) => THEMES[t]);
+  // What the position was about is said only once it is answered: its themes by name under
+  // the verdict, and in Lichess's own words when that line is tapped.
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const about = `${themes.map((t) => THEMES[t]!.name).join(', ') || 'Puzzle'}, rated ${puzzle.rating}`;
+  // It may open under the pinned button: it is brought into view once, when it opens.
+  const aboutPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (aboutOpen) aboutPanel.current?.scrollIntoView({ block: 'nearest' });
+  }, [aboutOpen]);
+  const solvedHow = outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : outcome === 'assisted' ? 'Solved with a hint: assisted.' : 'Solved after a wrong move: a miss.';
   const board = shown.board;
   return (
     <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' && !wrongSan ? expectedMove(run) : ''}>
@@ -243,7 +269,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
 
       <div className="say" aria-live="polite">
         {(phase === 'setup' || (phase === 'solving' && !wrongSan)) && (
-          <Ask title={`${side} to move`} meta={outcome === 'assisted' ? 'Hint used: counts as assisted.' : replaying ? 'Second go: not recorded.' : `Find the best move.${props.heading ? ` ${props.heading}.` : ''}`} />
+          <Ask title={`${side} to move`} meta={outcome === 'assisted' ? 'Hint used: counts as assisted.' : replaying ? 'Second go: not recorded.' : props.heading ? `${props.heading}.` : undefined} />
         )}
         {phase === 'solving' && wrongSan && (
           <>
@@ -251,6 +277,12 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
               <strong>{wrongSan} is not the move.</strong>
               {reply?.state === 'loading' && <p className="muted">Asking the engine what it leads to</p>}
               {reply?.state === 'shown' && !reply.pv && <p data-testid="engine-none">The engine did not answer on this device.</p>}
+              {/* The engine's number for the move just tried, and for the best one: how much was missed, not which move it is. */}
+              {reply?.wp !== undefined && (
+                <p className="wrong-eval" data-testid="wrong-eval" data-score={Math.round(reply.wp)}>
+                  {evalText(reply.wp)} for you{bestHere !== null && bestHere > reply.wp ? `; the best move gives ${evalText(bestHere)}` : ''}.
+                </p>
+              )}
               {shown.note}
             </div>
             {/* The engine's answer to the wrong move: on the board, and here as moves to step through. */}
@@ -258,32 +290,40 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
           </>
         )}
         {phase === 'solved' && (
-          <>
-            <div className={`verdict ${outcome === 'success' ? 'right' : 'neutral'}`} data-testid="verdict-solved">
-              <strong>{outcome === 'success' ? 'Solved first try.' : replaying ? 'Solved on the second go.' : outcome === 'assisted' ? 'Solved with a hint: counts as assisted.' : 'Solved after a wrong move: counts as a miss.'}</strong>
-              {run.acceptedAlternative && <p>Your checkmate also counts.</p>}
-              {replaying && <p data-testid="replay-note">The first attempt stays {outcome === 'assisted' ? 'assisted' : 'a miss'}.</p>}
+          <div className="result" data-testid="verdict-solved" data-tone={outcome === 'success' ? 'right' : 'neutral'}>
+            <div className="result-head">
+              <span className={`grade-mark is-${outcome === 'success' ? 'good' : 'mid'}`} aria-hidden>✓</span>
+              <ResultTitle about={about} onAbout={() => setAboutOpen((o) => !o)} open={aboutOpen}><strong>{solvedHow}</strong></ResultTitle>
             </div>
-            {shown.ribbon}
-          </>
-        )}
-        {phase === 'revealed' && (
-          <div className="result" data-testid="verdict-revealed">
-            <p className="result-head">
-              <strong>Solution</strong>
-              {/* A check is a fixed set of first tries: no second go there. */}
-              {props.context !== 'check' && <button className="result-side" data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
-            </p>
+            {run.acceptedAlternative && <p>Your checkmate also counts.</p>}
+            {replaying && <p data-testid="replay-note">The first attempt stays {outcome === 'assisted' ? 'assisted' : 'a miss'}.</p>}
             {shown.chips}
             {shown.ribbon}
             {shown.note}
           </div>
         )}
-        {done && (
-          <p className="ask-meta provenance">
-            {themes || 'Puzzle'}, rated {puzzle.rating}.{' '}
-            <a href={`https://lichess.org/training/${puzzle.id}`} target="_blank" rel="noreferrer">Puzzle {puzzle.id} on Lichess</a>
-          </p>
+        {phase === 'revealed' && (
+          <div className="result" data-testid="verdict-revealed">
+            <div className="result-head">
+              <ResultTitle about={about} onAbout={() => setAboutOpen((o) => !o)} open={aboutOpen}><strong>Solution</strong></ResultTitle>
+              {/* A check is a fixed set of first tries: no second go there. */}
+              {props.context !== 'check' && <button className="result-side" data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
+            </div>
+            {shown.chips}
+            {shown.ribbon}
+            {shown.note}
+          </div>
+        )}
+        {/* Opened from the line under the verdict: each theme in Lichess's own words, and the puzzle's source. */}
+        {done && aboutOpen && (
+          <div className="about-panel" data-testid="about-panel" ref={aboutPanel}>
+            {themes.length > 0 && (
+              <dl>
+                {themes.map((t) => <div key={t}><dt>{THEMES[t]!.name}. </dt><dd>{THEMES[t]!.description}</dd></div>)}
+              </dl>
+            )}
+            <p><a href={`https://lichess.org/training/${puzzle.id}`} target="_blank" rel="noreferrer">Puzzle {puzzle.id} on Lichess</a></p>
+          </div>
         )}
       </div>
 
