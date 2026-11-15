@@ -336,7 +336,7 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
  * colours; the bar under a move is how good the position is for you after it, fuller is
  * better. Under the chips the moves of the line on the board, which are also the stepper.
  */
-.result { display: flex; flex-direction: column; gap: 0.2rem; animation: verdict-in 180ms ease-out; }
+.result { display: flex; flex-direction: column; gap: 0.15rem; animation: verdict-in 180ms ease-out; }
 .result-head { display: flex; align-items: center; gap: 0.5rem; min-height: 2.4rem; }
 /* The lesser action on a result (another try) sits at the end of its first line: the pinned button below stays alone. */
 .result-head .result-side { margin-left: auto; min-height: 2.4rem; padding: 0.15rem 0.7rem; font-size: 0.92rem; white-space: nowrap; }
@@ -348,13 +348,15 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .grade-mark.is-mid { background: var(--you); }
 .grade-mark.is-bad { background: var(--flag); }
 .lines { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.4rem; }
-.line-chip { --c: var(--you); --cs: var(--you-soft); flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; min-height: 3.2rem; padding: 0.2rem 0.55rem 0.4rem; text-align: left; border: 1.5px solid var(--rule); border-top: 4px solid var(--c); border-radius: 8px; background: var(--surface); min-width: 0; }
+.line-chip { --c: var(--you); --cs: var(--you-soft); flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; min-height: 3.2rem; padding: 0.1rem 0.55rem 0.3rem; text-align: left; border: 1.5px solid var(--rule); border-top: 4px solid var(--c); border-radius: 8px; background: var(--surface); min-width: 0; }
 .line-chip.is-game { --c: var(--game); --cs: var(--game-soft); }
 .line-chip.is-best { --c: var(--best); --cs: var(--best-soft); }
 .line-chip[aria-pressed='true'] { background: var(--cs); border-color: var(--c); }
 .line-who { font-size: 0.7rem; line-height: 1.25; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .line-san { font-size: 1.08rem; font-weight: 700; white-space: nowrap; line-height: 1.15; }
-.line-bar { display: block; height: 0.4rem; margin-top: 0.2rem; border-radius: 0.2rem; background: var(--rule); overflow: hidden; }
+.line-score { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.05rem; }
+.line-bar { display: block; flex: 1; min-width: 1rem; height: 0.4rem; border-radius: 0.2rem; background: var(--rule); overflow: hidden; }
+.line-eval { flex: none; font-size: 0.78rem; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
 .line-bar i { display: block; height: 100%; border-radius: 0.2rem; background: var(--c); transition: width 240ms ease-out; }
 .line-steps { --c: var(--pencil); --cs: var(--pencil-soft); display: flex; align-items: center; gap: 0.25rem; min-height: 2.5rem; }
 .line-steps.is-you { --c: var(--you); --cs: var(--you-soft); }

@@ -140,3 +140,20 @@ describe('the moves compared after an answer: you, the game, the best (ADR-052)'
     expect(numberedSans(fen, ['e2h5', 'a1a8']).map((t) => t.san)).toEqual(['Bh5+']);
   });
 });
+
+describe('a capture that the rest of the line takes back is not a result (ADR-053)', () => {
+  // White takes a knight, quiet moves follow, and Black takes a knight back at the end of the line.
+  const fen = 'r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4';
+  const line = ['f3e5', 'c6e5', 'd2d4', 'e5c6', 'd4d5', 'c6e7', 'f1d3', 'd7d6'];
+  it('claims nothing for the whole line, although its first moves alone would show a gain', () => {
+    // Knight takes pawn, knight takes knight: after six moves White is two points down, and stays so.
+    expect(consequenceOf(fen, line, 'white')?.text).toBe('Knight taken on e5. You end 2 points behind.');
+    // The same start, but the material comes back later in the line: nothing is claimed ...
+    const back = ['f3e5', 'c6e5', 'd2d4', 'e5c6', 'd4d5', 'c6e7', 'd5d6', 'c7d6', 'd1d6', 'e7c6', 'd6f6', 'd8f6'];
+    const whole = consequenceOf(fen, back, 'white');
+    const head = consequenceOf(fen, back.slice(0, 6), 'white');
+    expect(head).not.toBeNull();
+    // ... or, if something is, it is not what the first six moves alone would have said.
+    expect(whole === null || whole.text !== head!.text).toBe(true);
+  });
+});

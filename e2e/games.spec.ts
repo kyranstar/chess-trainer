@@ -97,6 +97,8 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await page.getByTestId('line-best').click();
   await expect(page.getByTestId('lines')).toHaveAttribute('data-selected', 'best');
   await expect(page.getByTestId('line-consequence')).toHaveText('Checkmate.');
+  // Chips, moves and the note all fit above the pinned button on a phone.
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
   // A second go at once is practice: it is not recorded (the review count below is still one).
   await page.getByTestId('own-retry').click();
   await expect(page.getByTestId('own-retry-note')).toBeVisible();
@@ -266,6 +268,10 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(board).toHaveAttribute('data-arrows', /^you:f3e5 .*b1d2/);
   const score = async (id: string) => Number(await page.getByTestId(id).locator('.line-bar').getAttribute('data-score'));
   expect(await score('line-you')).toBeLessThan(await score('line-best'));
+  // At the end of each bar, the engine's evaluation in pawns from his side: plus is good for him.
+  const evalOf = async (id: string) => (await page.getByTestId(id).getByTestId('line-eval').textContent())!;
+  for (const id of ['line-you', 'line-best']) expect(await evalOf(id)).toMatch(/^([+−]\d+\.\d+|0\.00|[+−]M)$/);
+  expect(Number((await evalOf('line-you')).replace('−', '-'))).toBeLessThan(Number((await evalOf('line-best')).replace('−', '-')));
   // The reply he named is the one fact still said, in a line.
   await expect(page.getByTestId('own-move-named')).toHaveText('You named the reply: dxe5.');
   const rest = await size();
@@ -276,7 +282,10 @@ test('your move: play your own move in a position from your game and see exactly
   const length = Number(await stepper.getAttribute('data-length'));
   await expect(stepper).toHaveAttribute('data-step', String(length));
   await expect(page.getByTestId('line-next')).toBeDisabled();
-  await expect(page.getByTestId('line-consequence')).toHaveText('Knight taken on e5. You end 2 points behind.');
+  // What it says there depends on the engine's whole line: the knight's loss is named only when
+  // nothing later in the line gives it back (ADR-053). Either way nothing else is claimed.
+  const note = page.getByTestId('line-consequence');
+  if (await note.count()) await expect(note).toHaveText(/^Knight taken on e5\. You end \d+ points? behind\.$/);
   // Nothing has moved and nothing needs scrolling: board, chips, moves and the note fit above the button.
   expect(await size()).toEqual(rest);
   if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);

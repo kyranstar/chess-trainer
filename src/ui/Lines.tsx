@@ -5,7 +5,8 @@
  * just tried, the one he played in the game, and the engine's first choice. They used to be
  * told apart in sentences, with a different set of buttons in each exercise. Here they are
  * chips in a fixed order and fixed colours (you, game, best), merged when two are the same
- * move. The result rests on the position that was asked about, with one arrow per chip.
+ * move. Under each move a bar says how good the position is for him after it, with the
+ * engine's evaluation in pawns at its end ("+0.11"; plus is good for him). The result rests on the position that was asked about, with one arrow per chip.
  * Tapping a chip plays that line on the board; the moves of the line are the stepper, so any
  * move can be gone back to, and one step back from the first move is the starting position.
  *
@@ -18,6 +19,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { consequenceOf, lineAt, type MoveLine, numberedSans, type Who } from '../chess/line';
 import { type Color, fenAfter, positionFromFen } from '../chess/rules';
 import { bestLineFor } from '../engine/interactive';
+import { evalText } from '../engine/uci';
 
 /** Time between two moves of a line that plays itself: long enough to see each move land. */
 export const STEP_MS = 650;
@@ -84,10 +86,11 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
   const got = line && start ? loaded[`${start}|${line.uci}`] : undefined;
   const pv = line ? line.pv ?? (got && got !== 'loading' ? got.pv : null) : null;
   const full = useMemo(() => (line ? [line.uci, ...(pv ?? [])] : []), [line?.uci, pv?.join(' ')]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Where the line is decided. The whole line is asked first. An engine's line is long and its
-  // tail is its least reliable part: when the whole of it claims nothing (it ends in the
-  // middle of an exchange, say), the moves that would be shown anyway are asked on their own.
-  const decided = useMemo(() => (start && full.length ? consequenceOf(start, full, opts.me) ?? (full.length > CAP ? consequenceOf(start, full.slice(0, CAP), opts.me) : null) : null), [start, full, opts.me]);
+  // Where the line is decided is read from the whole line and from nothing less. A shorter
+  // piece of it can show a capture that the rest of the line takes back: a fallback to the
+  // first moves, tried in ADR-052, told the learner he ended five points ahead after a wrong
+  // puzzle move whose rook was won back three moves later (withdrawn in ADR-053).
+  const decided = useMemo(() => (start && full.length ? consequenceOf(start, full, opts.me) : null), [start, full, opts.me]);
   const n = !line ? 0 : decided && opts.stopThere !== false ? decided.ply : opts.stopThere === false ? full.length : Math.min(full.length, CAP);
   // A line asked to play "to where it is decided" stops there even when more of it can be stepped through.
   const target = cur.goal === null ? Math.min(cur.step, n) : cur.goal === 'end' ? n : decided ? Math.min(decided.ply, n) : Math.min(cur.fallback ?? n, n);
@@ -144,8 +147,12 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
             <span className="line-who">{l.label}</span>
             <span className="line-san">{l.san}</span>
             {score !== null && (
-              <span className="line-bar" role="img" aria-label={`${Math.round(score)} out of 100`} data-score={Math.round(score)}>
-                <i style={{ width: `${Math.max(3, Math.min(100, score))}%` }} />
+              <span className="line-score">
+                <span className="line-bar" role="img" aria-label={`${Math.round(score)} out of 100`} data-score={Math.round(score)}>
+                  <i style={{ width: `${Math.max(3, Math.min(100, score))}%` }} />
+                </span>
+                {/* The engine's evaluation in pawns after the move, from the learner's side: plus is good for him. */}
+                <span className="line-eval" data-testid="line-eval" aria-label={`${evalText(score)} pawns for you`}>{evalText(score)}</span>
               </span>
             )}
           </button>

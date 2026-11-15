@@ -20,6 +20,21 @@ export function winPercent(score: Score): number {
   return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * score.cp)) - 1);
 }
 
+/**
+ * An expected score (0-100, for whoever it is given for) as the engine's evaluation in pawns
+ * for the same side, written the way chess programs write it: "+0.11", "−2.40", "+12.3".
+ * It is the inverse of winPercent, so the number and the bar beside it always agree. Exactly
+ * 100 or 0 is what a forced mate gives: "+M" or "−M".
+ */
+export function evalText(wp: number): string {
+  if (wp >= 100) return '+M';
+  if (wp <= 0) return '−M';
+  const pawns = Math.log(wp / (100 - wp)) / 0.00368208 / 100;
+  const shown = Math.abs(pawns) >= 10 ? Math.abs(pawns).toFixed(1) : Math.abs(pawns).toFixed(2);
+  // What rounds to nothing is written without a sign.
+  return Number(shown) === 0 ? '0.00' : `${pawns > 0 ? '+' : '−'}${shown}`;
+}
+
 export function parseInfo(line: string): { multipv: number; score: Score; pv: string[] } | null {
   if (!line.startsWith('info ') || !line.includes(' pv ')) return null;
   const t = line.split(' ');
