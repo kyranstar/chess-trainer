@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lineSan } from '../games/analyse';
-import { consequenceOf, lineAt, ucisOfSanLine, ABOUT_EQUAL, otherMoves, othersLabel, replaySpan, STANDS_OUT } from './line';
+import { branchOf, consequenceOf, lineAt, ucisOfSanLine, ABOUT_EQUAL, otherMoves, othersLabel, replaySpan, STANDS_OUT, triedMove, triedScore } from './line';
 import { GRADE_BANDS } from '../games/ownmove';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -231,5 +231,99 @@ describe('how far a line is shown and where its replay rests', () => {
     expect(replaySpan({ length: 9, decidedPly: 3, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 3, stop: 3 });
     // A wrong move with no answer known yet is one move long.
     expect(replaySpan({ length: 1, decidedPly: null, stopThere: true, least: 2, cap: CAP })).toEqual({ shown: 1, stop: 1 });
+  });
+});
+
+describe('a move made by hand on a result (ADR-055)', () => {
+  // The compared moves from the starting position: e4 and d4 are on the screen.
+  const firsts = ['e2e4', 'd2d4'];
+
+  it('in the position asked, the first move of a line already shown opens that line', () => {
+    expect(branchOf(START, [], 'd2d4', null, firsts)).toEqual({ kind: 'line', index: 1 });
+  });
+
+  it('in the position asked, any other move is a line of its own', () => {
+    expect(branchOf(START, [], 'g1f3', null, firsts)).toEqual({ kind: 'try', path: ['g1f3'] });
+  });
+
+  it('the move the line on the board goes on with is one step on, not a new line', () => {
+    expect(branchOf(START, ['e2e4'], 'e7e5', 'e7e5', firsts)).toEqual({ kind: 'on' });
+  });
+
+  it('another move inside a line, for whichever side is to move, is tried from there with the moves that led to it', () => {
+    // "What if they did this instead": Black's move, two moves into White's line.
+    expect(branchOf(START, ['e2e4'], 'c7c5', 'e7e5', firsts)).toEqual({ kind: 'try', path: ['e2e4', 'c7c5'] });
+    // "What if I did this instead": White's, a move later.
+    expect(branchOf(START, ['e2e4', 'e7e5'], 'f1c4', 'g1f3', firsts)).toEqual({ kind: 'try', path: ['e2e4', 'e7e5', 'f1c4'] });
+  });
+
+  it('a first move of a shown line made later in a line is not that line: the position is another one', () => {
+    expect(branchOf(START, ['g1f3', 'g8f6'], 'd2d4', null, firsts)).toEqual({ kind: 'try', path: ['g1f3', 'g8f6', 'd2d4'] });
+  });
+
+  it('at the end of a line there is nothing to step on to: the move is tried', () => {
+    expect(branchOf(START, ['e2e4', 'e7e5'], 'g1f3', null, firsts)).toEqual({ kind: 'try', path: ['e2e4', 'e7e5', 'g1f3'] });
+  });
+
+  it('reads castling however it is written, and promotion with its piece', () => {
+    const castle = 'r3k2r/pppq1ppp/2n5/8/8/2N5/PPPQ1PPP/R3K2R w KQkq - 0 1';
+    // King onto the rook is the same move as the king's two squares.
+    expect(branchOf(castle, [], 'e1h1', 'e1g1', [])).toEqual({ kind: 'on' });
+    expect(branchOf(castle, [], 'e1h1', null, ['e1g1'])).toEqual({ kind: 'line', index: 0 });
+    expect(branchOf(castle, [], 'e1a1', null, ['e1g1'])).toEqual({ kind: 'try', path: ['e1c1'] });
+    const promote = '8/P6k/8/8/8/8/8/K7 w - - 0 1';
+    // An underpromotion is its own move, not the queen's line.
+    expect(branchOf(promote, [], 'a7a8n', 'a7a8q', ['a7a8q'])).toEqual({ kind: 'try', path: ['a7a8n'] });
+    expect(branchOf(promote, [], 'a7a8q', null, ['a7a8q'])).toEqual({ kind: 'line', index: 0 });
+  });
+
+  it('a move that cannot be played there is nothing, and so is a line that cannot be followed', () => {
+    expect(branchOf(START, [], 'e2e5', null, firsts)).toBeNull();
+    expect(branchOf(START, ['e2e4'], 'e2e4', null, firsts)).toBeNull();
+    expect(branchOf(START, ['e2e5'], 'e7e5', null, firsts)).toBeNull();
+    expect(branchOf('not a position', [], 'e2e4', null, firsts)).toBeNull();
+  });
+
+  it('a tried move is named with its number unless it was made in the position asked', () => {
+    expect(triedMove(START, ['g1f3'])).toEqual({ san: 'Nf3', no: null });
+    // a3 can also be played in the position asked: made a move later, it says so.
+    expect(triedMove(START, ['g1f3', 'g8f6', 'a2a3'])).toEqual({ san: 'a3', no: '2.' });
+    expect(triedMove(START, ['e2e4', 'c7c5'])).toEqual({ san: 'c5', no: '1…' });
+    expect(triedMove(BLACK_TO_MOVE, ['e7e5', 'g1f3'])).toEqual({ san: 'Nf3', no: '2.' });
+    expect(triedMove(START, ['e2e5'])).toBeNull();
+    expect(triedMove(START, [])).toBeNull();
+  });
+
+  it('what a tried line is worth is always said from the learner’s side, whoever is to move after it', () => {
+    // After White's try it is Black to move: the engine's 30 for Black is 70 for White.
+    expect(triedScore(START, ['g1f3'], 'white', 30)).toEqual({ over: false, score: 70 });
+    expect(triedScore(START, ['g1f3'], 'black', 30)).toEqual({ over: false, score: 30 });
+    // After a try for the opponent it is the learner's move: the engine's number is already his.
+    expect(triedScore(START, ['e2e4', 'c7c5'], 'white', 55)).toEqual({ over: false, score: 55 });
+    // No answer from the engine: no number.
+    expect(triedScore(START, ['g1f3'], 'white', null)).toEqual({ over: false, score: null });
+  });
+
+  it('a tried move that ends the game needs no engine: mate is all or nothing, stalemate is a draw', () => {
+    // Fool's mate, tried for Black against White.
+    const fools = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+    expect(triedScore(START, fools, 'white', null)).toEqual({ over: true, score: 0 });
+    expect(triedScore(START, fools, 'black', null)).toEqual({ over: true, score: 100 });
+    // Qb6 stalemates the king in the corner.
+    const stale = 'k7/8/2K5/8/8/8/8/1Q6 w - - 0 1';
+    expect(triedScore(stale, ['b1b6'], 'white', null)).toEqual({ over: true, score: 50 });
+  });
+
+  it('a tried move is always answered on the board, and its line ends where it is decided after the move', () => {
+    const CAP = 6;
+    // Tried three moves into a line: the engine answered with ten moves, nothing is decided.
+    // The replay rests on the reply; six of the engine's moves can be stepped through.
+    expect(replaySpan({ length: 13, decidedPly: null, stopThere: true, least: 4, cap: 3 + CAP })).toEqual({ shown: 9, stop: 4 });
+    // Decided two moves after the reply: it plays on to there and ends there.
+    expect(replaySpan({ length: 13, decidedPly: 6, stopThere: true, least: 4, cap: 3 + CAP })).toEqual({ shown: 6, stop: 6 });
+    // The tried move itself took something and kept it: the reply is still shown.
+    expect(replaySpan({ length: 13, decidedPly: 3, stopThere: true, least: 4, cap: 3 + CAP })).toEqual({ shown: 4, stop: 4 });
+    // No answer yet: the line is the moves made so far.
+    expect(replaySpan({ length: 3, decidedPly: null, stopThere: true, least: 4, cap: 3 + CAP })).toEqual({ shown: 3, stop: 3 });
   });
 });

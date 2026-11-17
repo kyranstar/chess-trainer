@@ -1,4 +1,24 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { Chess } from 'chessops/chess';
+import { chessgroundDests } from 'chessops/compat';
+import { parseFen } from 'chessops/fen';
+import { makeSan } from 'chessops/san';
+import { parseUci } from 'chessops/util';
+
+/** The moves that can be played in a position (no promotions), each with its notation, for tests that try a move of their own. */
+export function movesIn(fen: string): { uci: string; san: string }[] {
+  const pos = Chess.fromSetup(parseFen(fen).unwrap()).unwrap();
+  const out: { uci: string; san: string }[] = [];
+  for (const [from, tos] of chessgroundDests(pos)) {
+    for (const to of tos) {
+      const move = parseUci(`${from}${to}`);
+      // A pawn reaching the last rank needs its piece, and the king onto its rook is castling written twice: neither is tried here.
+      if (!move || !pos.isLegal(move) || (pos.board.get((move as { from: number }).from)?.role === 'king' && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) > 1)) continue;
+      out.push({ uci: `${from}${to}`, san: makeSan(pos, move) });
+    }
+  }
+  return out;
+}
 
 /** Waits until the first-run pack install has finished and the app is usable. */
 export async function openApp(page: Page, path = '#/today') {

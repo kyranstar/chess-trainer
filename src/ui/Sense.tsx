@@ -148,14 +148,15 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
   const words = grade ? senseWords(item, grade, playedSan) : null;
   const them = item.color === 'white' ? 'Black' : 'White';
   const source = gameRef(item.date, item.ply);
-  const mover = phase === 'play' ? (safety ? opponent : item.color) : null;
+  // Once it is answered the board is for trying moves on (see ./Lines.tsx).
+  const mover = phase === 'play' ? (safety ? opponent : item.color) : phase === 'done' ? shown.board?.turn ?? null : null;
   const unscored = grade?.response === 'unverified-reply' || grade?.response === 'label-disputed';
   return (
     <section className="puzzle" data-testid="sense-drill" data-kind={item.kind} data-truth={item.truth} data-phase={phase} data-expected={phase === 'play' ? (safety ? item.replyUci : item.best) : ''} data-response={grade?.response ?? ''}>
       <Board
         fen={shown.board ? shown.board.fen : fen} orientation={item.color} movable={mover} lastMove={shown.board ? shown.board.lastMove : lastMove}
         marks={shown.board?.marks ?? []} arrows={shown.board?.arrows ?? []} line={shown.board?.line ?? null}
-        arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => void onMove(u)} flash={grade ? `${grade.correct ? 'right' : unscored ? 'none' : 'wrong'}:${item.id}` : null}
+        arrow={phase === 'ask' && safety ? item.proposed : null} onMove={(u) => (phase === 'done' ? shown.play(u) : void onMove(u))} flash={grade ? `${grade.correct ? 'right' : unscored ? 'none' : 'wrong'}:${item.id}` : null}
       />
       <div className="say" aria-live="polite">
         {phase === 'ask' && (safety

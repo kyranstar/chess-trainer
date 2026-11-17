@@ -228,8 +228,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   const loose = result && facts && facts.loose.length > 0 && !facts.mateInOne && reallyLoose({ engineTakes, captureCost: result.captureCost }) ? facts.loose : [];
   const mark = result ? GRADE_MARK[result.verdict] : null;
   const shown = phase === 'done' && shownLines.board
-    ? { fen: shownLines.board.fen, last: shownLines.board.lastMove, marks: shownLines.board.marks, arrows: shownLines.board.arrows, line: shownLines.board.line }
-    : { fen, last: lastMove, marks: [] as string[], arrows: [], line: null };
+    ? { fen: shownLines.board.fen, last: shownLines.board.lastMove, marks: shownLines.board.marks, arrows: shownLines.board.arrows, line: shownLines.board.line, turn: shownLines.board.turn }
+    : { fen, last: lastMove, marks: [] as string[], arrows: [], line: null, turn: null };
   // The engine's reply to his move, to set beside the reply he named.
   const replySan = (() => {
     try {
@@ -245,7 +245,9 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   return (
     <section className="puzzle" data-testid="own-move" data-phase={phase} data-verdict={result?.verdict ?? ''} data-fen={fen} data-loose={loose.map((l) => l.square).join(' ')}>
       <Board
-        fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : null} lastMove={shown.last} marks={shown.marks} onMove={onMove}
+        fen={shown.fen} orientation={item.color} movable={phase === 'move' ? item.color : phase === 'predict' ? opponent : shown.turn} lastMove={shown.last} marks={shown.marks}
+        // Once it is answered the board is for trying moves on (see ./Lines.tsx).
+        onMove={phase === 'done' ? shownLines.play : onMove}
         arrows={shown.arrows} line={shown.line}
         rings={onMine ? loose.map((l) => ({ square: l.square, from: l.by.from })) : []}
         badge={onMine && mark && mine ? { square: mine.uci.slice(2, 4), ...mark } : null}

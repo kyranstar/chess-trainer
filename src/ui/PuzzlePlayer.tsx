@@ -263,8 +263,10 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   return (
     <section className="puzzle" data-testid="puzzle" data-puzzle-id={puzzle.id} data-phase={phase} data-outcome={outcome ?? ''} data-expected={phase === 'solving' && !wrongSan ? expectedMove(run) : ''}>
       <Board
-        fen={board ? board.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !wrongSan ? solver : null}
-        lastMove={board ? board.lastMove : lastMove} marks={board ? board.marks : marks} arrows={board?.arrows ?? []} line={board?.line ?? null} onMove={onMove} resetKey={resetKey} flash={flash}
+        fen={board ? board.fen : phase === 'setup' ? puzzle.fen : run.fen} orientation={solver} movable={phase === 'solving' && !busy && !wrongSan ? solver : done ? board?.turn ?? null : null}
+        lastMove={board ? board.lastMove : lastMove} marks={board ? board.marks : marks} arrows={board?.arrows ?? []} line={board?.line ?? null}
+        // Once it is solved or shown the board is for trying moves on (see ./Lines.tsx).
+        onMove={done ? shown.play : onMove} resetKey={resetKey} flash={flash}
       />
 
       <div className="say" aria-live="polite">

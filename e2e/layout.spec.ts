@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { failPuzzle, openApp, playMove, solvePuzzle } from './helpers';
+import { failPuzzle, movesIn, openApp, playMove, solvePuzzle } from './helpers';
 
 /**
  * One layout for every exercise (ADR-051): the board is the first thing under the bar and
@@ -111,10 +111,29 @@ test('a solved position can be stepped back through, and the one before can be g
   await expect(page.getByTestId('about-panel').getByRole('link')).toHaveAttribute('href', `https://lichess.org/training/${first}`);
   await page.getByTestId('about-toggle').click();
   await expect(page.getByTestId('about-panel')).toHaveCount(0);
-  // The chip plays the solution again.
+  // The board is live once the position is answered (ADR-055): another first move than the
+  // solution is tried by making it, and stands beside the solution with its own number.
+  await expect(board).not.toHaveAttribute('data-movable', 'none');
+  const onScreen = await page.locator('[data-uci]').evaluateAll((els) => els.map((e) => e.getAttribute('data-uci')));
+  const other = movesIn(start!).find((m) => !onScreen.includes(m.uci))!;
+  await playMove(page, other.uci);
+  const tried = page.getByTestId('line-try');
+  await expect(tried).toHaveAttribute('data-uci', other.uci);
+  await expect(tried).toContainText(other.san);
+  await expect(tried.getByTestId('line-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M)$/, { timeout: 30_000 });
+  await expect(steps).toHaveAttribute('data-line', 'other');
+  await expect(steps).toHaveAttribute('data-playing', 'false');
+  expect(await boardBox(page)).toEqual(asked);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // Nothing was recorded for it: the puzzle is still solved first try.
+  await expect(puzzle).toHaveAttribute('data-phase', 'solved');
+  await expect(puzzle).toHaveAttribute('data-outcome', 'success');
+  // The chip plays the solution again. It ends in mate: there is nothing to try there.
   await chip.click();
   await expect(board).toHaveAttribute('data-fen', solved!);
+  await expect(board).toHaveAttribute('data-movable', 'none');
   await expect(others).toHaveCount(0);
+  await expect(tried).toBeVisible();
 
   // On to the next position, then back to the last one from the bar.
   await page.getByTestId('next').click();

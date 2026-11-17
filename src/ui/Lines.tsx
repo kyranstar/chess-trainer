@@ -22,9 +22,18 @@
  *
  * A line that plays itself stops where it is decided (the piece that goes, the mate) and
  * marks it, when that can be told from the moves; see consequenceOf in src/chess/line.ts.
+ *
+ * Once the position is answered the board is live (owner request, 2026-11-17; ADR-055):
+ * wherever it stands, at the position asked or any number of moves into any line, a piece
+ * can be moved for whichever side is to move. A move that is not already on the screen
+ * becomes a line of its own, "Try": the moves that led there, the move, and the engine's
+ * answer to it, which is played at once. It is a fourth chip with a bar and a number like
+ * the others, in the colour of the engine's other choices, and its moves are the stepper
+ * like any line's. A move made in a tried line tries again from there, so a position can be
+ * played out against the engine a move at a time. Only the last try is kept.
  */
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { consequenceOf, lineAt, type MoveLine, numberedSans, otherMoves, othersLabel, replaySpan, type SearchedLine, type Who } from '../chess/line';
+import { branchOf, consequenceOf, lineAt, type MoveLine, numberedSans, otherMoves, othersLabel, replaySpan, type SearchedLine, triedMove, triedScore, type Who } from '../chess/line';
 import { canonicalUci, type Color, fenAfter, positionFromFen } from '../chess/rules';
 import { bestLineFor, otherLinesFor } from '../engine/interactive';
 import { evalText } from '../engine/uci';
@@ -33,6 +42,8 @@ import { evalText } from '../engine/uci';
 export const STEP_MS = 650;
 /** How many moves of a line are shown when it is not decided earlier. */
 const CAP = 6;
+/** The place of the tried line among the lines: it is not one of the listed ones. */
+const TRY = -1;
 
 const stillMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -62,7 +73,13 @@ export interface LinesOptions {
 
 export interface ResultLines {
   /** What the board shows, or null when there is no result. */
-  board: { fen: string; lastMove: string | null; marks: string[]; arrows: { uci: string; who: Who }[]; line: Who | null } | null;
+  board: {
+    fen: string; lastMove: string | null; marks: string[]; arrows: { uci: string; who: Who }[]; line: Who | null;
+    /** Who may move a piece on it to try a move: the side to move, or null (a plain line, a game that is over). */
+    turn: Color | null;
+  } | null;
+  /** A move made by hand on the board: one step on, an existing line opened, or a line tried (see branchOf). */
+  play: (uci: string) => void;
   /** The moves to compare, and under them the engine's other choices; null for a single line. */
   chips: ReactNode;
   /** The moves of the line on the board, with a step either way; null at the starting position of a comparison. */
@@ -108,6 +125,8 @@ export function useSearchedBest(fen: string | null): number | null {
 }
 
 interface St { key: string; sel: number | null; step: number; goal: 'decided' | 'end' | null; fallback?: number }
+/** The line tried by hand: the moves from the position asked, and which of them were made by hand (counted from 1). */
+interface Tried { key: string; path: string[]; hand: number[] }
 
 export function useResultLines(start: string | null, lines: MoveLine[], opts: LinesOptions): ResultLines {
   const single = !opts.compare;
@@ -123,6 +142,8 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
   // A new result starts at once, not one render late.
   const cur = state.key === key ? state : fresh();
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
+  const [tried, setTried] = useState<Tried | null>(null);
+  const tr = !single && tried && tried.key === key ? tried : null;
 
   // The engine's other choices: asked for where moves are compared and it is the learner's
   // move in the starting position (the numbers are for the side to move).
@@ -158,8 +179,20 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
   const label = useMemo(() => (found ? othersLabel(found, extra) : 'Others'), [found, extra]);
   const all = useMemo(() => [...lines, ...extra], [lines, extra]);
 
-  const line = cur.sel === null ? null : all[cur.sel] ?? null;
-  const got = line && start ? loaded[`${start}|${line.uci}`] : undefined;
+  // The tried line: its moves so far, then the engine's answer once it is in.
+  const tryId = tr && start ? `try|${start}|${tr.path.join(' ')}` : null;
+  const tryGot = tryId ? loaded[tryId] : undefined;
+  const tryLine = useMemo((): MoveLine | null => {
+    if (!tr || !start) return null;
+    const answer = tryGot && tryGot !== 'loading' ? tryGot : null;
+    const move = triedMove(start, tr.path);
+    if (!move) return null;
+    return { kind: 'other', who: ['other'], label: move.no ? `Try ${move.no}` : 'Try', uci: tr.path[0]!, san: move.san, score: answer?.score ?? null, pv: [...tr.path.slice(1), ...(answer?.pv ?? [])] };
+  }, [tr, start, tryGot]);
+  const onTry = cur.sel === TRY && !!tr && !!tryLine;
+
+  const line = cur.sel === TRY ? tryLine : cur.sel === null ? null : all[cur.sel] ?? null;
+  const got = onTry ? tryGot : line && start ? loaded[`${start}|${line.uci}`] : undefined;
   const pv = line ? line.pv ?? (got && got !== 'loading' ? got.pv : null) : null;
   const full = useMemo(() => (line ? [line.uci, ...(pv ?? [])] : []), [line?.uci, pv?.join(' ')]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the line is decided is read from the whole line and from nothing less. A shorter
@@ -170,8 +203,12 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
   // How much of the line can be stepped through, and where a replay "to where it is decided"
   // rests. The line that opens with the result may ask for a least number of moves (the
   // engine's answer to a wrong puzzle move is always shown): see replaySpan.
-  const least = line && open && line.who.includes(open.kind) ? open.fallback ?? 0 : 0;
-  const span = replaySpan({ length: full.length, decidedPly: decided ? decided.ply : null, stopThere: opts.stopThere !== false, least, cap: CAP });
+  // A tried move is always answered on the board: its replay runs at least to the engine's
+  // reply, and on to where the line is decided if that comes after the move. What was decided
+  // before the move was tried is not where this line ends.
+  const least = onTry ? tr.path.length + 1 : line && open && line.who.includes(open.kind) ? open.fallback ?? 0 : 0;
+  const decidedPly = !decided || (onTry && decided.ply < tr.path.length) ? null : decided.ply;
+  const span = replaySpan({ length: full.length, decidedPly, stopThere: onTry || opts.stopThere !== false, least, cap: onTry ? tr.path.length + CAP : CAP });
   const n = !line ? 0 : span.shown;
   const target = cur.goal === null ? Math.min(cur.step, n) : cur.goal === 'end' ? n : Math.min(span.stop, n);
   const step = cur.goal !== null && stillMotion() ? target : Math.min(cur.step, n);
@@ -201,44 +238,96 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
     void bestLineFor(after, opts.nodes).then((best) => setLoaded((x) => ({ ...x, [id]: { pv: best ? best.pv.slice(0, 9) : [], score: best ? 100 - best.wp : null } })));
   }, [start, line?.uci, line?.pv]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The engine's answer to a tried line is asked for as soon as the move is made.
+  useEffect(() => {
+    if (!start || !tr || !tryId || loaded[tryId]) return;
+    const id = tryId;
+    const over = triedScore(start, tr.path, opts.me, null);
+    if (over.over) {
+      setLoaded((x) => ({ ...x, [id]: { pv: [], score: over.score } }));
+      return;
+    }
+    let after: string;
+    try {
+      after = fenAfter(start, tr.path);
+    } catch {
+      return;
+    }
+    setLoaded((x) => ({ ...x, [id]: 'loading' }));
+    const path = tr.path;
+    void bestLineFor(after, opts.nodes).then((best) => setLoaded((x) => ({ ...x, [id]: { pv: best ? best.pv.slice(0, 10) : [], score: triedScore(start, path, opts.me, best ? best.wp : null).score } })));
+  }, [start, tryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** By hand: go there and stop any replay. One step back from the first move of a comparison is the starting position. */
   const go = (to: number) => {
     const s = Math.max(0, Math.min(n, to));
     setState({ key, sel: s === 0 && !single ? null : cur.sel, step: s, goal: null });
   };
-  const select = (i: number) => setState(cur.sel === i ? { key, sel: null, step: 0, goal: null } : { key, sel: i, step: 1, goal: 'decided' });
+  // A chip tapped plays its line from the first move; the tried line opens on the move that was tried.
+  const select = (i: number) => setState(cur.sel === i ? { key, sel: null, step: 0, goal: null } : { key, sel: i, step: i === TRY && tr ? tr.path.length : 1, goal: 'decided' });
+  /** A move made by hand on the board, wherever it stands. */
+  const play = (raw: string) => {
+    if (!start || single) return;
+    const on = !!line && step > 0;
+    const b = branchOf(start, on ? full.slice(0, step) : [], raw, on && step < n ? full[step] ?? null : null, all.map((l) => l.uci));
+    if (!b) return;
+    if (b.kind === 'on') return go(step + 1);
+    if (b.kind === 'line') return select(b.index);
+    // Moves made by hand earlier in the same tried line stay marked as such.
+    const hand = [...(onTry ? tr.hand.filter((h) => h < b.path.length) : []), b.path.length];
+    setTried({ key, path: b.path, hand });
+    setState({ key, sel: TRY, step: b.path.length, goal: 'decided' });
+  };
 
   const at = useMemo(() => (start && line ? lineAt(start, full, step) : null), [start, line?.uci, full, step]); // eslint-disable-line react-hooks/exhaustive-deps
   const onIt = !!decided && !!line && step === decided.ply;
-  const board = !start ? null : line && at && step > 0
-    ? { fen: at.fen, lastMove: at.last, marks: onIt ? [decided!.square] : [], arrows: [], line: single ? null : line.kind }
-    : { fen: start, lastMove: opts.startLast ?? null, marks: [], arrows: single ? [] : lines.map((l) => ({ uci: l.uci, who: l.kind })), line: null };
+  const onBoard = !!line && !!at && step > 0;
+  const shownFen = !start ? null : onBoard ? at!.fen : start;
+  const turn = useMemo((): Color | null => {
+    if (!shownFen || single) return null;
+    try {
+      const pos = positionFromFen(shownFen);
+      return pos.isEnd() ? null : pos.turn;
+    } catch {
+      return null;
+    }
+  }, [shownFen, single]);
+  // At the position asked every compared move has its arrow; so has a move tried from there.
+  const startArrows = single ? [] : [...lines.map((l) => ({ uci: l.uci, who: l.kind })), ...(tr && tr.path.length === 1 ? [{ uci: tr.path[0]!, who: 'other' as const }] : [])];
+  const board = !start ? null : onBoard
+    ? { fen: at!.fen, lastMove: at!.last, marks: onIt ? [decided!.square] : [], arrows: [], line: single ? null : line!.kind, turn }
+    : { fen: start, lastMove: opts.startLast ?? null, marks: [], arrows: startArrows, line: null, turn };
 
   const scoreOf = (l: MoveLine) => {
+    if (l === tryLine) return l.score;
     const x = start ? loaded[`${start}|${l.uci}`] : undefined;
     return l.score ?? (x && x !== 'loading' ? x.score : null) ?? searchedScore.get(l.uci) ?? null;
+  };
+  const chip = (l: MoveLine, i: number, testid: string, who: string, uci: string) => {
+    const score = scoreOf(l);
+    return (
+      <button key={i === TRY ? 'try' : l.uci} className={`line-chip is-${l.kind}`} data-testid={testid} data-who={who} data-uci={uci} data-state={i === TRY && tryGot === 'loading' ? 'loading' : undefined} aria-pressed={cur.sel === i} onClick={() => select(i)}>
+        <span className="line-who">{l.label}</span>
+        <span className="line-san">{l.san}</span>
+        {score !== null && (
+          <span className="line-score">
+            <span className="line-bar" role="img" aria-label={`${Math.round(score)} out of 100`} data-score={Math.round(score)}>
+              <i style={{ width: `${Math.max(3, Math.min(100, score))}%` }} />
+            </span>
+            {/* The engine's evaluation in pawns after the move, from the learner's side: plus is good for him. */}
+            <span className="line-eval" data-testid="line-eval" aria-label={`${evalText(score)} pawns for you`}>{evalText(score)}</span>
+          </span>
+        )}
+        {score === null && i === TRY && tryGot === 'loading' && <span className="line-wait">…</span>}
+      </button>
+    );
   };
   const chips = !start || single || lines.length === 0 ? null : (
     <>
     <div className="lines" data-testid="lines" data-selected={line?.kind ?? ''}>
-      {lines.map((l, i) => {
-        const score = scoreOf(l);
-        return (
-          <button key={l.uci} className={`line-chip is-${l.kind}`} data-testid={`line-${l.kind}`} data-who={l.who.join(' ')} data-uci={l.uci} aria-pressed={cur.sel === i} onClick={() => select(i)}>
-            <span className="line-who">{l.label}</span>
-            <span className="line-san">{l.san}</span>
-            {score !== null && (
-              <span className="line-score">
-                <span className="line-bar" role="img" aria-label={`${Math.round(score)} out of 100`} data-score={Math.round(score)}>
-                  <i style={{ width: `${Math.max(3, Math.min(100, score))}%` }} />
-                </span>
-                {/* The engine's evaluation in pawns after the move, from the learner's side: plus is good for him. */}
-                <span className="line-eval" data-testid="line-eval" aria-label={`${evalText(score)} pawns for you`}>{evalText(score)}</span>
-              </span>
-            )}
-          </button>
-        );
-      })}
+      {lines.map((l, i) => chip(l, i, `line-${l.kind}`, l.who.join(' '), l.uci))}
+      {/* The move tried by hand, with its number like the others: the last one made, wherever in a line it was made. */}
+      {tryLine && tr && chip(tryLine, TRY, 'line-try', 'try', tr.path[tr.path.length - 1]!)}
     </div>
     {/* Shown while the result rests on the position asked; the moves of a line on the board take its place.
         The row keeps its place while the search runs, so nothing under it moves when the moves arrive. */}
@@ -269,7 +358,7 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
       <button className="step" data-testid="line-prev" disabled={step === 0} onClick={() => go(step - 1)} aria-label={step === 1 && !single ? 'Back to the starting position' : 'One move back'}>‹</button>
       <span className="line-moves" ref={moves}>
         {tokens.map((t, i) => (
-          <button key={i} className={`line-move${i + 1 === step ? ' is-on' : ''}`} data-testid="line-move" aria-current={i + 1 === step} onClick={() => go(i + 1)}>
+          <button key={i} className={`line-move${i + 1 === step ? ' is-on' : ''}${onTry && tr.hand.includes(i + 1) ? ' is-hand' : ''}`} data-testid="line-move" data-hand={onTry && tr.hand.includes(i + 1) ? 'true' : undefined} aria-current={i + 1 === step} onClick={() => go(i + 1)}>
             {t.no && <span className="line-no">{t.no}</span>}{t.san}
           </button>
         ))}
@@ -279,7 +368,7 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
     </div>
   );
   const note = onIt ? <p className="line-note" data-testid="line-consequence">{decided!.text}</p> : null;
-  return { board, chips, ribbon, note, selected: line, step };
+  return { board, play, chips, ribbon, note, selected: line, step };
 }
 
 function turnOf(fen: string): Color | null {

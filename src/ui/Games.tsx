@@ -332,10 +332,11 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>
       <Board
-        fen={shown.board ? shown.board.fen : event.fen} orientation={game.color} movable={result || checking ? null : game.color}
+        fen={shown.board ? shown.board.fen : event.fen} orientation={game.color} movable={result ? shown.board?.turn ?? null : checking ? null : game.color}
         lastMove={shown.board ? shown.board.lastMove : null} marks={shown.board?.marks ?? []} arrows={shown.board?.arrows ?? []} line={shown.board?.line ?? null}
         badge={onMine && mine && head?.mark ? { square: mine.uci.slice(2, 4), text: head.mark, tone: head.tone as 'good' | 'mid' | 'bad' } : null}
-        onMove={(u) => void record(u, false)} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : other === 'worse' ? 'wrong' : 'none'}:${drill.id}:${retrying}` : null}
+        // Once it is answered the board is for trying moves on (see ./Lines.tsx).
+        onMove={(u) => (result ? shown.play(u) : void record(u, false))} resetKey={resetKey} flash={result && !result.shown ? `${result.ok ? 'right' : other === 'worse' ? 'wrong' : 'none'}:${drill.id}:${retrying}` : null}
       />
       <div className="say" aria-live="polite">
         {!result && (

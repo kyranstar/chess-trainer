@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { openApp, playMove, solvePuzzle } from './helpers';
+import { movesIn, openApp, playMove, solvePuzzle } from './helpers';
 
 const archive = JSON.parse(readFileSync('src/games/fixtures/chesscom-archive.fixture.json', 'utf8'));
 const API = 'https://api.chess.com/pub/player/fixture_learner';
@@ -332,8 +332,66 @@ test('your move: play your own move in a position from your game and see exactly
   await page.getByTestId('line-prev').click();
   await expect(page.getByTestId('own-move-line')).toHaveCount(0);
   await expect(board).toHaveAttribute('data-arrows', /you:f3e5/);
-  // The game's move was not an error, so its line is asked for when it is opened.
-  await inGame.click();
+  // The board is live once the answer is in (ADR-055). A move of his own that is nowhere on the
+  // screen is a line of its own: a fourth chip, "Try", with a bar and a number like the others,
+  // and the engine's answer to it played on the board at once.
+  await expect(board).toHaveAttribute('data-movable', 'white');
+  const onScreen = await page.locator('[data-uci]').evaluateAll((els) => els.map((e) => e.getAttribute('data-uci')));
+  const mine = movesIn(asked!).find((m) => !onScreen.includes(m.uci))!;
+  await playMove(page, mine.uci);
+  const tried = page.getByTestId('line-try');
+  await expect(tried).toHaveAttribute('data-uci', mine.uci);
+  await expect(tried).toHaveAttribute('aria-pressed', 'true');
+  await expect(tried).toContainText(mine.san);
+  await expect(tried.locator('.line-who')).toHaveText('Try');
+  await expect(tried.getByTestId('line-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M)$/, { timeout: 30_000 });
+  await expect(stepper).toHaveAttribute('data-line', 'other');
+  await expect(stepper).toHaveAttribute('data-playing', 'false');
+  expect(Number(await stepper.getAttribute('data-step'))).toBeGreaterThanOrEqual(2); // answered on the board
+  await expect(page.getByTestId('line-move').first()).toHaveAttribute('data-hand', 'true');
+  await expect(page.getByTestId('line-move').first()).toContainText(mine.san);
+  await expect(page.getByTestId('line-move').nth(1)).not.toHaveAttribute('data-hand', 'true');
+  // The other three chips are as they were, and nothing has moved or needs scrolling.
+  await expect(page.getByTestId('line-you')).toContainText('Nxe5');
+  expect(await size()).toEqual(rest);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // "What if they did this instead": on his tried move it is Black's turn, and another reply
+  // than the engine's can be made for Black. The try is now that move, named with its number.
+  const engineReply = (await page.getByTestId('line-move').nth(1).textContent())!;
+  await page.getByTestId('line-move').first().click();
+  await expect(stepper).toHaveAttribute('data-step', '1');
+  await expect(board).toHaveAttribute('data-movable', 'black');
+  const afterMine = (await board.getAttribute('data-fen'))!;
+  const theirs = movesIn(afterMine).find((m) => m.san !== engineReply)!;
+  await playMove(page, theirs.uci);
+  await expect(tried).toHaveAttribute('data-uci', theirs.uci);
+  await expect(tried.locator('.line-who')).toHaveText('Try 10…');
+  await expect(tried).toContainText(theirs.san);
+  await expect(tried.getByTestId('line-eval')).toHaveText(/^([+−]\d+\.\d+|0\.00|[+−]M)$/, { timeout: 30_000 });
+  await expect(stepper).toHaveAttribute('data-playing', 'false');
+  expect(Number(await stepper.getAttribute('data-step'))).toBeGreaterThanOrEqual(3);
+  // Both moves made by hand are marked as his; the engine's answer is not.
+  await expect(page.getByTestId('line-move').nth(1)).toHaveAttribute('data-hand', 'true');
+  await expect(page.getByTestId('line-move').nth(2)).not.toHaveAttribute('data-hand', 'true');
+  expect(await size()).toEqual(rest);
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // The move the line goes on with, made by hand, is one step on and not another try.
+  await page.getByTestId('line-move').first().click();
+  await playMove(page, theirs.uci);
+  await expect(stepper).toHaveAttribute('data-step', '2');
+  await expect(tried).toHaveAttribute('data-uci', theirs.uci);
+  // Tapping the chip returns to the position asked; the try stays to be compared and opened again.
+  await tried.click();
+  await expect(page.getByTestId('own-move-line')).toHaveCount(0);
+  await expect(board).toHaveAttribute('data-fen', asked!);
+  await expect(tried).toHaveAttribute('aria-pressed', 'false');
+  await expect(others).toHaveAttribute('data-state', 'shown');
+  if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // The game's move made by hand is the game's line, not a try: its chip opens as if tapped.
+  // It was not an error, so its line is asked for when it is opened.
+  await playMove(page, 'b1d2');
+  await expect(inGame).toHaveAttribute('aria-pressed', 'true');
+  await expect(tried).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByTestId('own-move-line')).toHaveAttribute('data-step', /[1-9]/);
   await expect(page.getByTestId('line-move').nth(1)).toBeVisible({ timeout: 30_000 });
   await expect(board).not.toHaveAttribute('data-fen', asked!);

@@ -355,9 +355,12 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .line-chip { --c: var(--you); --cs: var(--you-soft); flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; min-height: 3.2rem; padding: 0.1rem 0.55rem 0.3rem; text-align: left; border: 1.5px solid var(--rule); border-top: 4px solid var(--c); border-radius: 8px; background: var(--surface); min-width: 0; }
 .line-chip.is-game { --c: var(--game); --cs: var(--game-soft); }
 .line-chip.is-best { --c: var(--best); --cs: var(--best-soft); }
+/* A move tried by hand after the answer: the colour of the engine's other choices, which it stands beside. */
+.line-chip.is-other { --c: var(--other); --cs: var(--other-soft); }
+.line-chip .line-wait { padding: 0; line-height: 1; }
 .line-chip[aria-pressed='true'] { background: var(--cs); border-color: var(--c); }
 .line-who { font-size: 0.7rem; line-height: 1.25; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 700; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.line-san { font-size: 1.08rem; font-weight: 700; white-space: nowrap; line-height: 1.15; }
+.line-san { font-size: 1.08rem; font-weight: 700; white-space: nowrap; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
 .line-score { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.05rem; }
 .line-bar { display: block; flex: 1; min-width: 1rem; height: 0.4rem; border-radius: 0.2rem; background: var(--rule); overflow: hidden; }
 .line-eval { flex: none; font-size: 0.78rem; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
@@ -372,6 +375,8 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .line-moves::-webkit-scrollbar { display: none; }
 .line-move { flex: none; min-height: 2.5rem; padding: 0.2rem 0.35rem; border: 0; border-radius: 6px; background: transparent; font-weight: 500; font-size: 1rem; gap: 0.2rem; }
 .line-move.is-on { background: var(--cs); font-weight: 700; box-shadow: inset 0 -3px 0 var(--c); }
+/* A move made by hand in a tried line, among the engine's. */
+.line-move.is-hand { color: var(--c); font-weight: 700; }
 .line-no { color: var(--muted); font-size: 0.82rem; font-weight: 500; }
 .line-wait { color: var(--muted); padding: 0 0.4rem; }
 /* The last move of a line being played through is tinted in that line's colour. */

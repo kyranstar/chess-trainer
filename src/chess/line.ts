@@ -308,3 +308,75 @@ export function othersLabel(searched: SearchedLine[], shown: { score: number | n
   if (!mating && gaps.every((g) => g < ABOUT_EQUAL)) return 'About as good';
   return 'Others';
 }
+
+/**
+ * What a move made by hand on a result does (owner request, 2026-11-17; ADR-055). Once a
+ * position is answered the board is live wherever it stands, for whichever side is to move:
+ *   'on'    the move is the one the line on the board goes on with: one step on, nothing new;
+ *   'line'  made in the position asked, it is the first move of a line already shown (a chip
+ *           or one of the engine's other choices): that line is opened, as its chip would;
+ *   'try'   anything else: a line of its own, the moves that led here and then this one, for
+ *           the engine to answer.
+ * `played` are the moves from the position asked to where the board stands, `next` the move
+ * the line on the board goes on with (null at its end or with no line), `firsts` the first
+ * moves of the lines shown (canonical). Null when the move cannot be played there.
+ */
+export type Branch = { kind: 'on' } | { kind: 'line'; index: number } | { kind: 'try'; path: string[] };
+
+export function branchOf(start: string, played: string[], raw: string, next: string | null, firsts: string[]): Branch | null {
+  let pos: Chess;
+  let uci: string;
+  try {
+    pos = positionFromFen(start);
+    for (const u of played) pos = applyUci(pos, u);
+    uci = canonicalUci(pos, raw);
+  } catch {
+    return null;
+  }
+  if (next) {
+    try {
+      if (canonicalUci(pos, next) === uci) return { kind: 'on' };
+    } catch {
+      // a line whose next move cannot be played does not go on: the move is a try
+    }
+  }
+  if (played.length === 0) {
+    const index = firsts.indexOf(uci);
+    if (index >= 0) return { kind: 'line', index };
+  }
+  return { kind: 'try', path: [...played, uci] };
+}
+
+/**
+ * What the position after a tried line is worth to the learner (0-100), from the engine's
+ * expected score for the side to move there (`wp`, null with no answer). A game that is over
+ * needs no engine: mate is all or nothing, any other end is a draw.
+ */
+export function triedScore(start: string, path: string[], me: Color, wp: number | null): { over: boolean; score: number | null } {
+  let pos: Chess;
+  try {
+    pos = positionFromFen(start);
+    for (const u of path) pos = applyUci(pos, u);
+  } catch {
+    return { over: false, score: null };
+  }
+  if (pos.isEnd()) return { over: true, score: pos.isCheckmate() ? (pos.turn === me ? 0 : 100) : 50 };
+  return { over: false, score: wp === null ? null : pos.turn === me ? wp : 100 - wp };
+}
+
+/**
+ * A tried move as its chip names it: the move, and its number when it was not made in the
+ * position asked ("11." for White's, "11…" for Black's). Beside the compared moves, which are
+ * all moves from the position asked, a bare "a3" would read as one more of those.
+ */
+export function triedMove(start: string, path: string[]): { san: string; no: string | null } | null {
+  try {
+    let pos = positionFromFen(start);
+    for (const u of path.slice(0, -1)) pos = applyUci(pos, u);
+    const last = path[path.length - 1];
+    if (!last) return null;
+    return { san: sanOf(pos, last), no: path.length > 1 ? `${pos.fullmoves}${pos.turn === 'white' ? '.' : '…'}` : null };
+  } catch {
+    return null;
+  }
+}
