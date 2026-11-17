@@ -20,11 +20,6 @@ export function senseItemsFrom(games: GameRecord[]): SenseItem[] {
   return late.filter((i) => !i.truth).length >= 20 ? late : [...safetyItems(games), ...chanceItems(games)];
 }
 
-/** A question by its id, from every question the games can supply (a review item may predate the "move 7 onwards" rule). */
-export function senseItemById(games: GameRecord[], id: string): SenseItem | undefined {
-  return [...safetyItems(games), ...chanceItems(games)].find((x) => x.id === id);
-}
-
 /** A question on screen for less than this was not really shown (a screen passing through). */
 const MIN_SHOWN_MS = 1000;
 

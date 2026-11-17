@@ -414,6 +414,94 @@ test('your move: play your own move in a position from your game and see exactly
   await expect(page.getByTestId('own-move-verdict')).toBeVisible();
 });
 
+test('a "Your move" position missed today is asked again in tomorrow\'s review; what is gone from the device is passed over without a word and is not due again', async ({ page }) => {
+  // The owner, 2026-11-17: "it keeps saying 'This review position is no longer in the installed
+  // content pack...' ... Why does it happen everyday?" Review could not find the positions the
+  // session asks from, announced them as gone and left them due.
+  const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',
+    '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', '[EndDate "2026.11.08"]', '[EndTime "10:20:00"]', '[Link "https://www.chess.com/game/live/900000777"]', '',
+    '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 7. Re1 a6 8. Bb3 Ba7 9. h3 h6 10. Nbd2 Re8 11. Nf1 Be6 12. Bc2 d5 13. exd5 Bxd5 14. Ng3 Qd7 15. Nh4 Rad8 16. Nhf5 Kh8 17. Qf3 Ne7 18. Nxe7 Qxe7 1-0'].join('\n');
+  const long = { url: 'https://www.chess.com/game/live/900000777', pgn, time_control: '600', time_class: 'rapid', rated: true, rules: 'chess', end_time: 1794133200, white: { username: 'fixture_learner', rating: 455, result: 'win' }, black: { username: 'opponent_long', rating: 470, result: 'resigned' } };
+  await page.route('https://api.chess.com/**', async (route) => {
+    const url = route.request().url();
+    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+    if (url === `${API}/stats`) return route.fulfill({ headers, json: { chess_rapid: { last: { rating: 455, date: 1794000000 } } } });
+    if (url === `${API}/games/archives`) return route.fulfill({ headers, json: { archives: [`${API}/games/2026/11`] } });
+    if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [long] } });
+    return route.fulfill({ status: 404, headers, json: {} });
+  });
+  const start = new Date(2026, 10, 10, 9, 0, 0);
+  await page.clock.install({ time: start });
+  await openApp(page, '#/progress');
+  await page.getByTestId('chesscom-username').fill('fixture_learner');
+  await page.getByTestId('save-username').click();
+  await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
+
+  // Today: move 10 of the game, as the session asks it, and a knight given away.
+  await page.goto('./#/practice/run?mode=move&pace=0');
+  const drill = page.getByTestId('own-move');
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  const asked = await drill.locator('.board').getAttribute('data-fen');
+  await playMove(page, 'f3e5');
+  await expect(drill).toHaveAttribute('data-phase', 'predict');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));
+
+  const states = () => page.evaluate(() => new Promise<{ itemId: string; ask?: string; retired?: string }[]>((resolve, reject) => {
+    const open = indexedDB.open('chess-trainer');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const all = open.result.transaction('reviewStates').objectStore('reviewStates').getAll();
+      all.onsuccess = () => { open.result.close(); resolve(all.result); };
+    };
+  }));
+  await expect.poll(async () => (await states()).map((r) => r.ask)).toEqual([expect.stringMatching(/^move:[^:]+:18$/)]);
+  // And something that really is gone: a puzzle due for review that the installed pack does not hold.
+  await page.evaluate((due) => new Promise<void>((resolve, reject) => {
+    const open = indexedDB.open('chess-trainer');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const tx = open.result.transaction('reviewStates', 'readwrite');
+      const store = tx.objectStore('reviewStates');
+      store.getAll().onsuccess = (e) => {
+        const algo = ((e.target as IDBRequest<{ algo: string }[]>).result[0]!).algo;
+        store.put({ itemId: 'lichess:notInThePack', algo, due, lastAttemptUuid: 'none', card: { due, stability: 1, difficulty: 5, elapsed_days: 0, scheduled_days: 1, learning_steps: 0, reps: 1, lapses: 0, state: 2, last_review: due - 86_400_000 } });
+      };
+      tx.oncomplete = () => { open.result.close(); resolve(); };
+    };
+  }), start.getTime());
+
+  // Tomorrow: both are due. The position from his game comes first and is the one he was asked.
+  await page.clock.setSystemTime(new Date(start.getTime() + 26 * 3_600_000));
+  await page.goto('./#/practice');
+  // The app is opened afresh, as on a new day: the row written behind its back is read then.
+  await page.reload();
+  await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('practice-review')).toContainText('2 due now');
+  await page.getByTestId('practice-review').click();
+  await expect(drill).toHaveAttribute('data-phase', 'move');
+  await expect(drill.locator('.board')).toHaveAttribute('data-fen', asked!);
+  await expect(page.getByTestId('practice-run')).not.toContainText('no longer in the installed content pack');
+  await playMove(page, 'b1d2');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  // On from it: the puzzle that is gone is not announced; the queue is simply done.
+  await page.getByTestId('own-move-next').click();
+  await expect(page.getByTestId('review-empty')).toBeVisible();
+  await expect(page.getByTestId('practice-run')).not.toContainText('no longer in the installed content pack');
+  expect((await states()).find((r) => r.itemId === 'lichess:notInThePack')?.retired).toBe('gone');
+  // It does not count as due any more, today or the day after.
+  await page.goto('./#/practice');
+  await expect(page.getByTestId('practice-review')).toContainText('0 due now');
+  await page.clock.setSystemTime(new Date(start.getTime() + 50 * 3_600_000));
+  await page.goto('./#/today');
+  await page.goto('./#/practice');
+  await expect(page.getByTestId('practice-review')).toContainText(/^Review what is due[01] due now/);
+  await page.getByTestId('practice-review').click();
+  await expect(page.getByTestId('practice-run')).not.toContainText('no longer in the installed content pack');
+});
+
 test('your move on the clock: running over never forces a move or changes its rating, lateness is noted beside it, and Progress counts timed moves apart', async ({ page }) => {
   // Black has a bishop that can already be taken, and a knight he can take for nothing.
   const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',

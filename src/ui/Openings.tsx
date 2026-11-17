@@ -46,6 +46,12 @@ export function useRepertoire(): RepertoireEntry[] {
   return useLiveQuery(() => db.repertoire.toArray(), [db]) ?? [];
 }
 
+/** The stored repertoire, or undefined while it is still being read (where "not there" must not be mistaken for "not read yet"). */
+export function useStoredRepertoire(): RepertoireEntry[] | undefined {
+  const db = useDb();
+  return useLiveQuery(() => db.repertoire.toArray(), [db]);
+}
+
 export { DEFAULT_BAND };
 
 export function useOpeningPrefs(): { band: number; side: Side; setBand: (b: number) => void; setSide: (s: Side) => void } {
@@ -449,7 +455,9 @@ export function OpeningRecallRun({ learner, side, onFinished }: { learner: Learn
   const queue = useRef<RepertoireEntry[] | null>(null);
   const [i, setI] = useState(0);
   if (queue.current === null && learner.ready && entries.length > 0) {
-    const queued = new Set(learner.reviews.map((r) => r.itemId));
+    // A move that was taken out of review because it was not in the repertoire then, and is
+    // again now, is recalled as a new one.
+    const queued = new Set(learner.reviews.filter((r) => r.retired !== 'gone').map((r) => r.itemId));
     const dueIds = new Set(due.map((d) => d.itemId));
     queue.current = entries.filter((e) => e.side === side && (!queued.has(drillId(e)) || dueIds.has(drillId(e)))).sort((a, b) => a.path.length - b.path.length);
   }

@@ -81,9 +81,11 @@ export interface ReviewState {
   /**
    * Out of active review: 'graduated' after a successful recall two weeks or more later,
    * 'set-aside' after repeated misses. The history is kept; a later miss of a graduated item
-   * brings it back.
+   * brings it back. 'gone': its content is not on this device any more (a puzzle left out of
+   * a newer pack, a repertoire move since replaced), found when it came up for review; it is
+   * not offered again, and an answer recorded for it later puts it back.
    */
-  retired?: 'graduated' | 'set-aside';
+  retired?: 'graduated' | 'set-aside' | 'gone';
 }
 
 export interface SerializedCard {

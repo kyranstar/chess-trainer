@@ -276,8 +276,8 @@ export interface MoveItem {
   date: string;
   /** What he played in the game. */
   played: string;
-  /** Expected score of the best move here, from the game's measurement record. */
-  bestWp: number;
+  /** Expected score of the best move here, from the game's measurement record; null when the game is not measured at that move. */
+  bestWp: number | null;
 }
 
 /** Positions are taken this many plies apart at least, so neighbours of one moment are not all asked. */
@@ -319,6 +319,34 @@ export function moveItems(games: GameRecord[], opts: { fromMove?: number; toMove
     }
   }
   return out;
+}
+
+/**
+ * A "Your move" position by its id, built from the game itself: for asking again a position
+ * that was asked before (review). It is not looked up in a selection: which positions are
+ * offered as new depends on the range of moves and on the spacing between them, and a list
+ * made with other bounds holds other positions. Review did that (moves 1 to 200 where the
+ * session asks from 10 to 19) and could find 23 of the 147 positions the session can ask;
+ * the rest came back every day as "no longer in the installed content pack" (owner report,
+ * 2026-11-17). All that is needed is the game and a move of his at that point in it.
+ */
+export function moveItemById(games: GameRecord[], id: string): MoveItem | null {
+  const m = /^move:([^:]+):(\d+)$/.exec(id);
+  if (!m) return null;
+  const g = games.find((x) => x.id === m[1]);
+  const ply = Number(m[2]);
+  const played = g?.moves[ply];
+  // His move: White's are the even ones.
+  if (!g || !played || (ply % 2 === 0) !== (g.color === 'white')) return null;
+  let fen: string;
+  try {
+    let pos = positionFromFen(START);
+    for (const u of g.moves.slice(0, ply)) pos = applyUci(pos, u);
+    fen = fenOf(pos);
+  } catch {
+    return null;
+  }
+  return { id, gameId: g.id, ply, fen, color: g.color, date: g.endDate, played, bestWp: g.measure?.facts?.find((f) => f.ply === ply)?.wp ?? null };
 }
 
 const NAME: Record<Role, string> = { pawn: 'pawn', knight: 'knight', bishop: 'bishop', rook: 'rook', queen: 'queen', king: 'king' };

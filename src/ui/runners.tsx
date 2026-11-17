@@ -7,17 +7,16 @@ import { CHECK, gradeCheck, KPK_CHECK } from '../learn/curriculum';
 import { selectPuzzles } from '../puzzles/select';
 import type { Puzzle } from '../puzzles/types';
 import { type Learner, useDb, usePool } from '../app/store';
-import { type DrillPosition, drillPositions } from '../games/metrics';
 import { reviewOrder } from '../schedule/mix';
-import { type MoveItem, moveItems } from '../games/ownmove';
-import type { SenseItem } from '../games/sense';
+import { type OwnReview, ownGameReview } from '../games/reviewItem';
+import { positionOf, reviewKey } from '../schedule/position';
 import { drillId } from '../openings/repertoire';
 import { OwnGameDrill, useGames } from './Games';
 import { OwnMoveDrill } from './OwnMove';
 import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
-import { OpeningDrill, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
-import { SenseDrill, senseItemById } from './Sense';
+import { OpeningDrill, useOpeningBook, useOpeningPrefs, useStoredRepertoire } from './Openings';
+import { SenseDrill } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
 import { Ask, KeepLast, useRunNote } from './Stage';
 
@@ -260,14 +259,14 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
 }) {
   const pool = usePool();
   const book = useOpeningBook();
-  const repertoire = useRepertoire();
+  const repertoire = useStoredRepertoire();
   const prefs = useOpeningPrefs();
   const games = useGames();
   // Snapshot at start: items answered now get a new due date and must not re-enter this run.
   // Own-game positions first: review minutes are few and that is where the rating is lost.
   // A position from his own games is asked in the form it was last answered in (see src/schedule/position.ts).
   const queue = useRef(reviewOrder(due).map((d) => d.ask ?? d.itemId));
-  const held = useRef<{ id: string; sense?: SenseItem; drill?: DrillPosition; move?: MoveItem } | null>(null);
+  const held = useRef<{ id: string; own: OwnReview | null } | null>(null);
   const [i, setI] = useState(0);
   const leftNow = queue.current.length - i;
   useRunNote(single || leftNow <= 0 ? null : `${leftNow} left`);
@@ -289,50 +288,46 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
         </div>
       );
     }
+    // What is not on the device any more is passed over without a word (see GoneItem). The
+    // inner key makes each such item its own; the outer element has none, so it is not kept
+    // as "the last position".
+    const gone = <div><GoneItem key={itemId} itemId={itemId} onNext={advance} /></div>;
     if (itemId.startsWith('lichess:')) {
       const puzzle = pool.byId.get(itemId.slice(8));
-      if (!puzzle) return <RetiredItem onNext={advance} />;
+      if (!puzzle) return gone;
       return (
         <PuzzlePlayer key={itemId} puzzle={puzzle} context="review" conceptId={null} sessionId={sessionId} packVersion={pool.version}
           allowHints={false} onRecorded={onAttempt} onNext={advance} />
       );
     }
-    if (itemId.startsWith('sense:')) {
+    if (positionOf(itemId)) {
+      // A position from his own games, in the form it was last answered in, or as "Your move"
+      // when that form is no longer to be had (see src/games/reviewItem.ts).
       if (!games) return <p className="muted">Loading your games</p>;
       // Looked up once per queue position and kept: the games table changes while games are
-      // analysed, and a question on screen must not turn into "no longer available" mid-answer.
-      if (held.current?.id !== itemId) held.current = { id: itemId, sense: senseItemById(games, itemId) };
-      const item = held.current.sense;
-      if (!item) return <RetiredItem onNext={advance} />;
-      return <SenseDrill key={itemId} item={item} sessionId={sessionId} context="review" onDone={advance} />;
-    }
-    if (itemId.startsWith('move:')) {
-      if (!games) return <p className="muted">Loading your games</p>;
-      if (held.current?.id !== itemId) held.current = { id: itemId, move: moveItems(games, { fromMove: 1, toMove: 200 }).find((m) => m.id === itemId) };
-      const move = held.current.move;
-      if (!move) return <RetiredItem onNext={advance} />;
-      return <OwnMoveDrill key={itemId} item={move} sessionId={sessionId} context="review" onRecorded={onAttempt} onDone={advance} />;
+      // analysed, and a question on screen must not turn into another one mid-answer.
+      if (held.current?.id !== itemId) held.current = { id: itemId, own: ownGameReview(games, itemId) };
+      const own = held.current.own;
+      if (!own) return gone;
+      if (own.kind === 'sense') return <SenseDrill key={itemId} item={own.item} sessionId={sessionId} context="review" onDone={advance} />;
+      if (own.kind === 'game') return <OwnGameDrill key={itemId} drill={own.drill} sessionId={sessionId} onDone={advance} />;
+      return <OwnMoveDrill key={itemId} item={own.item} sessionId={sessionId} context="review" onRecorded={onAttempt} onDone={advance} />;
     }
     if (itemId.startsWith('kpk:')) {
       const [, goal, ...rest] = itemId.split(':');
       return <KpkDrill key={itemId} start={rest.join(':')} goal={goal as KpkGoal} sessionId={sessionId} onDone={advance} />;
     }
-    if (itemId.startsWith('game:')) {
-      if (!games) return <p className="muted">Loading your games</p>;
-      if (held.current?.id !== itemId) held.current = { id: itemId, drill: drillPositions(games).find((d) => d.id === itemId) };
-      const drill = held.current.drill;
-      if (!drill) return <RetiredItem onNext={advance} />;
-      return <OwnGameDrill key={itemId} drill={drill} sessionId={sessionId} onDone={advance} />;
-    }
     if (itemId.startsWith('opening:')) {
+      // Not known to be gone until the repertoire has been read.
+      if (!repertoire) return <p className="muted">Loading your repertoire</p>;
       const entry = repertoire.find((e) => drillId(e) === itemId);
-      if (!entry) return <RetiredItem onNext={advance} />;
+      if (!entry) return gone;
       return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} onDone={advance} />;
     }
     const [, lessonId, stepNo] = itemId.split(':');
     const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
     const step = lesson?.steps[Number(stepNo) - 1];
-    if (!lesson || !step || step.type !== 'try') return <RetiredItem onNext={advance} />;
+    if (!lesson || !step || step.type !== 'try') return gone;
     return (
       <section className="lesson-review" key={itemId}>
         <Ask title={CONCEPT_BY_ID.get(lesson.conceptId)?.title ?? lesson.title} />
@@ -343,11 +338,23 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
   return <KeepLast>{body()}</KeepLast>;
 }
 
-function RetiredItem({ onNext }: { onNext: () => void }) {
-  return (
-    <div className="empty">
-      <p>This review position is no longer in the installed content pack. Its history is kept.</p>
-      <div className="actions"><button className="primary" onClick={onNext}>Next</button></div>
-    </div>
-  );
+/**
+ * A due item whose content is not on this device any more: a puzzle left out of a newer pack,
+ * a repertoire move since replaced, a lesson step since re-cut, a game that is not stored.
+ * It used to be announced ("This review position is no longer in the installed content
+ * pack") and left due, so it was announced again in every review after that (owner report,
+ * 2026-11-17). There is nothing for the learner to do about it, so nothing is said: the item
+ * is taken out of the queue ('gone'), its attempts stay in the log, and the run goes on. An
+ * answer recorded for it later, should its content return, puts it back.
+ */
+function GoneItem({ itemId, onNext }: { itemId: string; onNext: () => void }) {
+  const db = useDb();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void db.reviewStates.update(reviewKey(itemId), { retired: 'gone' }).catch(() => 0).then(onNext);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <p className="muted" data-testid="review-gone">Loading</p>;
 }
