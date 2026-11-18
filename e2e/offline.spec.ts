@@ -45,6 +45,7 @@ test('after one online visit the app runs with no network: launch, practise, per
   await page.goto('./#/progress');
   await page.reload();
   await expect(page.getByTestId('card-unseen')).toContainText('1 of 2');
+  await page.goto('./#/progress/more/data');
   await expect(page.getByTestId('pack-info')).toContainText('practice positions');
 
   // No request to a third party was attempted during the offline session.
@@ -81,7 +82,7 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
     return route.fulfill({ status: 404, headers, json: {} });
   });
   // At home, online: games arrive and are analysed.
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
@@ -95,7 +96,10 @@ test('on the subway: games fetched earlier, the engine, own-game questions and a
   await page.reload();
   await expect(page.getByTestId('offline-strip')).toBeVisible();
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('headline-rating')).toContainText('455');
+  await expect(page.getByTestId('recent-games').getByTestId('game-row').first()).toBeVisible();
+  await page.goto('./#/progress/more/data');
   // Asking for a refresh says plainly that it could not be done, and nothing is lost.
   await page.getByTestId('sync-now').click();
   await expect(page.getByTestId('sync-status')).toContainText('offline');

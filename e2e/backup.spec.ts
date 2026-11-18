@@ -9,6 +9,7 @@ test('backup on one device restores on a clean one; a damaged file changes nothi
   await failPuzzle(page);
   await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen')).toContainText('1 of 2');
+  await page.goto('./#/progress/more/data');
   await expect(page.getByTestId('last-backup')).toContainText('No backup has been made');
 
   const download = page.waitForEvent('download');
@@ -25,22 +26,26 @@ test('backup on one device restores on a clean one; a damaged file changes nothi
   const page2 = await other.newPage();
   await openApp(page2, '#/progress');
   await expect(page2.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
+  await page2.goto('./#/progress/more/data');
 
   const damaged = testInfo.outputPath('damaged.json');
   writeFileSync(damaged, readFileSync(file, 'utf8').replace('"outcome":"fail"', '"outcome":"success"'));
   await page2.getByTestId('restore-input').setInputFiles(damaged);
   await expect(page2.getByTestId('data-message')).toContainText('does not match its checksum');
   await expect(page2.getByTestId('data-message')).toContainText('Nothing on this device was changed');
+  await page2.goto('./#/progress');
   await expect(page2.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
 
+  await page2.goto('./#/progress/more/data');
   await page2.getByTestId('restore-input').setInputFiles(file);
   await expect(page2.getByTestId('data-message')).toContainText('added 2 attempts');
+  await page2.goto('./#/progress');
   await expect(page2.getByTestId('card-unseen')).toContainText('1 of 2');
   await page2.getByTestId('tab-practice').click();
   await expect(page2.getByTestId('practice-review')).toContainText('1 in the queue');
 
   // Restoring again is harmless.
-  await page2.getByTestId('tab-progress').click();
+  await page2.goto('./#/progress/more/data');
   await page2.getByTestId('restore-input').setInputFiles(file);
   await expect(page2.getByTestId('data-message')).toContainText('added 0 attempts');
   await other.close();

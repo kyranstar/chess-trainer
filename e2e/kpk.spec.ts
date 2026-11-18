@@ -72,10 +72,11 @@ test('king and pawn ending: win against best defence, hold a draw, and a result-
   await expect(page.getByTestId('kpk-retry-note')).toContainText('not recorded');
 
   // Progress reports the three play-outs with their split, separately from puzzles.
-  await page.goto('./#/progress');
+  await page.goto('./#/progress/more/endgames');
   const card = page.getByTestId('card-endgame');
   await expect(card).toContainText('2 of 3');
   await expect(card).toContainText('Winning: 1 of 2. Holding the draw: 1 of 1.');
+  await page.goto('./#/progress');
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
   // Only the ending that went wrong is kept for review; the two played correctly are not.
   await page.goto('./#/practice');

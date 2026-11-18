@@ -22,6 +22,8 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   // Before any game the dashboard says so and shows only the ratings that were typed in.
   await expect(page.getByTestId('card-ratings')).toContainText('No games are on this device yet');
   await expect(page.getByTestId('card-errors')).toHaveCount(0);
+  await expect(page.getByTestId('card-early')).toHaveCount(0);
+  await page.goto('./#/progress/more/data');
   await expect(page.getByTestId('games-count')).toHaveText('0 games on this device, 0 analysed.');
   // There is no file import: games come only from the public API.
   await expect(page.getByTestId('games-input')).toHaveCount(0);
@@ -30,7 +32,37 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
 
-  // Ratings are per time control and never blended.
+  // The overview (ADR-061): one thing to do, the latest rated rapid games, cards for the rapid games.
+  await page.goto('./#/progress');
+  await expect(page.getByTestId('next-up')).toBeVisible();
+  await expect(page.getByTestId('recent-games').getByTestId('game-row')).toHaveCount(3);
+  await expect(page.getByTestId('recent-games')).toContainText('All 4 games');
+  await expect(page.getByTestId('card-early')).toContainText('of 4');
+  await expect(page.getByTestId('card-early')).toContainText('Provisional');
+  await expect(page.getByTestId('card-mistakes')).toContainText('per 100 moves');
+  await expect(page.getByTestId('headline-rating')).toHaveText('455');
+  // A game opens as its own page: the result, the numbers, how it went, and its moments.
+  await page.getByTestId('recent-games').getByTestId('game-row').first().click();
+  const game = page.getByTestId('game-breakdown');
+  await expect(game).toContainText('Rating after');
+  await expect(game).toContainText('Big mistakes');
+  await expect(game.getByTestId('moment').or(game.getByTestId('no-moments')).first()).toBeVisible();
+  // A measure has three windows of its own; each keeps its definition.
+  await page.goto('./#/progress/metric/mistakes');
+  await expect(page.getByTestId('detail-mistakes')).toContainText('in');
+  await page.getByTestId('seg-history').click();
+  await expect(page.getByTestId('detail-mistakes')).toContainText('All 4 rated rapid');
+  await expect(page.getByTestId('about')).toContainText('20 points or more');
+  // How you play: by move, by type, by clock and by colour, each row a link to its positions.
+  await page.goto('./#/progress/how');
+  await expect(page.getByTestId('how-rows').locator('li')).toHaveCount(4);
+  await page.getByTestId('seg-clock').click();
+  await expect(page.getByTestId('clock-insufficient')).toContainText('at least 30 moves are needed in each group');
+  await page.getByTestId('seg-colour').click();
+  await expect(page.getByTestId('how-rows').locator('li')).toHaveCount(2);
+
+  // Every time control, under More: ratings per time control and never blended.
+  await page.goto('./#/progress/more/games');
   await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');
   await expect(page.getByTestId('rating-blitz')).toHaveAttribute('data-current', '431');
   await expect(page.getByTestId('rating-daily')).toHaveAttribute('data-current', '772');
@@ -130,9 +162,11 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(page.getByTestId('card-unseen').getByTestId('insufficient')).toBeVisible();
 
   // Asking Chess.com again changes nothing.
+  await page.goto('./#/progress/more/data');
   await page.getByTestId('sync-now').click();
   await expect(page.getByTestId('card-games-import')).toHaveAttribute('data-sync', 'ok');
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.');
+  await page.goto('./#/progress/more/games');
   await expect(errors).toContainText('3 in 27 decisions');
 });
 
@@ -150,7 +184,7 @@ test('a question from your own games stays put while new games arrive and are an
   });
   const start = new Date(2026, 10, 10, 9, 0, 0);
   await page.clock.install({ time: start });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
@@ -192,7 +226,7 @@ test('one button: "Just practise" mixes own-game questions, missed moves and new
     if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: archive });
     return route.fulfill({ status: 404, headers, json: {} });
   });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
@@ -249,7 +283,7 @@ test('your move: play your own move in a position from your game and see exactly
     if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [long] } });
     return route.fulfill({ status: 404, headers, json: {} });
   });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
@@ -487,7 +521,7 @@ test('a "Your move" position missed today is asked again in tomorrow\'s review; 
   });
   const start = new Date(2026, 10, 10, 9, 0, 0);
   await page.clock.install({ time: start });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
@@ -573,6 +607,7 @@ test('your move on the clock: it is announced over a covered board and starts wh
   });
   await openApp(page, '#/progress');
   await expect(page.getByTestId('card-ownmove')).toContainText('No “Your move” positions played yet');
+  await page.goto('./#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
@@ -660,8 +695,9 @@ test('your move on the clock: it is announced over a covered board and starts wh
   }))).toEqual([['pace:2', 'clock:2', 'late'], ['pace:2', 'clock:2']]);
 
   await page.goto('./#/progress');
-  const card = page.getByTestId('card-ownmove');
-  await expect(card).toContainText('1 was made after the time ran out');
+  await expect(page.getByTestId('card-ownmove')).toContainText('sound');
+  await page.goto('./#/progress/metric/own-move');
+  await expect(page.getByTestId('ownmove-pace')).toContainText('1 was made after the time ran out');
   await expect(page.getByTestId('ownmove-grades')).toContainText('Best');
   // Both were played on the clock; the untimed count stays empty and is shown beside it.
   await expect(page.getByTestId('ownmove-pace')).toContainText('seconds on the clock: ');
@@ -685,7 +721,7 @@ test('your move: a position left by a reload is asked again, not as a first look
     if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [long] } });
     return route.fulfill({ status: 404, headers, json: {} });
   });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
@@ -719,7 +755,7 @@ test('your move: a position left by a reload is asked again, not as a first look
   await page.getByTestId('own-move-no-reply').click();
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
 
-  await page.goto('./#/progress');
+  await page.goto('./#/progress/metric/own-move');
   const pace = page.getByTestId('ownmove-pace');
   // One answer in all: rated, but in neither condition. The position that was only shown is not an answer.
   await expect(pace).toContainText('seconds on the clock: 0 of 0 first looks passed');
@@ -748,7 +784,7 @@ test('repertoire: read from your own games; your courses decide inside their ope
     if (url === `${API}/games/2026/11`) return route.fulfill({ headers, json: { games: [game(900000801, '06', usual), game(900000802, '07', usual), game(900000803, '08', '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6')] } });
     return route.fulfill({ status: 404, headers, json: {} });
   });
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
   await expect(page.getByTestId('games-count')).toContainText('3 games on this device', { timeout: 120_000 });

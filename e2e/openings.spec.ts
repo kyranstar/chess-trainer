@@ -52,10 +52,11 @@ test('repertoire: record own moves by frequency, see engine evidence and coverag
   // Both positions are now in the spaced-review queue; nothing is due again today.
   await page.goto('./#/practice/openings');
   await expect(page.getByTestId('recall-card')).toContainText('0 to recall now');
-  await page.goto('./#/progress');
+  await page.goto('./#/progress/more/openings');
   const card = page.getByTestId('card-openings');
   await expect(card).toContainText('1 of 2 recalled');
   await expect(card).toContainText('1 sound by engine evidence');
+  await page.goto('./#/progress/more/data');
 
   const download = page.waitForEvent('download');
   await page.getByTestId('backup-download').click();

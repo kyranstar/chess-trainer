@@ -121,8 +121,11 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await page.getByTestId('check-done').click();
   await page.getByTestId('tab-progress').click();
   await expect(page.getByTestId('card-unseen')).toContainText('6 of 7');
-  await expect(page.getByTestId('card-unseen')).toContainText('provisional');
+  await expect(page.getByTestId('card-unseen')).toContainText('Provisional');
   await expect(page.getByTestId('card-coverage')).toContainText('1 of 29');
+  // The per-concept table is behind the card, with the positions.
+  await page.getByTestId('card-unseen').click();
+  await expect(page.getByTestId('detail-puzzles')).toBeVisible();
   // 1 apply + 5 check positions carry the hanging-piece tag; the mixed-test position may carry it too.
   expect(Number(await page.getByTestId('row-safety.hanging-pieces').getAttribute('data-n'))).toBeGreaterThanOrEqual(6);
   // Concepts with no observations say "untested", never 0%.

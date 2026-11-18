@@ -1,288 +1,381 @@
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { href, type Route } from '../app/router';
-import { type Learner, useJournal, usePool } from '../app/store';
+import { type Learner, useDueReviews, useNow, usePool } from '../app/store';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
-import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, THEMES } from '../content';
+import { CONCEPT_BY_ID, LESSON_BY_ID, THEMES } from '../content';
 import type { Attempt } from '../db/types';
-import { endgameAccuracy, formatPct, PROVISIONAL_N, type RateMetric, retention, unseenAccuracy, wilson } from '../metrics/metrics';
+import { retention, unseenAccuracy } from '../metrics/metrics';
 import { startRun } from '../puzzles/run';
+import {
+  activityDays, byPhase, chanceList, conceptCells, earlyRate, errorRatio, type GameRow, markBlocks, type Mark, momentsOf, nextAction, ownMoveMarks, puzzleMarks, rapidRows,
+  rateOfMarks, rollingErrors, senseMarks, trainingIndex, trainingStartOf,
+} from '../progress/series';
 import { Board } from './Board';
-import { walkRepertoire } from '../openings/repertoire';
-import { reviewCalibration } from '../schedule/review';
-import { DataPanel } from './Data';
-import { useRememberedFold } from './Stage';
-import { GameCards, Headline, useGames } from './Games';
-import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
+import { BarList, BlockChart, CELL_TEXT, ConceptGrid, DayBars, GameSquares, Legend, LineChart, MarkStrip, RangeRows, shortDate, type Square } from './charts';
+import { GameCards, useGames, useLiveRatings } from './Games';
+import { MORE_PAGES } from './ProgressMore';
 import { PuzzlePlayer } from './PuzzlePlayer';
-import { timeUse } from '../games/metrics';
-import { CLOCK_SERIES_FROM, conditionDifference, ownMoveSummary, TIMED_SECONDS } from '../schedule/pace';
 
-const DAY = 86_400_000;
-const PERIODS = [
-  { key: '7', label: '7 days', days: 7 },
-  { key: '30', label: '30 days', days: 30 },
-  { key: 'all', label: 'All time', days: null },
-] as const;
-type PeriodKey = (typeof PERIODS)[number]['key'];
-const MIN_FOCUS_N = 8;
-
-/** Lower bound as a local date string for date-keyed game metrics. */
+/** Lower bound as a local date string for date-keyed game metrics (the positions lists still take a period). */
 export function sinceDateOf(period: string): string | undefined {
-  const p = PERIODS.find((x) => x.key === period);
-  if (!p || p.days === null) return undefined;
-  const d = new Date(Date.now() - p.days * DAY);
+  const days = period === '7' ? 7 : period === '30' ? 30 : null;
+  if (days === null) return undefined;
+  const d = new Date(Date.now() - days * 86_400_000);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function since(period: PeriodKey): number | undefined {
-  const p = PERIODS.find((x) => x.key === period)!;
-  return p.days === null ? undefined : Date.now() - p.days * DAY;
+export const pctText = (x: number | null) => (x === null ? '–' : `${Math.round(100 * x)}%`);
+export const rangeText = (r: { lo: number; hi: number }) => `95% range ${Math.round(100 * r.lo)}–${Math.round(100 * r.hi)}%`;
+export const per100 = (x: number) => (100 * x).toFixed(1);
+export const RESULT_WORD = { win: 'Win', draw: 'Draw', loss: 'Loss' } as const;
+export const colourWord = (c: 'white' | 'black') => (c === 'white' ? 'White' : 'Black');
+export const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : '±'}${Math.abs(x)}`;
+const PROVISIONAL_N = 20;
+
+/** Everything the overview and the detail screens share, computed once per change. */
+export function useProgress(learner: Learner) {
+  const games = useGames();
+  const now = useNow();
+  const rows = useMemo(() => (games ? rapidRows(games) : []), [games]);
+  const start = useMemo(() => trainingStartOf(learner.attempts), [learner.attempts]);
+  return { games, rows, start, tIdx: trainingIndex(rows, start), now };
 }
 
-function RateLine({ m, unit }: { m: RateMetric; unit: string }) {
-  if (m.n === 0) return <p className="metric-empty" data-testid="insufficient">Insufficient data: no {unit} in this period.</p>;
+/** The squares of the early-blunder strip for some rows. */
+export function squaresOf(rows: GameRow[]): Square[] {
+  return rows.map((r) => ({
+    filled: !!r.early.event,
+    pending: !r.early.measured,
+    label: `Game ${r.index}, ${shortDate(r.game.endDate)}: ${!r.early.measured ? 'not measured yet' : r.early.event ? `early blunder on move ${Math.floor(r.early.event.ply / 2) + 1}` : 'no early blunder'}`,
+  }));
+}
+
+/** Where training began inside a run of rows, as a position in it, or null. */
+export const markerIn = (rows: GameRow[], tIdx: number | null) => (tIdx === null ? null : rows.findIndex((r) => r.index === tIdx) >= 0 ? rows.findIndex((r) => r.index === tIdx) : null);
+
+function Card({ id, testid, title, value, sub, range, provisional, children, empty }: { id: string; testid: string; title: string; value?: ReactNode; sub?: ReactNode; range?: ReactNode; provisional?: boolean; children?: ReactNode; empty?: ReactNode }) {
   return (
-    <p className="metric-line">
-      <span className="metric-value">{m.successes} of {m.n}</span>
-      <span className="metric-pct">{formatPct(m.rate)}</span>
-      <span className="metric-range">plausible range {formatPct(m.interval!.lo)}–{formatPct(m.interval!.hi)}</span>
-      {m.confidence === 'provisional' && <span className="badge" title={`Fewer than ${PROVISIONAL_N} observations`}>provisional, n&lt;{PROVISIONAL_N}</span>}
-    </p>
+    <a className="pcard" href={href(`progress/metric/${id}`)} data-testid={testid}>
+      <span className="pcard-head"><span className="pcard-title">{title}</span><span className="chev" aria-hidden>›</span></span>
+      {empty ? (
+        <span className="pcard-empty">{empty}</span>
+      ) : (
+        <>
+          <span className="pcard-value">{value}</span>
+          {children}
+          <span className="pcard-sub">{sub}</span>
+          {(range || provisional) && <span className="pcard-range">{range}{provisional && <span className="tag">Provisional</span>}</span>}
+        </>
+      )}
+    </a>
   );
 }
 
-/** Horizontal interval bar: the dot is the observed rate, the band its 95% Wilson interval. */
-function IntervalBar({ m }: { m: RateMetric }) {
-  if (!m.interval || m.rate === null) return <div className="ibar is-empty" aria-hidden />;
+function Section({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
   return (
-    <div className="ibar" role="img" aria-label={`${formatPct(m.rate)}, range ${formatPct(m.interval.lo)} to ${formatPct(m.interval.hi)}`}>
-      <span className="ibar-band" style={{ left: `${m.interval.lo * 100}%`, width: `${(m.interval.hi - m.interval.lo) * 100}%` }} />
-      <span className="ibar-dot" style={{ left: `${m.rate * 100}%` }} />
-    </div>
+    <section className="psec">
+      <h2 className="psec-title">{title}{meta && <span className="psec-meta">{meta}</span>}</h2>
+      {children}
+    </section>
   );
 }
 
-/** Whether a folded section (the long list of numbers, the data and backup) is open: a convenience kept in this browser only. */
-const SHOW_ALL_KEY = 'progress.all';
-const SHOW_DATA_KEY = 'progress.data';
 export function ProgressHome({ learner }: { learner: Learner }) {
-  const [period, setPeriod] = useState<PeriodKey>('all');
-  const from = since(period);
-  const overall = useMemo(() => unseenAccuracy(learner.attempts, { since: from }), [learner.attempts, from]);
-  const ret = useMemo(() => retention(learner.attempts, from), [learner.attempts, from]);
-  const endgame = useMemo(() => endgameAccuracy(learner.attempts, from), [learner.attempts, from]);
-  const calibration = useMemo(() => reviewCalibration(learner.attempts, from), [learner.attempts, from]);
-  const perConcept = useMemo(
-    () => learner.statuses.filter((s) => s.concept.themes.length > 0 && s.assessable).map((s) => ({ s, m: unseenAccuracy(learner.attempts, { themes: s.concept.themes, since: from }) })),
-    [learner.attempts, learner.statuses, from],
-  );
-  const stages = { demonstrated: 0, taught: 0, started: 0, new: 0 };
-  for (const s of learner.statuses) stages[s.stage]++;
-  const untested = perConcept.filter((x) => x.m.n === 0).length;
-  const focus = perConcept.filter((x) => x.m.n >= MIN_FOCUS_N).sort((a, b) => a.m.interval!.hi - b.m.interval!.hi)[0];
-  const periodLabel = PERIODS.find((p) => p.key === period)!.label.toLowerCase();
-  const journal = useJournal().filter((j) => from === undefined || j.ts >= from);
-  const tally = (r: 'win' | 'draw' | 'loss') => journal.filter((j) => j.result === r).length;
-  const lastRated = journal.find((j) => j.ratingAfter !== null);
-  const book = useOpeningBook();
-  const repertoire = useRepertoire();
-  const prefs = useOpeningPrefs();
-  const walk = useMemo(() => (book ? walkRepertoire(book, repertoire, prefs.side, [prefs.band]) : null), [book, repertoire, prefs.side, prefs.band]);
-  const recalls = learner.attempts.filter((a) => a.exerciseKind === 'opening' && a.outcome !== 'skipped' && (from === undefined || a.ts >= from));
-  const recalled = recalls.filter((a) => a.outcome === 'success').length;
-  const alt = (v: 'sound' | 'weaker' | 'unknown') => recalls.filter((a) => a.altVerdict === v).length;
-
-  const [showAll, rememberShowAll] = useRememberedFold(SHOW_ALL_KEY);
-  const [showData, rememberShowData] = useRememberedFold(SHOW_DATA_KEY);
-
+  const { games, rows, tIdx, now } = useProgress(learner);
+  const due = useDueReviews(learner.reviews, now);
+  const dueFromGames = due.filter((r) => r.itemId.startsWith('pos:') || r.itemId.startsWith('game:')).length;
   return (
-    <div className="page" data-testid="progress-home">
+    <div className="page progress" data-testid="progress-home">
       <h1>Progress</h1>
-      <div className="length-picker" role="group" aria-label="Period">
-        {PERIODS.map((p) => (
-          <button key={p.key} className={p.key === period ? 'chip is-on' : 'chip'} aria-pressed={p.key === period} onClick={() => setPeriod(p.key)}>{p.label}</button>
-        ))}
-      </div>
-
-      <Headline attempts={learner.attempts} sinceDate={sinceDateOf(period)} since={from} periodLabel={periodLabel} />
-
-      {/* The default view answers three questions: fewer costly early mistakes? reflected in
-          the rating? what next? Every other number is kept, one tap away, and the choice is remembered. */}
-      <details className="all-numbers" data-testid="progress-all" open={showAll} onToggle={(e) => rememberShowAll((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary>All the numbers</summary>
-      <OwnMoveCard attempts={learner.attempts} since={from} sinceDate={sinceDateOf(period)} periodLabel={periodLabel} />
-
-      <section className="card" data-testid="card-focus">
-        <h2>Where to put effort</h2>
-        {overall.n < PROVISIONAL_N ? (
-          <p>Not enough evidence yet: {overall.n} unseen position{overall.n === 1 ? '' : 's'} so far, and nothing is called a weakness below {PROVISIONAL_N}. Today’s mixed test samples untested concepts first.</p>
-        ) : focus ? (
-          <>
-            <p>Lowest first-try rate so far: <strong>{focus.s.concept.title}</strong>, {focus.m.successes} of {focus.m.n} unseen ({formatPct(focus.m.interval!.lo)}–{formatPct(focus.m.interval!.hi)}). This describes practice positions, not why games are lost.</p>
-            <div className="actions">
-              <a className="button primary" href={href('practice/run', { concept: focus.s.concept.id })}>Practise this</a>
-              <a className="button" href={href('progress/positions', { set: `concept:${focus.s.concept.id}`, period })}>View positions</a>
-            </div>
-          </>
-        ) : (
-          <p>No single concept has {MIN_FOCUS_N} or more unseen positions yet, so none is singled out.</p>
-        )}
-      </section>
-
-      <section className="card" data-testid="card-unseen">
-        <h2>Unseen puzzle accuracy</h2>
-        <RateLine m={overall} unit="unseen positions" />
-        <IntervalBar m={overall} />
-        <p className="definition-small">
-          Solved on the first-ever showing with no wrong move and no hint, out of all first-ever showings; {periodLabel}. Left out: {overall.excluded.repeats} repeats and reviews, {overall.excluded.skipped} skipped, {overall.excluded.guided} lesson examples and opening recalls.
-        </p>
-        {overall.n > 0 && <a href={href('progress/positions', { set: 'unseen', period })} data-testid="view-unseen">View the {overall.n} positions</a>}
-      </section>
-
-      <section className="card" data-testid="card-concepts">
-        <h2>By concept</h2>
-        <p className="definition-small">Same definition, restricted to positions carrying the concept’s Lichess theme tags; {periodLabel}. {untested} of {perConcept.length} concepts are untested, which is not the same as weak.</p>
-        <table className="concept-table">
-          <thead>
-            <tr><th scope="col">Concept</th><th scope="col">First try</th><th scope="col">Range</th></tr>
-          </thead>
-          <tbody>
-            {perConcept.map(({ s, m }) => (
-              <tr key={s.concept.id} data-testid={`row-${s.concept.id}`} data-n={m.n}>
-                <th scope="row">
-                  <a href={href('progress/positions', { set: `concept:${s.concept.id}`, period })}>{s.concept.title}</a>
-                  <span className="row-stage">{s.stage === 'demonstrated' ? 'demonstrated' : s.stage === 'taught' ? 'studied' : ''}</span>
-                </th>
-                <td>{m.n === 0 ? <span className="muted">untested</span> : `${m.successes}/${m.n}${m.confidence === 'provisional' ? '*' : ''}`}</td>
-                <td><IntervalBar m={m} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="definition-small">* provisional: fewer than {PROVISIONAL_N} positions. The bar shows the 95% Wilson interval on a 0–100% scale.</p>
-      </section>
-
-      <section className="card" data-testid="card-retention">
-        <h2>Retention</h2>
-        <RateLine m={ret} unit="scheduled reviews" />
-        <p className="definition-small">Positions you missed before, solved when they came back on schedule; {periodLabel}. Repeats done early are left out. The scheduler aims for 90% recall once an item is established and forecasts less for items missed only recently; the forecast line below is what it predicted for exactly these reviews.</p>
-        {ret.n > 0 && (
-          <table className="concept-table">
-            <thead><tr><th scope="col">Days since last seen</th><th scope="col">Recalled</th></tr></thead>
-            <tbody>
-              {ret.buckets.map((b) => (
-                <tr key={b.label}><th scope="row">{b.label}</th><td>{b.n === 0 ? <span className="muted">none</span> : `${b.successes}/${b.n}`}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {calibration.n > 0 && (
-          <p data-testid="calibration">
-            Scheduler forecast for these reviews: {formatPct(calibration.predicted)} expected, {formatPct(calibration.observed)} recalled (n={calibration.n}{calibration.n < PROVISIONAL_N ? ', too few to judge the scheduler' : ''}).
-          </p>
-        )}
-        {ret.n > 0 && <a href={href('progress/positions', { set: 'retention', period })}>View the {ret.n} reviews</a>}
-      </section>
-
-      <section className="card" data-testid="card-endgame">
-        <h2>Endgame technique, exact</h2>
-        <RateLine m={endgame} unit="king-and-pawn play-outs" />
-        {endgame.n > 0 && <p>Winning: {endgame.win.successes} of {endgame.win.n}. Holding the draw: {endgame.hold.successes} of {endgame.hold.n}.</p>}
-        <p className="definition-small">King and pawn against king, first time each start is seen: the win or draw kept on every move against perfect play, with no help; {periodLabel}. Moves are judged by the complete table of this ending, so a failure is a move that changed the theoretical result, not an engine preference.</p>
-        <a href={href('practice/run', { mode: 'kpk' })}>Practise this ending</a>
-      </section>
-
-      <section className="card" data-testid="card-coverage">
-        <h2>Curriculum coverage</h2>
-        <p className="metric-line">
-          <span className="metric-value">{stages.demonstrated} of {CONCEPTS.length}</span>
-          <span className="metric-range">concepts demonstrated on unseen positions</span>
-        </p>
-        <p className="definition-small">
-          {stages.taught} studied and awaiting a check, {stages.started} started, {stages.new} not started. {learner.statuses.filter((s) => !s.assessable).length} concepts have no independent check yet and cannot be demonstrated. All time.
-        </p>
-        <a href={href('learn')}>Open the curriculum</a>
-      </section>
-
-      <GameCards sinceDate={sinceDateOf(period)} periodLabel={periodLabel} period={period} />
-
-      <section className="card" data-testid="card-openings">
-        <h2>Opening preparedness</h2>
-        {!book || !walk ? (
-          <p className="metric-empty">Opening data is not on this device yet.</p>
-        ) : repertoire.filter((e) => e.side === prefs.side).length === 0 ? (
-          <p className="metric-empty">No repertoire moves recorded as {prefs.side === 'white' ? 'White' : 'Black'} yet.</p>
-        ) : (
-          <>
-            <p className="metric-line">
-              <span className="metric-value">{formatPct(walk.levels[2]?.answered ?? 0)}</span>
-              <span className="metric-range">of games have a recorded answer through your 3rd move; {formatPct(walk.levels[4]?.answered ?? 0)} through your 5th</span>
-            </p>
-            <p>
-              Recall: {recalls.length === 0 ? 'no recall attempts in this period' : `${recalled} of ${recalls.length} recalled`}
-              {recalls.length - recalled > 0 && ` (other moves played: ${alt('sound')} sound by engine evidence, ${alt('weaker')} weaker, ${recalls.length - recalled - alt('sound') - alt('weaker')} not evaluated or shown)`}.
-            </p>
-          </>
-        )}
-        {book && (
-          <p className="definition-small">
-            As {prefs.side === 'white' ? 'White' : 'Black'}, weighting opponents’ replies by how often players rated {bandLabel(book, prefs.band)} on Lichess play them ({book.manifest.games.used.toLocaleString()} games, {book.manifest.source.month}). Coverage counts recorded answers, all time; recall counts attempts to produce your own chosen move, {periodLabel}. A different sound move is reported separately, not as an error.
-          </p>
-        )}
-        <a href={href('practice/openings')}>Open the repertoire</a>
-      </section>
-
-      <section className="card" data-testid="card-journal">
-        <h2>Games you logged</h2>
-        {journal.length === 0 ? (
-          <p className="metric-empty">No games logged in this period. Play days add them.</p>
-        ) : (
-          <>
-            <p className="metric-line">
-              <span className="metric-value">{journal.length}</span>
-              <span className="metric-range">rapid game{journal.length === 1 ? '' : 's'}: {tally('win')} won, {tally('draw')} drawn, {tally('loss')} lost</span>
-            </p>
-            {lastRated && <p>Latest rapid rating you entered: <strong>{lastRated.ratingAfter}</strong> on {new Date(lastRated.ts).toLocaleDateString()}.</p>}
-            <ul className="attempt-list">
-              {journal.slice(0, 10).map((j) => (
-                <li key={j.id}>
-                  <span className="journal-row" data-testid="journal-row">
-                    <span className="concept-name">{new Date(j.ts).toLocaleDateString()}: {j.result ?? 'no result'}{j.color ? ` as ${j.color}` : ''}{j.ratingAfter ? `, rating ${j.ratingAfter}` : ''}</span>
-                    {j.turningPoint && <span className="concept-meta">Turning point: {j.turningPoint}</span>}
-                    {j.nextTime && <span className="concept-meta">Next time: {j.nextTime}</span>}
-                    {j.url && <a className="concept-meta" href={j.url} target="_blank" rel="noreferrer">Open the game</a>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        <p className="definition-small">Entered by you on play days; {periodLabel}. A handful of results says little about strength, and none of this is engine analysis.</p>
-      </section>
-
-      <section className="card" data-testid="card-level">
-        <h2>Practice difficulty</h2>
-        <p className="metric-line"><span className="metric-value">{learner.level.level}</span><span className="metric-range">Lichess puzzle scale, from {learner.level.n} unseen positions</span></p>
-        <p className="definition-small">Used only to choose how hard practice positions are. Starts at 1200 and moves after each unseen position. It is not a playing-strength rating.</p>
-      </section>
-
-      </details>
-      {/* Backup and restore are one tap from the top, not under every number. */}
-      <details className="all-numbers" data-testid="progress-data" open={showData} onToggle={(e) => rememberShowData((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary>Your data and backup</summary>
-        <DataPanel learner={learner} />
-      </details>
+      {games && games.length > 0 && <NextUp rows={rows} dueFromGames={dueFromGames} />}
+      {games && games.length > 0 && <RecentGames rows={rows} />}
+      {games && games.length === 0 && <GameCards sinceDate={undefined} periodLabel="all time" period="all" />}
+      {rows.length > 0 && (
+        <Section title="In your games" meta={`${rows.length} rated rapid`}>
+          <EarlyCard rows={rows} tIdx={tIdx} />
+          <RatingCard rows={rows} tIdx={tIdx} />
+          <MistakesCard rows={rows} tIdx={tIdx} />
+          <ChancesCard rows={rows} />
+          <HowCard rows={rows} />
+        </Section>
+      )}
+      <Section title="In training" meta="First looks only">
+        <SenseCard attempts={learner.attempts} kind="safe-or-not" />
+        <OwnMoveCard attempts={learner.attempts} />
+        <SenseCard attempts={learner.attempts} kind="chance-or-not" />
+        <PuzzlesCard attempts={learner.attempts} />
+      </Section>
+      <Section title="Learning">
+        <ChecksCard learner={learner} now={now} />
+        <ActivityCard attempts={learner.attempts} now={now} />
+      </Section>
+      <Section title="More">
+        <ul className="rowlist" data-testid="progress-more">
+          {MORE_PAGES.map((p) => (
+            <li key={p.key}><a href={href(`progress/more/${p.key}`)} data-testid={`more-link-${p.key}`}>{p.title}<span className="chev" aria-hidden>›</span></a></li>
+          ))}
+        </ul>
+      </Section>
     </div>
   );
 }
 
-function attemptsForSet(learner: Learner, set: string, period: PeriodKey): { title: string; uuids: string[] } {
-  const from = since(period);
-  if (set === 'unseen') return { title: 'Unseen positions', uuids: unseenAccuracy(learner.attempts, { since: from }).attemptUuids };
-  if (set === 'retention') return { title: 'Scheduled reviews', uuids: retention(learner.attempts, from).attemptUuids };
+const ACTION_TITLE = { early: 'Look again at your latest early blunder', biggest: 'Look again at the biggest mistake of your latest game', chance: 'Find the chance your latest game had', clock: 'Look again at the move you made short of time' } as const;
+
+function NextUp({ rows, dueFromGames }: { rows: GameRow[]; dueFromGames: number }) {
+  const a = nextAction(rows, dueFromGames);
+  if (a.kind === 'review') {
+    const g = a.row.game;
+    return (
+      <a className="pcard nextup" href={href(`progress/game-event/${g.id}/${a.moment.ply}`)} data-testid="next-up" data-kind={a.moment.kind}>
+        <span className="pcard-title">Next up</span>
+        <span className="nextup-what">{ACTION_TITLE[a.moment.kind]}</span>
+        <span className="pcard-sub">Move {a.moment.move} · {g.result ? `${RESULT_WORD[g.result]} as ${colourWord(g.color)}` : colourWord(g.color)} · {shortDate(g.endDate)}</span>
+        <span className="button primary nextup-go">Open the position</span>
+      </a>
+    );
+  }
+  if (a.kind === 'due') {
+    return (
+      <a className="pcard nextup" href={href('practice/run', { mode: 'review' })} data-testid="next-up" data-kind="due">
+        <span className="pcard-title">Next up</span>
+        <span className="nextup-what">Positions from your games are due again</span>
+        <span className="pcard-sub">{a.count} due in review</span>
+        <span className="button primary nextup-go">Review them</span>
+      </a>
+    );
+  }
+  return (
+    <a className="pcard nextup" href={href('today')} data-testid="next-up" data-kind="none">
+      <span className="pcard-title">Next up</span>
+      <span className="nextup-what">Nothing to look at from your latest game</span>
+      <span className="pcard-sub">No big mistake, early blunder or missed chance was found in it</span>
+      <span className="button primary nextup-go">Today’s training</span>
+    </a>
+  );
+}
+
+export function GameRowLink({ row }: { row: GameRow }) {
+  const g = row.game;
+  const m = momentsOf(row);
+  const early = row.early.event ? `Early blunder, move ${Math.floor(row.early.event.ply / 2) + 1}` : null;
+  return (
+    <a href={href(`progress/game/${g.id}`)} className="grow" data-testid="game-row">
+      <span className={`result-mark is-${g.result ?? 'none'}`} aria-hidden>{g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : g.result === 'draw' ? 'D' : '·'}</span>
+      <span className="grow-main">
+        <span className="grow-title">{g.result ? RESULT_WORD[g.result] : 'No result'} as {colourWord(g.color)}<span className="muted"> · {shortDate(g.endDate)}</span></span>
+        <span className="grow-meta">
+          {row.analysed ? `${row.errors} big mistake${row.errors === 1 ? '' : 's'}` : 'Not analysed yet'}
+          {early ? ` · ${early}` : m.some((x) => x.kind === 'chance') ? ' · A chance missed' : ''}
+        </span>
+      </span>
+      <span className="grow-rating">
+        {g.playerRating ?? '–'}
+        {row.ratingChange !== null && <span className={row.ratingChange >= 0 ? 'delta' : 'delta is-down'}>{signed(row.ratingChange)}</span>}
+      </span>
+    </a>
+  );
+}
+
+function RecentGames({ rows }: { rows: GameRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <Section title="Recent games">
+      <div className="pcard is-list" data-testid="recent-games">
+        {rows.slice(-3).reverse().map((r) => <GameRowLink key={r.game.id} row={r} />)}
+        <a className="grow-all" href={href('progress/games')}>All {rows.length} games<span className="chev" aria-hidden>›</span></a>
+      </div>
+    </Section>
+  );
+}
+
+export function earlyView(rows: GameRow[]) {
+  const last = rows.slice(-20);
+  const before = rows.length >= 40 ? rows.slice(-40, -20) : null;
+  const now = earlyRate(last);
+  const prev = before ? earlyRate(before) : null;
+  const waiting = rows.slice(-40).filter((r) => !r.early.measured).length;
+  return { last, before, now, prev, waiting };
+}
+
+function EarlyCard({ rows, tIdx }: { rows: GameRow[]; tIdx: number | null }) {
+  const { last, before, now, prev, waiting } = earlyView(rows);
+  const strip = [...(before ? [{ name: '20 before', squares: squaresOf(before), markerAt: markerIn(before, tIdx) }] : []), { name: rows.length > 20 ? 'Last 20' : 'So far', squares: squaresOf(last), markerAt: markerIn(last, tIdx) }];
+  return (
+    <Card id="early" testid="card-early" title="Early blunders" provisional={now.n < PROVISIONAL_N}
+      empty={now.n === 0 ? (waiting ? `${waiting} games waiting to be measured` : 'No rated rapid games measured yet') : undefined}
+      value={<><strong data-testid="early-value">{now.k} of {now.n}</strong><span className="pcard-unit">games</span></>}
+      sub={<>{rows.length > 20 ? 'Last 20 rated rapid' : `${now.n} rated rapid`}{prev ? ` · ${prev.k} in the 20 before` : ''}{waiting ? ` · ${waiting} waiting` : ''}</>}
+      range={now.n ? rangeText(now) : null}>
+      <GameSquares rows={strip} marker="Training" title={`Early blunders: ${now.k} of the last ${now.n} rated rapid games${prev ? `, ${prev.k} of the ${prev.n} before` : ''}.`} />
+    </Card>
+  );
+}
+
+export function ratingPoints(rows: GameRow[]) {
+  return rows.filter((r) => r.game.playerRating !== null).map((r) => ({ x: r.index, y: r.game.playerRating!, label: `Game ${r.index}, ${shortDate(r.game.endDate)}: ${r.game.playerRating}${r.ratingChange !== null ? ` (${signed(r.ratingChange)})` : ''}` }));
+}
+
+function RatingCard({ rows, tIdx }: { rows: GameRow[]; tIdx: number | null }) {
+  const live = useLiveRatings();
+  const pts = ratingPoints(rows);
+  const last = pts[pts.length - 1];
+  const current = live?.rapid?.rating ?? last?.y ?? null;
+  const twentyAgo = pts.length > 20 ? pts[pts.length - 21]!.y : null;
+  const shown = pts.slice(-40);
+  return (
+    <Card id="rating" testid="card-rating" title="Rapid rating" empty={current === null ? 'No rapid rating yet' : undefined}
+      value={<strong data-testid="headline-rating">{current}</strong>}
+      sub={<>{twentyAgo !== null && last ? `${signed(last.y - twentyAgo)} over 20 games · ` : ''}{pts.length} rated games</>}>
+      {shown.length > 1 && <LineChart points={shown} xMin={shown[0]!.x} xMax={shown[shown.length - 1]!.x} format={(y) => String(Math.round(y))} xLabel="games" vline={tIdx !== null ? { x: tIdx, label: 'Training' } : null} title={`Rapid rating after each of the last ${shown.length} rated rapid games, from ${shown[0]!.y} to ${shown[shown.length - 1]!.y}.`} height={104} />}
+    </Card>
+  );
+}
+
+function MistakesCard({ rows, tIdx }: { rows: GameRow[]; tIdx: number | null }) {
+  const done = rows.filter((r) => r.analysed);
+  const last = done.slice(-20);
+  const r = errorRatio(last);
+  const roll = rollingErrors(rows, 20);
+  return (
+    <Card id="mistakes" testid="card-mistakes" title="Big mistakes" provisional={last.length < PROVISIONAL_N} empty={!r ? 'No analysed rapid games yet' : undefined}
+      value={r && <><strong>{per100(r.rate)}</strong><span className="pcard-unit">per 100 moves</span></>}
+      sub={r && <>{last.length < 20 ? `${last.length} rated rapid` : 'Last 20 rated rapid'} · {r.events} in {r.decisions} moves</>}
+      range={r && r.se !== null ? `95% range ${per100(r.lo)}–${per100(r.hi)}` : null}>
+      {roll.length > 1 && <LineChart points={roll.map((p) => ({ x: p.index, y: 100 * p.rate }))} band={roll.map((p) => ({ x: p.index, lo: 100 * p.lo, hi: 100 * p.hi }))} xMin={roll[0]!.index} xMax={roll[roll.length - 1]!.index} yMin={0} format={(y) => y.toFixed(1)} xLabel="games" vline={tIdx !== null ? { x: tIdx, label: 'Training' } : null} title="Big mistakes per 100 moves over each run of 20 rated rapid games, with the 95% range as a band." height={104} />}
+    </Card>
+  );
+}
+
+function ChancesCard({ rows }: { rows: GameRow[] }) {
+  const list = chanceList(rows.slice(-40));
+  const taken = list.filter((c) => c.chance.taken).length;
+  const rate = rateOfMarks(list.map((c) => ({ ok: c.chance.taken, ts: 0, uuid: '' })));
+  return (
+    <Card id="chances" testid="card-chances" title="Chances taken" provisional={list.length < PROVISIONAL_N} empty={list.length === 0 ? 'No clear chances in these games' : undefined}
+      value={<><strong>{taken} of {list.length}</strong><span className="pcard-unit">{pctText(rate.rate)}</span></>}
+      sub={<>Clear chances · last {Math.min(40, rows.length)} rated rapid</>}
+      range={rangeText(rate)}>
+      <MarkStrip marks={list.map((c) => ({ ok: c.chance.taken, label: '' }))} title={`${taken} of ${list.length} clear chances taken; filled marks were taken.`} />
+    </Card>
+  );
+}
+
+function HowCard({ rows }: { rows: GameRow[] }) {
+  const phases = byPhase(rows.slice(-40));
+  const top = phases.filter((p) => p.ratio).sort((a, b) => b.ratio!.rate - a.ratio!.rate)[0];
+  return (
+    <a className="pcard" href={href('progress/how')} data-testid="card-how">
+      <span className="pcard-head"><span className="pcard-title">How you play</span><span className="chev" aria-hidden>›</span></span>
+      {top && <span className="pcard-value"><strong className="pcard-mid">Moves {top.label.replace('Moves ', '')}</strong><span className="pcard-unit">most big mistakes</span></span>}
+      <BarList max={Math.max(1, ...phases.map((p) => (p.ratio ? 100 * (p.ratio.se !== null ? p.ratio.hi : p.ratio.rate) : 0)))} format={(v) => v.toFixed(1)}
+        rows={phases.map((p) => ({ key: p.key, label: p.label, value: p.ratio ? 100 * p.ratio.rate : null, ...(p.ratio && p.ratio.se !== null ? { lo: 100 * p.ratio.lo, hi: 100 * p.ratio.hi } : {}) }))} />
+      <span className="pcard-sub">Big mistakes per 100 moves · last {Math.min(40, rows.length)} games · also by type, clock and colour</span>
+    </a>
+  );
+}
+
+export const SENSE_TEXT = {
+  'safe-or-not': { id: 'danger', title: 'Spotting danger', there: 'unsafe', not: 'safe', ask: '“Is this move safe?”' },
+  'chance-or-not': { id: 'spot-chances', title: 'Spotting chances', there: 'with a chance', not: 'without', ask: '“Anything to win here?”' },
+} as const;
+
+function SenseCard({ attempts, kind }: { attempts: Attempt[]; kind: 'safe-or-not' | 'chance-or-not' }) {
+  const t = SENSE_TEXT[kind];
+  const { spotted, alarms } = senseMarks(attempts, kind);
+  const s = rateOfMarks(spotted);
+  const f = rateOfMarks(alarms);
+  return (
+    <Card id={t.id} testid={`card-${t.id}`} title={t.title} provisional={s.n < PROVISIONAL_N || f.n < PROVISIONAL_N}
+      empty={s.n + f.n === 0 ? `No ${t.ask} questions answered yet` : undefined}
+      value={<><strong>{pctText(s.rate)}</strong><span className="pcard-unit">spotted</span></>}
+      sub={<>First looks · {s.n} {t.there}, {f.n} {t.not}</>}>
+      <RangeRows rows={[{ label: 'Spotted', rate: s }, { label: 'False alarms', rate: f, bad: true }]} title={`${t.title}: ${s.k} of ${s.n} spotted, ${f.k} false alarms in ${f.n}.`} />
+    </Card>
+  );
+}
+
+export function TrainingChart({ marks, noun, title }: { marks: Mark[]; noun: string; title: string }) {
+  if (marks.length >= 40) {
+    const b = markBlocks(marks, 20);
+    return <BlockChart blocks={b.blocks} pending={b.pending} size={20} noun={noun} title={title} />;
+  }
+  return <MarkStrip marks={marks.map((m) => ({ ok: m.ok, label: '' }))} title={title} />;
+}
+
+function OwnMoveCard({ attempts }: { attempts: Attempt[] }) {
+  const { marks, unrated } = ownMoveMarks(attempts);
+  const r = rateOfMarks(marks);
+  return (
+    <Card id="own-move" testid="card-ownmove" title="Your move" provisional={r.n < PROVISIONAL_N}
+      empty={r.n === 0 && unrated === 0 ? 'No “Your move” positions played yet.' : undefined}
+      value={<><strong>{pctText(r.rate)}</strong><span className="pcard-unit">sound</span></>}
+      sub={<>{r.k} of {r.n} first looks{unrated ? ` · ${unrated} not rated` : ''}</>}
+      range={r.n ? rangeText(r) : null}>
+      <TrainingChart marks={marks} noun="Positions" title={`Your move: ${r.k} of ${r.n} first looks sound.`} />
+    </Card>
+  );
+}
+
+function PuzzlesCard({ attempts }: { attempts: Attempt[] }) {
+  const marks = puzzleMarks(attempts);
+  const r = rateOfMarks(marks);
+  return (
+    <Card id="puzzles" testid="card-unseen" title="Fresh puzzles" provisional={r.n < PROVISIONAL_N}
+      empty={r.n === 0 ? <span data-testid="insufficient">No unseen puzzles yet.</span> : undefined}
+      value={<><strong>{pctText(r.rate)}</strong><span className="pcard-unit">solved</span></>}
+      sub={<>{r.k} of {r.n} unseen puzzles</>}
+      range={rangeText(r)}>
+      <TrainingChart marks={marks} noun="Puzzles" title={`Fresh puzzles: ${r.k} of ${r.n} solved on the first try.`} />
+    </Card>
+  );
+}
+
+export function cellLegend(cells: ReturnType<typeof conceptCells>) {
+  const order = ['passed', 'recheck', 'failed', 'studied', 'started', 'new'] as const;
+  return order.filter((s) => cells.some((c) => c.state === s)).map((s) => ({ swatch: `cell-sw is-${s}`, text: `${CELL_TEXT[s]} ${cells.filter((c) => c.state === s).length}` }));
+}
+
+function ChecksCard({ learner, now }: { learner: Learner; now: number }) {
+  const cells = conceptCells(learner.statuses, now);
+  const passed = cells.filter((c) => c.state === 'passed' || c.state === 'recheck').length;
+  const checked = learner.statuses.filter((s) => s.lastCheck || s.stage === 'demonstrated').length;
+  return (
+    <Card id="checks" testid="card-coverage" title="Concept checks"
+      value={<><strong>{passed}</strong><span className="pcard-unit">passed</span></>}
+      sub={<>{checked} of {cells.length} concepts checked · rechecked after 21 days</>}>
+      <ConceptGrid cells={cells} title={`Concept checks: ${passed} of ${cells.length} concepts passed.`} />
+      <Legend items={cellLegend(cells)} />
+    </Card>
+  );
+}
+
+function ActivityCard({ attempts, now }: { attempts: Attempt[]; now: number }) {
+  const days = activityDays(attempts, now, 28);
+  const active = days.filter((d) => d.firstLooks + d.other > 0).length;
+  const total = days.reduce((t, d) => t + d.firstLooks + d.other, 0);
+  const fresh = days.reduce((t, d) => t + d.firstLooks, 0);
+  return (
+    <Card id="activity" testid="card-activity" title="Practice"
+      value={<><strong>{active} of 28</strong><span className="pcard-unit">days</span></>}
+      sub={<>{total} positions · {fresh} first looks</>}>
+      <DayBars days={days} title={`Positions answered per day over the last 28 days: ${total} in all, on ${active} days.`} />
+      <Legend items={[{ swatch: 'bar-sw-a', text: 'First looks' }, { swatch: 'bar-sw-b', text: 'Again' }]} />
+    </Card>
+  );
+}
+
+function attemptsForSet(learner: Learner, set: string): { title: string; uuids: string[] } {
+  if (set === 'unseen') return { title: 'Unseen puzzles', uuids: unseenAccuracy(learner.attempts).attemptUuids };
+  if (set === 'retention') return { title: 'Scheduled reviews', uuids: retention(learner.attempts).attemptUuids };
+  if (set === 'own-move') return { title: 'Your move: first looks', uuids: ownMoveMarks(learner.attempts).marks.map((m) => m.uuid) };
+  if (set === 'sense:safe-or-not' || set === 'sense:chance-or-not') {
+    const m = senseMarks(learner.attempts, set.slice(6) as 'safe-or-not' | 'chance-or-not');
+    return { title: set.endsWith('safe-or-not') ? 'Is this move safe? First looks' : 'Anything to win? First looks', uuids: [...m.spotted, ...m.alarms].map((x) => x.uuid) };
+  }
   if (set.startsWith('concept:')) {
     const c = CONCEPT_BY_ID.get(set.slice(8));
-    if (c) return { title: `Unseen positions: ${c.title}`, uuids: unseenAccuracy(learner.attempts, { themes: c.themes, since: from }).attemptUuids };
+    if (c) return { title: `Unseen puzzles: ${c.title}`, uuids: unseenAccuracy(learner.attempts, { themes: c.themes }).attemptUuids };
   }
   return { title: 'Positions', uuids: [] };
 }
@@ -291,8 +384,7 @@ const OUTCOME_TEXT: Record<Attempt['outcome'], string> = { success: 'solved firs
 
 export function PositionsList({ route, learner }: { route: Route; learner: Learner }) {
   const set = route.query.get('set') ?? 'unseen';
-  const period = (route.query.get('period') ?? 'all') as PeriodKey;
-  const { title, uuids } = attemptsForSet(learner, set, period);
+  const { title, uuids } = attemptsForSet(learner, set);
   const wanted = new Set(uuids);
   const rows = learner.attempts.filter((a) => wanted.has(a.uuid)).sort((a, b) => b.ts - a.ts);
   return (
@@ -387,60 +479,4 @@ function safeSan(fen: string, uci: string): string {
   } catch {
     return uci;
   }
-}
-
-/**
- * "Your move" and the clock: how clean the learner's own moves are, the pace he has reached,
- * and what his real games say about time. Counts with denominators; no score is made of them.
- */
-function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: Attempt[]; since: number | undefined; sinceDate: string | undefined; periodLabel: string }) {
-  const games = useGames();
-  const s = ownMoveSummary(attempts, since);
-  const passed = s.grades.best + s.grades.good + s.grades.inaccuracy;
-  const rated = passed + s.grades.mistake + s.grades.blunder;
-  const answered = rated + s.grades.unrated;
-  const diff = conditionDifference(s.timed, s.untimed);
-  const count = (c: typeof s.timed) => c.passed + c.failed + c.unrated;
-  const earlier = count(s.before.timed) + count(s.before.untimed);
-  const points = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(Math.round(100 * x))}`;
-  const rapid = games ? timeUse(games, 'rapid', { sinceDate }) : null;
-  const iv = rated ? wilson(passed, rated) : null;
-  const line = (c: typeof s.timed) => {
-    const all = c.passed + c.failed + c.unrated;
-    return `${c.passed} of ${all} first looks passed${all ? ` (${formatPct(c.passed / all)})` : ''}${c.unrated ? `; ${c.unrated} of them could not be rated, so ${c.passed} of ${c.passed + c.failed} rated` : ''}`;
-  };
-  const rate = (b: { decisions: number; errors: number }) => `${b.errors} of ${b.decisions} moves${b.decisions ? ` (${(100 * b.errors / b.decisions).toFixed(1)}%)` : ''}`;
-  return (
-    <section className="card" data-testid="card-ownmove">
-      <h2>Your own moves</h2>
-      {answered === 0 ? (
-        <p className="metric-empty">No “Your move” positions played yet. They are part of “Just practise” and have their own entry under Practice.</p>
-      ) : (
-        <>
-          <p className="metric-line" data-testid="ownmove-clean">
-            <span className="metric-value">{passed} of {rated}</span>
-            {iv && <span className="metric-pct">{formatPct(passed / rated)}</span>}
-            <span className="metric-range">rated moves passed (best, good or an inaccuracy){iv ? `, plausible range ${formatPct(iv.lo)}–${formatPct(iv.hi)}` : ''}</span>
-          </p>
-          <p data-testid="ownmove-grades">Best {s.grades.best}, good {s.grades.good}, inaccuracies {s.grades.inaccuracy}, mistakes {s.grades.mistake}, blunders {s.grades.blunder}{s.grades.unrated ? `, not rated ${s.grades.unrated}` : ''}. When something of yours could already be taken, your move dealt with it {s.threat.met} of {s.threat.n} times. When something could be taken for nothing, you took it {s.free.taken} of {s.free.n} times. When your move left something, the reply you named was that one {s.named.yes} of {s.named.n} times.</p>
-          <p data-testid="ownmove-pace">
-            With {TIMED_SECONDS} seconds on the clock: {line(s.timed)}{s.timed.late ? `; ${s.timed.late} ${s.timed.late === 1 ? 'was' : 'were'} made after the time ran out` : ''}. With no clock: {line(s.untimed)}.
-            {diff && ` Timed minus untimed: ${points(diff.diff)} points, plausible range ${points(diff.lo)} to ${points(diff.hi)}; a range that includes 0 shows no difference yet.`}
-            {s.interrupted > 0 && ` ${s.interrupted} ${s.interrupted === 1 ? 'answer is' : 'answers are'} left out of this comparison because the app left the screen while the move was being chosen.`}
-            {s.shownBefore > 0 && <span data-testid="ownmove-shown-before"> {s.shownBefore} more {s.shownBefore === 1 ? 'is' : 'are'} left out because the position had been shown once before it was answered.</span>}
-            {' '}About one position in three gets the clock, chosen by the position and not by how you are doing.
-            {' '}Counted from {CLOCK_SERIES_FROM}, when the clock began to be announced and to run in sight.
-            {earlier > 0 && <span data-testid="ownmove-pace-before"> Before that, with the clock as a line of small text: {line(s.before.timed)} with it, {line(s.before.untimed)} without.</span>}
-          </p>
-        </>
-      )}
-      {rapid && rapid.games > 0 && (
-        <p data-testid="ownmove-time">
-          In your {rapid.games} measured rapid games, major errors came on {rate(rapid.overHalf)} begun with more than half the clock left, and on {rate(rapid.halfOrLess)} begun with half or less.
-          {rapid.losses > 0 && ` Of ${rapid.losses} lost games, ${rapid.lossesOnTime} ${rapid.lossesOnTime === 1 ? 'was' : 'were'} lost on time. Of the other ${rapid.losses - rapid.lossesOnTime}, ${rapid.lossesOverHalfUnused} had more than half the clock left after your last completed move.`}
-        </p>
-      )}
-      <p className="definition-small">Each move is rated by the built-in engine against its own first choice: under 5 points below is good, under 10 an inaccuracy, under 20 a mistake, more a blunder; allowing mate in one is always a blunder. The engine is a small one and can be wrong. First looks at a position only; {periodLabel}. The rapid figures are from your own games’ clocks: the clock is recorded after each move you made, so time spent on a move you never completed is not in them. They are counts, not an explanation.</p>
-    </section>
-  );
 }

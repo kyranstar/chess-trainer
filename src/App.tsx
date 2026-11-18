@@ -10,6 +10,8 @@ import { PracticeHome, PracticeRun } from './ui/Practice';
 import { DeviceCheck } from './ui/DeviceCheck';
 import { GameEventsList, GameEventView } from './ui/Games';
 import { PositionsList, PositionView, ProgressHome, sinceDateOf } from './ui/Progress';
+import { GameBreakdown, GamesList, HowYouPlay, MetricDetail } from './ui/ProgressDetail';
+import { MorePageView } from './ui/ProgressMore';
 import { BaselineRun, SessionRun, Today } from './ui/Today';
 
 const db = openDb();
@@ -80,6 +82,11 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
     else if (route.parts[1] === 'game-events') page = <GameEventsList route={route} sinceDateOf={sinceDateOf} />;
     else if (route.parts[1] === 'game-event' && route.parts[2] && route.parts[3]) page = <GameEventView key={`${route.parts[2]}:${route.parts[3]}`} gameId={route.parts[2]} ply={Number(route.parts[3])} />;
     else if (route.parts[1] === 'position' && route.parts[2]) page = <PositionView key={route.parts[2]} uuid={route.parts[2]} learner={learner} />;
+    else if (route.parts[1] === 'metric' && route.parts[2]) page = <MetricDetail key={route.parts[2]} id={route.parts[2]} learner={learner} />;
+    else if (route.parts[1] === 'game' && route.parts[2]) page = <GameBreakdown key={route.parts[2]} gameId={route.parts[2]} learner={learner} />;
+    else if (route.parts[1] === 'games') page = <GamesList learner={learner} />;
+    else if (route.parts[1] === 'how') page = <HowYouPlay learner={learner} />;
+    else if (route.parts[1] === 'more' && route.parts[2]) page = <MorePageView key={route.parts[2]} page={route.parts[2]} learner={learner} />;
     else page = <ProgressHome learner={learner} />;
   } else page = <Today learner={learner} />;
 

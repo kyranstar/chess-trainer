@@ -57,12 +57,14 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
 
   await expect(page.getByTestId('summary-game')).toHaveText('10+5 rapid, lost as black');
   await page.getByTestId('tab-progress').click();
+  await page.getByTestId('more-link-playdays').click();
   const card = page.getByTestId('card-journal');
   await expect(card).toContainText('0 won, 0 drawn, 1 lost');
   await expect(card).toContainText('Latest rapid rating you entered: 449');
   await expect(card).toContainText('Move 14: left the knight on f6 undefended.');
   await expect(card).toContainText('none of this is engine analysis');
 
+  await page.goto('./#/progress/more/data');
   const download = page.waitForEvent('download');
   await page.getByTestId('backup-download').click();
   const stream = await (await download).createReadStream();
@@ -74,11 +76,8 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
   expect(backup.data.gameJournal[0].turningPoint).toContain('knight on f6');
 });
 
-test('Today has one thing to do, and Progress opens on the headline with every other number and the backup one tap away', async ({ page }) => {
-  // Not through openApp: that helper opens "all the numbers" for the tests that read them.
-  await page.goto('./#/today');
-  await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
-  await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
+test('Today has one thing to do, and Progress is one page of cards with every other number and the backup one row away', async ({ page }) => {
+  await openApp(page, '#/today');
   await expect(page.getByTestId('start-session')).toHaveText('Start training · 30 min');
   await expect(page.getByTestId('start-mix')).toBeVisible();
   // The plan, the other lengths and the optional baseline are folded away until asked for.
@@ -89,19 +88,20 @@ test('Today has one thing to do, and Progress opens on the headline with every o
   await page.getByRole('button', { name: '20 min' }).click();
   await expect(page.getByTestId('start-session')).toHaveText('Start training · 20 min');
 
+  // No folds and no period picker: every card is on the page, each in its own window (ADR-061).
   await page.goto('./#/progress');
-  await expect(page.getByTestId('card-headline')).toBeVisible();
-  await expect(page.getByTestId('card-unseen')).toBeHidden();
-  await expect(page.getByTestId('card-ownmove')).toBeHidden();
-  await page.getByTestId('progress-all').locator('summary').click();
-  await expect(page.getByTestId('card-unseen')).toBeVisible();
-  // The backup has its own fold, one tap from the top.
-  await expect(page.getByTestId('backup-download')).toBeHidden();
-  await page.getByTestId('progress-data').locator('summary').click();
+  for (const id of ['card-ratings', 'card-danger', 'card-ownmove', 'card-spot-chances', 'card-unseen', 'card-coverage', 'card-activity']) await expect(page.getByTestId(id)).toBeVisible();
+  await expect(page.getByRole('button', { name: '7 days' })).toHaveCount(0);
+  await expect(page.getByTestId('backup-download')).toHaveCount(0);
+  // A card opens its measure with three windows; the backup is a row under More.
+  await page.getByTestId('card-unseen').click();
+  await expect(page.getByTestId('detail-puzzles')).toBeVisible();
+  await expect(page.getByTestId('seg-trend')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('seg-recent').click();
+  await expect(page.getByTestId('seg-recent')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('about')).toContainText('first time they were ever shown');
+  await page.goto('./#/progress');
+  await page.getByTestId('more-link-data').click();
   await expect(page.getByTestId('backup-download')).toBeVisible();
-  // The choice is remembered on this device.
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('progress.all'))).toBe('1');
-  await page.reload();
-  await expect(page.getByTestId('card-unseen')).toBeVisible();
 });
 

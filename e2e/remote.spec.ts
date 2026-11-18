@@ -23,7 +23,7 @@ test('private copy: off by default; with a repository and a token the backup is 
   // One attempt, so there is something to send.
   await openApp(page, '#/practice/run?concept=mate.in-one');
   await solvePuzzle(page);
-  await page.goto('./#/progress');
+  await page.goto('./#/progress/more/data');
   const card = page.getByTestId('card-remote');
   await expect(card).toHaveAttribute('data-on', 'false');
   await expect(page.getByTestId('card-data')).toContainText('Nothing is uploaded.');

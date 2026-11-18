@@ -44,8 +44,6 @@ export async function mockChessCom(page: Page, games: any[]): Promise<Mock> {
 }
 
 export async function openApp(page: Page, path = '#/today') {
-  // Progress folds most of its numbers away by default; these tests read them, so they are opened here.
-  await page.addInitScript(() => { try { localStorage.setItem('progress.all', '1'); localStorage.setItem('progress.data', '1'); } catch { /* not available */ } });
   await page.goto(`./${path}`);
   await expect(page.getByTestId('app')).toHaveAttribute('data-pack', 'installed', { timeout: 30_000 });
   await expect(page.getByTestId('app')).toHaveAttribute('data-ready', 'true');
@@ -82,9 +80,9 @@ export async function measured(page: Page): Promise<{ total: number; measured: n
   return { total: games.length, measured: games.filter((g) => g.measure).length };
 }
 
-/** Sets the username from the Progress screen; fetching and analysis then run by themselves. */
+/** Sets the username under Progress → More → Your data; fetching and analysis then run by themselves. */
 export async function setUsername(page: Page) {
-  if (!page.url().includes('#/progress')) await page.goto('./#/progress');
+  if (!page.url().includes('#/progress/more/data')) await page.goto('./#/progress/more/data');
   await page.getByTestId('chesscom-username').fill('fixture_learner');
   await page.getByTestId('save-username').click();
 }

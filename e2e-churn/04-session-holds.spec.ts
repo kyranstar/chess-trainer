@@ -286,7 +286,7 @@ test('baseline, opening gap builder with a pending choice, opening recall, and "
   await expect(page.getByTestId('drill-verdict')).toHaveAttribute('data-ok', 'true');
   expect((await store(page, 'attempts')).filter((a) => a.exerciseKind === 'opening')).toHaveLength(1);
 
-  await page.goto('./#/progress');
+  await page.goto('./#/progress/metric/puzzles');
   await page.getByTestId('view-unseen').click();
   await page.getByTestId('attempt-row').first().click();
   await page.getByRole('button', { name: 'Practise this again' }).click();

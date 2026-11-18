@@ -28,7 +28,7 @@ test('with a username the app fetches ratings and games by itself and analyses t
     return route.fulfill({ status: 404, headers, json: {} });
   });
 
-  await openApp(page, '#/progress');
+  await openApp(page, '#/progress/more/data');
   const card = page.getByTestId('card-games-import');
   await expect(page.getByTestId('games-count')).toHaveText('0 games on this device, 0 analysed.');
   expect(calls).toEqual([]); // nothing is requested until a username exists
@@ -39,11 +39,14 @@ test('with a username the app fetches ratings and games by itself and analyses t
   // Games and ratings arrive without any file; the coach game is left out.
   await expect(card).toHaveAttribute('data-sync', 'ok', { timeout: 30_000 });
   await expect(page.getByTestId('games-count')).toContainText('6 games on this device');
-  await expect(page.getByTestId('live-ratings')).toContainText('Rapid 455, Blitz 431');
-  await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');
 
   // The built-in engine analyses them in the background; the dashboard fills in.
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.', { timeout: 120_000 });
+  await page.goto('./#/progress');
+  await expect(page.getByTestId('headline-rating')).toHaveText('455');
+  await page.goto('./#/progress/more/games');
+  await expect(page.getByTestId('live-ratings')).toContainText('Rapid 455, Blitz 431');
+  await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');
   const errors = page.getByTestId('card-errors');
   await expect(errors).toContainText('in 27 decisions');
   await expect(errors).toContainText('6 of 6 imported games analysed');
@@ -51,6 +54,7 @@ test('with a username the app fetches ratings and games by itself and analyses t
   expect(calls).toEqual(['/stats', '/games/archives', '/games/2026/11']);
 
   // Reopening soon afterwards does not ask Chess.com again, and the username is remembered.
+  await page.goto('./#/progress/more/data');
   await page.reload();
   await expect(page.getByTestId('chesscom-username')).toHaveValue('fixture_learner');
   await expect(page.getByTestId('games-count')).toHaveText('6 games on this device, 6 analysed.');

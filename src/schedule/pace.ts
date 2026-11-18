@@ -103,19 +103,29 @@ export interface OwnMoveSummary {
   named: { yes: number; n: number };
 }
 
+/** "Your move" answers that were a first look at the position (not review, not left unanswered). */
+export function ownMoveFirstLooks(attempts: Attempt[], since?: number): Attempt[] {
+  return attempts.filter((a) => a.exerciseKind === 'own-move' && a.context !== 'review' && !a.themes.includes('left') && (since === undefined || a.ts >= since));
+}
+
+/** The rating a "Your move" answer was given, with the earlier schemes ('clean' / 'failed' / 'unresolved') mapped onto it. */
+export function ownMoveGrade(a: Attempt): keyof OwnMoveSummary['grades'] {
+  const g = a.themes[1];
+  if (g === 'clean') return 'good';
+  if (g === 'failed') return 'blunder';
+  if (g === 'unresolved' || g === undefined) return 'unrated';
+  return g as keyof OwnMoveSummary['grades'];
+}
+
+/** Sound: best, good or an inaccuracy, the app's own pass (ADR-043). */
+export const isSoundGrade = (g: string): boolean => g === 'best' || g === 'good' || g === 'inaccuracy';
+
 /** First looks at a position only: a second look says more about memory than about the clock. */
 export function ownMoveSummary(attempts: Attempt[], since?: number): OwnMoveSummary {
-  const rows = attempts.filter((a) => a.exerciseKind === 'own-move' && a.context !== 'review' && !a.themes.includes('left') && (since === undefined || a.ts >= since));
+  const rows = ownMoveFirstLooks(attempts, since);
   const has = (a: Attempt, t: string) => a.themes.includes(t);
   const late = (a: Attempt) => has(a, 'late') || has(a, 'timeout');
-  // Ratings under the earlier schemes: 'clean' / 'failed' / 'unresolved'.
-  const gradeOf = (a: Attempt): keyof OwnMoveSummary['grades'] => {
-    const g = a.themes[1];
-    if (g === 'clean') return 'good';
-    if (g === 'failed') return 'blunder';
-    if (g === 'unresolved' || g === undefined) return 'unrated';
-    return g as keyof OwnMoveSummary['grades'];
-  };
+  const gradeOf = ownMoveGrade;
   const condition = (xs: Attempt[]): Condition => ({
     passed: xs.filter((a) => ['best', 'good', 'inaccuracy'].includes(gradeOf(a))).length,
     failed: xs.filter((a) => ['mistake', 'blunder'].includes(gradeOf(a))).length,

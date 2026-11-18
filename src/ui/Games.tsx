@@ -8,9 +8,7 @@ import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { runSyncRound, useSyncState } from '../app/useAutoSync';
 import { DEFAULT_USERNAME } from '../games/autosync';
 import type { RatingSnapshot } from '../games/chesscom';
-import { clockPressure, CLOCK_MIN_DECISIONS, COMPARE_WINDOW, type DrillPosition, drillPositions, EARLY_MOVES, earlyBlunderGames, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries, UNDECIDED_BELOW } from '../games/metrics';
-import { senseStats } from '../games/sense';
-import type { Attempt } from '../db/types';
+import { clockPressure, CLOCK_MIN_DECISIONS, type DrillPosition, drillPositions, earlyBlunderGames, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries, UNDECIDED_BELOW } from '../games/metrics';
 import type { GameRecord, TimeClass } from '../games/types';
 import { formatPct, PROVISIONAL_N } from '../metrics/metrics';
 import { Board } from './Board';
@@ -20,7 +18,7 @@ import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
 import { useOtherMovesAhead, useResultLines } from './Lines';
 import { Ask, gameRef, KeepLast, ResultTitle, useFlaggable, useItem, useRunNote } from './Stage';
 import { reviewKey } from '../schedule/position';
-import { localDate } from '../schedule/session';
+import { byPhase, byType, chanceList, rapidRows } from '../progress/series';
 
 export function useGames(): GameRecord[] | undefined {
   const db = useDb();
@@ -177,10 +175,24 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
   );
 }
 
-function eventsFor(games: GameRecord[], kind: string, sinceDate: string | undefined): { title: string; rows: EventRef[] } {
+function eventsFor(games: GameRecord[], kind: string, sinceDate: string | undefined, span: string | null): { title: string; rows: EventRef[] } {
   if (kind === 'missed') return { title: 'Missed tactical chances', rows: missedOpportunities(games, { sinceDate }).events };
   if (kind === 'early') return { title: 'Early blunders in rapid games', rows: earlyBlunderGames(games, { timeClass: 'rapid', sinceDate }).events };
-  return { title: 'Major errors', rows: majorErrors(games, { sinceDate }).events };
+  if (kind === 'errors') return { title: 'Major errors', rows: majorErrors(games, { sinceDate }).events };
+  // Rated rapid games, as on the Progress cards (ADR-061); "span=trend" is the last 40 of them.
+  const all = rapidRows(games);
+  const rows = span === 'trend' ? all.slice(-40) : all;
+  if (kind === 'rapid-errors') return { title: 'Big mistakes in rated rapid games', rows: rows.filter((r) => r.analysed).flatMap((r) => r.game.analysis!.events.filter((e) => e.majorError).map((event) => ({ game: r.game, event }))) };
+  if (kind === 'rapid-chances') return { title: 'Clear chances missed', rows: chanceList(rows).filter((c) => !c.chance.taken).map((c) => ({ game: c.row.game, event: c.chance.event })) };
+  if (kind.startsWith('phase:')) {
+    const p = byPhase(rows).find((x) => x.key === kind.slice(6));
+    return { title: `Big mistakes, ${p?.label.toLowerCase() ?? 'by move'}`, rows: p?.events ?? [] };
+  }
+  if (kind.startsWith('label:')) {
+    const t = byType(rows).find((x) => x.label === kind.slice(6));
+    return { title: `Big mistakes: ${t ? LABEL_TEXT[t.label] : 'by type'}`, rows: t?.events ?? [] };
+  }
+  return { title: 'Positions', rows: [] };
 }
 
 export function GameEventsList({ route, sinceDateOf }: { route: Route; sinceDateOf: (period: string) => string | undefined }) {
@@ -188,7 +200,7 @@ export function GameEventsList({ route, sinceDateOf }: { route: Route; sinceDate
   const kind = route.query.get('kind') ?? 'errors';
   const period = route.query.get('period') ?? 'all';
   if (!games) return <div className="page"><p className="muted">Loading</p></div>;
-  const { title, rows } = eventsFor(games, kind, sinceDateOf(period));
+  const { title, rows } = eventsFor(games, kind, sinceDateOf(period), route.query.get('span'));
   return (
     <div className="page" data-testid="game-events">
       <a className="back" href={href('progress')}>Progress</a>
@@ -418,11 +430,13 @@ export function GamesImport() {
   const [username, setUsername] = useState('');
   const [saved, setSaved] = useState('');
   const [lastSync, setLastSync] = useState<{ at: number; status: string; added: number } | null>(null);
+  // What was typed before the stored name arrived is kept: the stored name only fills an untouched field.
+  const typed = useRef(false);
 
   useEffect(() => {
     void getMeta<string>(db, 'chesscom.username').then((u) => {
       const name = u ?? DEFAULT_USERNAME;
-      setUsername(name);
+      if (!typed.current) setUsername(name);
       setSaved(name);
     });
   }, [db]);
@@ -443,7 +457,7 @@ export function GamesImport() {
       <p data-testid="games-count">{games?.length ?? 0} games on this device, {analysed} analysed.</p>
       <label className="field">
         <span>Chess.com username</span>
-        <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={username} data-testid="chesscom-username" onChange={(e) => setUsername(e.target.value)} />
+        <input type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={username} data-testid="chesscom-username" onChange={(e) => { typed.current = true; setUsername(e.target.value); }} />
       </label>
       <div className="actions">
         {username.trim() !== saved && <button className="primary" data-testid="save-username" onClick={() => void saveUsername()}>{username.trim() ? 'Save and fetch my games' : 'Stop fetching'}</button>}
@@ -474,63 +488,4 @@ export function useLiveRatings(): RatingSnapshot | null {
     void getMeta<RatingSnapshot>(db, 'chesscom.ratings').then((x) => setR(x ?? null));
   }, [db, sync.last]);
   return r;
-}
-
-/** The three questions Progress leads with: stronger games, fewer target errors, fresh ordinary positions. */
-export function Headline({ attempts, sinceDate, since, periodLabel }: { attempts: Attempt[]; sinceDate: string | undefined; since: number | undefined; periodLabel: string }) {
-  const games = useGames();
-  const live = useLiveRatings();
-  if (!games) return null;
-  const rapid = ratingSeries(games, 'rapid');
-  // Training began on the day of the first recorded attempt.
-  const firstTs = attempts.reduce((t, a) => Math.min(t, a.ts), Infinity);
-  const trainingStart = Number.isFinite(firstTs) ? localDate(firstTs) : undefined;
-  const early = earlyBlunderGames(games, { timeClass: 'rapid', sinceDate, trainingStart });
-  const sense = senseStats(attempts, since);
-  const s = sense['safe-or-not'];
-  const c = sense['chance-or-not'];
-  const pct = (x: number | null) => (x === null ? 'no data' : formatPct(x));
-  return (
-    <section className="card focus" data-testid="card-headline">
-      <h2>Is it working?</h2>
-      <dl className="facts headline-facts">
-        <dt>Rapid rating</dt>
-        <dd data-testid="headline-rating">
-          {live?.rapid ? <strong>{live.rapid.rating}</strong> : rapid.current ? <strong>{rapid.current.rating}</strong> : 'No games yet'}
-          {rapid.twentyAgo !== null && rapid.current ? ` (${rapid.current.rating - rapid.twentyAgo >= 0 ? '+' : ''}${rapid.current.rating - rapid.twentyAgo} over the last 20 games)` : rapid.n > 0 ? ` after ${rapid.n} game${rapid.n === 1 ? '' : 's'}` : ''}
-        </dd>
-        <dt>Early blunders</dt>
-        <dd data-testid="headline-early">
-          {early.games === 0 ? (early.pending > 0 ? `${early.pending} rapid games are waiting to be measured on this device` : 'No rapid games yet') : (
-            <>
-              <strong>{early.withBlunder} of {early.games}</strong> rapid games ({formatPct(early.rate)}, range {formatPct(early.interval!.lo)}–{formatPct(early.interval!.hi)})
-              <span className="metric-sub">lost material or allowed mate in the first {EARLY_MOVES} moves</span>
-              <span className="metric-sub" data-testid="headline-compare">{(early.recent && early.previous ? ` Last ${COMPARE_WINDOW} games: ${early.recent.withBlunder}. The ${COMPARE_WINDOW} before: ${early.previous.withBlunder}.` : early.windowPending > 0 ? ` The last ${COMPARE_WINDOW} games against the ${COMPARE_WINDOW} before will be shown once ${early.windowPending} of those games ${early.windowPending === 1 ? 'has' : 'have'} been measured.` : ` A before-and-after comparison needs ${2 * COMPARE_WINDOW} rapid games.`).trim()}</span>
-            </>
-          )}
-        </dd>
-        <dt>Fresh positions</dt>
-        <dd data-testid="headline-sense">
-          {s.detected.n + s.quiet.n + c.detected.n + c.quiet.n === 0 ? 'No questions from your own games answered yet' : (
-            <>
-              <span className="metric-sub">Unsafe moves spotted: {s.noticed.successes} of {s.noticed.n} ({pct(s.noticed.rate)}); false alarms: {s.quiet.n - s.quiet.successes} of {s.quiet.n}.</span>
-              <span className="metric-sub">Chances spotted: {c.noticed.successes} of {c.noticed.n} ({pct(c.noticed.rate)}); false alarms: {c.quiet.n - c.quiet.successes} of {c.quiet.n}.</span>
-            </>
-          )}
-        </dd>
-      </dl>
-      <details className="source-details" data-testid="headline-how">
-        <summary>How these are measured</summary>
-        <p className="definition-small" data-testid="headline-more">
-          {early.games > 0 ? `All such moves: ${early.moves.events} in ${early.moves.decisions} decisions.` : ''}
-          {early.beforeTraining && early.sinceTraining ? ` Before you started training here (${trainingStart}): ${early.beforeTraining.withBlunder} of ${early.beforeTraining.games} games. Since: ${early.sinceTraining.withBlunder} of ${early.sinceTraining.games}.` : ''}
-          {early.games > 0 && early.pending > 0 ? ` ${early.pending} more game${early.pending === 1 ? ' is' : 's are'} waiting to be measured.` : ''}
-        </p>
-        <p className="definition-small">
-          These three were chosen before any training data existed. Early blunders is the main one: a game counts if, within your first {EARLY_MOVES} moves, your move allowed mate or lost at least two points of material in a short line that the best move would not have lost, whatever it did to the engine’s score; rated rapid games only; {periodLabel}. Every game is measured on this device with one fixed engine setting{early.protocol ? ` (${early.protocol})` : ''}, so the numbers stay comparable over time. With about ten games a month, a real change takes around three months to show. Fresh positions are questions from your own games answered the first time you see them; spotting and false alarms are reported separately because either can be gamed alone.
-        </p>
-      </details>
-      {early.withBlunder > 0 && <a href={href('progress/game-events', { kind: 'early', period: 'all' })} data-testid="view-early">View the {early.withBlunder} games’ positions</a>}
-    </section>
-  );
 }

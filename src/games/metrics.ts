@@ -158,18 +158,12 @@ export function missedOpportunities(games: GameRecord[], f: GameFilter = {}): Mi
   const open = eventsOf(done, (e) => e.opportunity !== null && e.bestWp < UNDECIDED_BELOW);
   // Not already won: a "miss" here is simply not playing the engine's first choice.
   const openMissed = open.filter((r) => !tookBest(r.event));
-  // Clear chances, with consecutive moves of one game on which the chance stayed available merged into one.
   let clearN = 0;
   let clearMissed = 0;
   for (const g of done) {
-    const evs = g.analysis!.events.filter((e) => e.opportunity !== null && e.secondWp !== null && e.bestWp - e.secondWp >= CLEAR_GAP).sort((a, b) => a.ply - b.ply);
-    let i = 0;
-    while (i < evs.length) {
-      let j = i;
-      while (j + 1 < evs.length && evs[j + 1]!.ply === evs[j]!.ply + 2 && !tookBest(evs[j]!)) j++;
+    for (const c of clearChances(g)) {
       clearN++;
-      if (!tookBest(evs[j]!)) clearMissed++;
-      i = j + 1;
+      if (!c.taken) clearMissed++;
     }
   }
   return {
@@ -182,6 +176,34 @@ export function missedOpportunities(games: GameRecord[], f: GameFilter = {}): Mi
     events,
     undecided: { available: open.length, missed: openMissed.length, rate: open.length ? openMissed.length / open.length : null, interval: open.length ? wilson(openMissed.length, open.length) : null, events: openMissed },
   };
+}
+
+/** One clear chance in one game: where it first stood, where it was last on the board, and whether it was taken. */
+export interface ClearChance {
+  ply: number;
+  lastPly: number;
+  taken: boolean;
+  /** The decision on which it was taken, or the last on which it stood. */
+  event: GameEvent;
+}
+
+/**
+ * Clear chances in one analysed game: one move beats every other by CLEAR_GAP points or more.
+ * Consecutive moves of the learner on which the same chance stayed available are one chance,
+ * missed only if it was never taken.
+ */
+export function clearChances(g: GameRecord): ClearChance[] {
+  if (!g.analysis) return [];
+  const evs = g.analysis.events.filter((e) => e.opportunity !== null && e.secondWp !== null && e.bestWp - e.secondWp >= CLEAR_GAP).sort((a, b) => a.ply - b.ply);
+  const out: ClearChance[] = [];
+  let i = 0;
+  while (i < evs.length) {
+    let j = i;
+    while (j + 1 < evs.length && evs[j + 1]!.ply === evs[j]!.ply + 2 && !tookBest(evs[j]!)) j++;
+    out.push({ ply: evs[i]!.ply, lastPly: evs[j]!.ply, taken: tookBest(evs[j]!), event: evs[j]! });
+    i = j + 1;
+  }
+  return out;
 }
 
 export const LOW_CLOCK_FRACTION = 0.1;
@@ -278,6 +300,11 @@ export interface EarlyBlunders {
   moves: { events: number; decisions: number };
   /** The one engine setting all counted games were measured with, or null when none are. */
   protocol: string | null;
+  /**
+   * Every eligible game in date order, measured or not, with its first early blunder when it
+   * has one: the games behind the strip on Progress. An unmeasured game is in neither count.
+   */
+  strip: { game: GameRecord; measured: boolean; event: GameEvent | null }[];
 }
 
 export const EARLY_MOVES = 20;
@@ -327,6 +354,7 @@ export function earlyBlunderGames(games: GameRecord[], opts: { timeClass: TimeCl
       decisions: pool.reduce((t, g) => t + g.measure!.decisions.filter((d) => d[0] < maxPly).length, 0),
     },
     protocol,
+    strip: eligible.slice().sort(byDate).map((g) => (isMeasured(g) ? { game: g, measured: true, event: targets(g)[0] ?? null } : { game: g, measured: false, event: null })),
   };
 }
 

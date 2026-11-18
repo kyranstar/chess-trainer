@@ -19,6 +19,23 @@ Each metric specifies: formal numerator, denominator, unit, population/cohort, t
 ## Explainability & actionability
 Every actionable card should display `[trend] [sample n] [defined period] [confidence]`, then 'View positions' and 'Practice this'. Show gaps and unknowns instead of confected signal. On the main view only 4–6 cards and one clear focus recommendation; detailed tabs can carry the rest.
 
+**Changed by ADR-061 (owner request, 2026-11-18):** the main view is grouped cards rather than 4–6: one action (*Next up*), three recent games, then sections *In your games*, *In training*, *Learning* and a list of rows under *More*. Each card still carries one number, one chart, its sample, window and 95% range or "Provisional", and opens its own screen with *Recent / Trend / History* windows, the positions behind it and "About this measure". There is no global period picker: each measure has windows of its own unit (games, first looks, days).
+
+## Progress page (ADR-061)
+| Card | Number | Unit and window | Chart |
+|---|---|---|---|
+| Early blunders | games with one, of the last 20 | rated rapid games; last 20 against the 20 before | squares per game, two rows |
+| Rapid rating | rating after the latest game | rated rapid games; change over 20 | line over game number |
+| Big mistakes | per 100 moves, last 20 games | decisions; interval clustered by game | rolling 20-game rate with band |
+| Chances taken | clear chances taken | last 40 rated rapid games | one mark per chance |
+| How you play | phase with most big mistakes | last 40 games | rows by move number |
+| Spotting danger / chances | share spotted | first looks; spotted and false alarms apart | two dot-and-range rows |
+| Your move | share sound (best, good, inaccuracy) | first looks | blocks of 20 |
+| Fresh puzzles | share solved first try | first-ever showings | blocks of 20 |
+| Concept checks | concepts passed | 29 concepts | grid by state |
+| Practice | days with an answer of 28 | positions per day | daily bars |
+
+
 ## Evidence discipline
 - Report analysis coverage: analyzed decision count / eligible decisions, analyzed games / eligible games. Do not pool games with inconsistent engine settings without labeling.
 - Flag e.g. `<20 relevant observations` as provisional by policy; threshold to be evaluated, not treated as statistical magic.
