@@ -14,7 +14,7 @@ import { OwnMoveDrill } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { SenseDrill, senseItemsFrom } from './Sense';
 import { KeepLast } from './Stage';
-import { positionOf, seenPositions } from '../schedule/position';
+import { movesToAsk, positionOf, seenPositions } from '../schedule/position';
 
 /** How a stretch of practice went, one plain line per kind of item that came up (rows for a `dl`). */
 export function RunSummaryRows({ attempts, omit = [] }: { attempts: Attempt[]; omit?: ('puzzles' | 'reviews')[] }) {
@@ -94,10 +94,10 @@ export function MixRun({ learner, onFinished, looking, onLooked, onCount }: {
     const senseAll = senseItemsFrom(games).filter((x) => !met.has(`${x.gameId}:${x.ply}`));
     const safe = pickSense(senseAll, 'safe-or-not', senseSeen, 2, `mix|${run.current}|${n}`)[0];
     const chance = pickSense(senseAll, 'chance-or-not', senseSeen, 2, `mix|${run.current}|${n}`)[0];
-    const movesDone = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
-    const moves = moveItems(games).filter((m) => !movesDone.has(m.id) && !shown.current.has(m.id) && !met.has(`${m.gameId}:${m.ply}`));
-    // Newest games first, with some variety inside them.
-    const move = moves.length ? moves[Math.max(0, moves.length - 1 - Math.floor(Math.random() * Math.min(12, moves.length)))] : undefined;
+    // A position that was shown and left without an answer is asked first (ADR-060); then
+    // the newest games, with some variety inside them.
+    const { owed, fresh: moves } = movesToAsk(moveItems(games), learner.attempts, shown.current);
+    const move = owed.length ? owed[owed.length - 1] : moves.length ? moves[Math.max(0, moves.length - 1 - Math.floor(Math.random() * Math.min(12, moves.length)))] : undefined;
     const tried = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-game').map((a) => a.exerciseId));
     const drill = drillPositions(games).find((d) => !tried.has(d.id) && !shown.current.has(d.id) && !met.has(positionOf(d.id) ?? ''));
     // Half the time a position on what is being learned now (studied, check not yet passed),

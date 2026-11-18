@@ -18,7 +18,7 @@ import { useArmed, useScreenChange } from '../app/tapGuard';
 import { bestLineFor } from '../engine/interactive';
 import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
 import { useOtherMovesAhead, useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, ResultTitle, useItem, useRunNote } from './Stage';
+import { Ask, gameRef, KeepLast, ResultTitle, useFlaggable, useItem, useRunNote } from './Stage';
 import { reviewKey } from '../schedule/position';
 import { localDate } from '../schedule/session';
 
@@ -332,6 +332,7 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
   // played by hand before the run goes on (owner, 2026-11-17; ADR-058). A move that was not
   // faulted owes nothing, and neither does the position gone back to with "Last".
   const owes = !!result && !result.ok && (result.shown || other === 'worse') && !stage.last;
+  useFlaggable(result ? { id: drill.id, kind: 'own-game' } : null);
 
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>

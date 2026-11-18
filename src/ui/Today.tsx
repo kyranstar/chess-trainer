@@ -20,7 +20,7 @@ import { isTimed, TIMED_SECONDS } from '../schedule/pace';
 import { OwnMoveDrill } from './OwnMove';
 import { RunSummaryRows } from './Mix';
 import { KeepLast, RunFrame } from './Stage';
-import { seenPositions } from '../schedule/position';
+import { movesToAsk, seenPositions } from '../schedule/position';
 
 /** A small stable hash for choosing among a few candidates by turn. */
 function hashOf(text: string): number {
@@ -344,12 +344,11 @@ export function SessionRun({ learner }: { learner: Learner }) {
     if (moveLatch.current?.index === testIndex) return moveLatch.current.pick;
     let pick: { item: MoveItem; pace: number } | null = null;
     if (Math.floor(testIndex / 2) % 3 !== 2) {
-      const done = new Set([...learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId), ...senseShown.current]);
-      // A position already met in another exercise is not asked again as a new one (see src/schedule/position.ts).
-      const met = seenPositions([...learner.attempts, ...[...senseShown.current].map((exerciseId) => ({ exerciseId }))]);
-      const left = moveItems(games).filter((m) => !done.has(m.id) && !met.has(`${m.gameId}:${m.ply}`));
-      // Newest games first, with some variety among them.
-      const item = left.length ? left[left.length - 1 - (hashOf(`${session.id}|${testIndex}`) % Math.min(8, left.length))] : undefined;
+      // A position already met in another exercise is not asked again as a new one (see
+      // src/schedule/position.ts); one that was shown and left without an answer is asked
+      // first (ADR-060); then the newest games, with some variety among them.
+      const { owed, fresh: left } = movesToAsk(moveItems(games), learner.attempts, senseShown.current);
+      const item = owed.length ? owed[owed.length - 1] : left.length ? left[left.length - 1 - (hashOf(`${session.id}|${testIndex}`) % Math.min(8, left.length))] : undefined;
       if (item) pick = { item, pace: isTimed(item.id) ? TIMED_SECONDS : 0 };
     }
     moveLatch.current = { index: testIndex, pick };

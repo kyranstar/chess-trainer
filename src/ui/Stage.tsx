@@ -3,10 +3,11 @@
  * left), the exercise under it. The exercise itself is always board, then what is asked or the
  * verdict, then the buttons pinned to the bottom (see `.puzzle`, `.say`, `.dock` in styles.css).
  */
-import { createContext, type ReactElement, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, type ReactElement, type ReactNode, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { noteScreenChange } from '../app/tapGuard';
 import { FLIP_EVENT } from './Board';
+import { FlagButton, type Flaggable } from './Flag';
 
 const RunNoteContext = createContext<(note: string | null) => void>(() => {});
 
@@ -31,6 +32,25 @@ const LastContext = createContext<LastState>({ has: false, viewing: false, setHa
 interface ItemState { active: boolean; last: boolean; back: () => void }
 const ItemContext = createContext<ItemState>({ active: true, last: false, back: () => {} });
 const KeptContext = createContext(false);
+
+const FlagContext = createContext<(key: string, item: Flaggable | null) => void>(() => {});
+
+/**
+ * Tells the run bar that the exercise on screen has been answered and can be flagged for a
+ * later look (see ./Flag.tsx); null before the answer. Only the exercise on the page speaks:
+ * the one kept for "Last" is silent until it is the one being looked at.
+ */
+export function useFlaggable(item: Flaggable | null): void {
+  const set = useContext(FlagContext);
+  const { active } = useContext(ItemContext);
+  const key = useId();
+  const id = active ? item?.id ?? null : null;
+  const kind = item?.kind ?? '';
+  useEffect(() => {
+    set(key, id ? { id, kind } : null);
+  }, [set, key, id, kind]);
+  useEffect(() => () => set(key, null), [set, key]);
+}
 
 /**
  * For an exercise's main button. On the exercise gone back to, "Next" must not move the run
@@ -145,7 +165,22 @@ export function RunFrame({ back, title, clock, side, testid, attrs, children }: 
     });
   }, []);
   const last = useMemo<LastState>(() => ({ has, viewing, setHas, setViewing }), [has, viewing, setViewing]);
+  // The answered exercise on the page, if any (see useFlaggable): keyed by who said so, because
+  // the exercise kept for "Last" and the current one are both alive.
+  const [flaggable, setFlaggable] = useState<Record<string, Flaggable>>({});
+  const setFlag = useCallback((key: string, item: Flaggable | null) => {
+    setFlaggable((m) => {
+      if (!item) {
+        if (!(key in m)) return m;
+        const { [key]: _gone, ...rest } = m;
+        return rest;
+      }
+      return m[key]?.id === item.id && m[key]?.kind === item.kind ? m : { ...m, [key]: item };
+    });
+  }, []);
+  const flag = Object.values(flaggable)[0] ?? null;
   return (
+    <FlagContext.Provider value={setFlag}>
     <LastContext.Provider value={last}>
     <RunNoteContext.Provider value={setNote}>
       <div className="page run" data-testid={testid} {...attrs}>
@@ -158,6 +193,7 @@ export function RunFrame({ back, title, clock, side, testid, attrs, children }: 
             )}
             {note && !viewing && <span className="run-note" data-testid="run-note">{note}</span>}
             {side}
+            {flag && <FlagButton key={flag.id} item={flag} />}
             <button className="quiet flip-bar" data-testid="flip-board" aria-label="Flip board" onClick={() => window.dispatchEvent(new Event(FLIP_EVENT))}>⇅</button>
           </span>
         </header>
@@ -165,6 +201,7 @@ export function RunFrame({ back, title, clock, side, testid, attrs, children }: 
       </div>
     </RunNoteContext.Provider>
     </LastContext.Provider>
+    </FlagContext.Provider>
   );
 }
 

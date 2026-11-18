@@ -3,6 +3,7 @@
 Read `AGENTS.md`, `docs/STATE.md`, `docs/PRODUCT.md`, `docs/ROADMAP.md`, and the currently relevant design specification before editing code. These files, not conversation memory, are authoritative. Resolve discrepancies in the decision log; don't silently overwrite decisions.
 
 ## On every session
+0. **Before anything else, whatever was asked: look for what the owner flagged.** Run `scripts/fetch-practice.sh && node scripts/flags.mjs`. It pulls the latest backup copy from his phone and lists the positions he marked with the flag in the run bar (ADR-059), each with what his screen said. For every flag listed: look at the position and at what the app showed him (deep engine search, `tools/audit`), tell him what you found at the start of your answer, fix it if it is a defect, and mark it with `node scripts/flags.mjs --done <id> "<note>"`. A flag is a request, not a hint. If the fetch fails (no `gh` access, no copy yet), say so in your answer and carry on. Flags and the backup stay under `data/` (git-ignored): the repository is public and they hold his games.
 1. Identify git branch, commit, dirty state, executable project status, and current milestone. Reconcile `docs/STATE.md` with the repository.
 2. Read the active milestone's acceptance tests and relevant content/legal restrictions.
 3. State the smallest useful vertical slice and its verification steps; then implement it.

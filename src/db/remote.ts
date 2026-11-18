@@ -56,10 +56,13 @@ export async function clearRemote(db: TrainerDB): Promise<void> {
 export async function dataSignature(db: TrainerDB): Promise<string> {
   const sessions = await db.sessions.toArray();
   const games = await db.games.toArray();
+  // Flags (src/db/flags.ts): one set, replaced or taken off is something new to send.
+  const flags = (await db.meta.where('key').startsWith('flag:').toArray()).map((r) => (r.value as { ts?: number }).ts ?? 0);
   return [
     await db.attempts.count(), await db.lessonEvents.count(), await db.repertoire.count(), await db.gameJournal.count(),
     sessions.reduce((m, s) => Math.max(m, s.updatedAt ?? 0), 0),
     games.length, games.filter((g) => g.measure).length,
+    flags.length, flags.reduce((m, t) => Math.max(m, t), 0),
   ].join('|');
 }
 

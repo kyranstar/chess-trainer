@@ -11,7 +11,7 @@ import { useGames } from './Games';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { type Candidate, mergeLines, ucisOfSanLine } from '../chess/line';
 import { useOtherMovesAhead, useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, ResultTitle, useItem } from './Stage';
+import { Ask, gameRef, KeepLast, ResultTitle, useFlaggable, useItem } from './Stage';
 import { seenPositions } from '../schedule/position';
 
 /** Controls come from move 7 on when there are enough of them: the first moves are not interesting. */
@@ -49,6 +49,7 @@ export function SenseDrill({ item, sessionId, context, onRecorded, onDone }: {
   const started = useRef(Date.now());
   const me = item.color === 'white' ? 'White' : 'Black';
   useScreenChange(`${item.id}|${phase}`);
+  useFlaggable(phase === 'done' ? { id: item.id, kind: 'sense' } : null);
   const armed = useArmed();
 
   // A question that was shown has been seen: if the learner leaves before answering, record

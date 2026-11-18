@@ -91,6 +91,8 @@ export interface OwnMoveSummary {
    * the thinking, so these are practice and are in neither condition.
    */
   interrupted: number;
+  /** Answers to a position that had been shown before and left (ADR-060): not first looks, in neither condition. */
+  shownBefore: number;
   /** How many moves got each rating, every first look answered. */
   grades: Record<'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'unrated', number>;
   /** Of moves made when something of his could already be taken: how often that capture was gone afterwards. */
@@ -125,13 +127,15 @@ export function ownMoveSummary(attempts: Attempt[], since?: number): OwnMoveSumm
   const something = rows.filter((a) => a.themes[2] === 'loose' || a.themes[2] === 'mate');
   const now = rows.filter((a) => seriesOf(a) === CLOCK_SERIES);
   const earlier = rows.filter((a) => seriesOf(a) !== CLOCK_SERIES);
-  const timed = (xs: Attempt[]) => condition(xs.filter((a) => !has(a, 'interrupted') && (paceOf(a) ?? 0) > 0));
-  const untimed = (xs: Attempt[]) => condition(xs.filter((a) => !has(a, 'interrupted') && (paceOf(a) ?? 0) === 0));
+  const fair = (a: Attempt) => !has(a, 'interrupted') && !has(a, 'shown-before');
+  const timed = (xs: Attempt[]) => condition(xs.filter((a) => fair(a) && (paceOf(a) ?? 0) > 0));
+  const untimed = (xs: Attempt[]) => condition(xs.filter((a) => fair(a) && (paceOf(a) ?? 0) === 0));
   return {
     timed: timed(now),
     untimed: untimed(now),
     before: { timed: timed(earlier), untimed: untimed(earlier) },
     interrupted: now.filter((a) => has(a, 'interrupted')).length,
+    shownBefore: now.filter((a) => has(a, 'shown-before') && !has(a, 'interrupted')).length,
     grades,
     threat: { met: rows.filter((a) => has(a, 'threat-met')).length, n: rows.filter((a) => has(a, 'threat-met') || has(a, 'threat-left')).length },
     free: { taken: rows.filter((a) => has(a, 'free-taken')).length, n: rows.filter((a) => has(a, 'free-taken') || has(a, 'free-left')).length },
@@ -165,7 +169,7 @@ export function conditionDifference(timed: Condition, untimed: Condition): { tim
  */
 export function clockRun(attempts: Attempt[]): number {
   const rows = attempts
-    .filter((a) => a.exerciseKind === 'own-move' && a.context !== 'review' && !a.themes.includes('left') && !a.themes.includes('interrupted') && seriesOf(a) === CLOCK_SERIES && (paceOf(a) ?? 0) > 0)
+    .filter((a) => a.exerciseKind === 'own-move' && a.context !== 'review' && !a.themes.includes('left') && !a.themes.includes('interrupted') && !a.themes.includes('shown-before') && seriesOf(a) === CLOCK_SERIES && (paceOf(a) ?? 0) > 0)
     .sort((a, b) => b.ts - a.ts);
   let run = 0;
   for (const a of rows) {

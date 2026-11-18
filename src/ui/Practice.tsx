@@ -10,12 +10,12 @@ import { OpeningRecallRun } from './Openings';
 import { SenseRun, senseItemsFrom } from './Sense';
 import { KPK_DRILLS } from '../endgames/kpk';
 import { drillPositions } from '../games/metrics';
-import { moveItems } from '../games/ownmove';
+import { moveItems, type MoveItem } from '../games/ownmove';
 import { MixRun } from './Mix';
 import { OwnMoveRun } from './OwnMove';
 import { conceptPicker, PuzzleStream, ReviewRunner } from './runners';
 import { RunFrame } from './Stage';
-import { seenPositions } from '../schedule/position';
+import { movesToAsk } from '../schedule/position';
 
 const OPENING_NAMES: Record<string, string> = { Italian_Game: 'Italian Game', 'Caro-Kann_Defense': 'Caro-Kann Defence' };
 
@@ -136,13 +136,10 @@ export function PracticeHome({ learner }: { learner: Learner }) {
 function OwnMoveRunFromGames({ learner, paceOverride }: { learner: Learner; paceOverride: number | null }) {
   const games = useGames();
   const items = useMemo(() => (games ? moveItems(games) : null), [games]);
-  const done = useRef<Set<string> | null>(null);
-  const met = useRef<Set<string> | null>(null);
-  if (done.current === null && learner.ready) {
-    done.current = new Set(learner.attempts.filter((a) => a.exerciseKind === 'own-move').map((a) => a.exerciseId));
-    met.current = seenPositions(learner.attempts);
-  }
-  return <OwnMoveRun items={done.current ? items : null} done={done.current ?? new Set()} met={met.current ?? undefined} pace={paceOverride} onFinished={() => go('practice')} />;
+  // What can be asked is settled when the run opens: answers given in it must not reshuffle it.
+  const open = useRef<{ owed: MoveItem[]; fresh: MoveItem[] } | null>(null);
+  if (open.current === null && learner.ready && items) open.current = movesToAsk(items, learner.attempts);
+  return <OwnMoveRun items={open.current ? items : null} owed={open.current?.owed ?? []} fresh={open.current?.fresh ?? []} pace={paceOverride} onFinished={() => go('practice')} />;
 }
 
 export function PracticeRun({ route, learner }: { route: Route; learner: Learner }) {

@@ -96,6 +96,27 @@ describe('what is counted for "Your move"', () => {
   });
 });
 
+describe('an answer to a position that had been shown before', () => {
+  it('is not a first look: it is in neither condition and not in the streak, but its rating counts', () => {
+    const s = ownMoveSummary([
+      a(['own-move', 'good', 'none', 'no-reply-named', 'pace:30'], 'success'),
+      a(['own-move', 'blunder', 'loose', 'named-it', 'pace:30', 'shown-before'], 'fail'),
+      a(['own-move', 'best', 'none', 'no-reply-named', 'pace:0', 'shown-before'], 'success'),
+      a(['own-move', 'best', 'none', 'no-reply-named', 'pace:0', 'shown-before', 'interrupted'], 'success'),
+    ]);
+    expect(s.timed).toEqual({ passed: 1, failed: 0, unrated: 0, late: 0 });
+    expect(s.untimed).toEqual({ passed: 0, failed: 0, unrated: 0, late: 0 });
+    // Each answer left out is counted once, under the first reason.
+    expect(s.interrupted).toBe(1);
+    expect(s.shownBefore).toBe(2);
+    expect(s.grades).toMatchObject({ best: 2, good: 1, blunder: 1 });
+    expect(clockRun([
+      a(['own-move', 'good', 'none', 'no-reply-named', 'pace:30'], 'success'),
+      a(['own-move', 'blunder', 'loose', 'named-it', 'pace:30', 'shown-before'], 'fail'),
+    ])).toBe(1);
+  });
+});
+
 describe('what the flag costs', () => {
   const timed = (grade: string, ...more: string[]) => a(['own-move', grade, 'none', 'no-reply-named', 'pace:30', ...more], grade === 'mistake' || grade === 'blunder' ? 'fail' : 'success');
   const untimed = (grade: string) => a(['own-move', grade, 'none', 'no-reply-named', 'pace:0'], grade === 'blunder' ? 'fail' : 'success');

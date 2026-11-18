@@ -427,6 +427,7 @@ function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: At
             With {TIMED_SECONDS} seconds on the clock: {line(s.timed)}{s.timed.late ? `; ${s.timed.late} ${s.timed.late === 1 ? 'was' : 'were'} made after the time ran out` : ''}. With no clock: {line(s.untimed)}.
             {diff && ` Timed minus untimed: ${points(diff.diff)} points, plausible range ${points(diff.lo)} to ${points(diff.hi)}; a range that includes 0 shows no difference yet.`}
             {s.interrupted > 0 && ` ${s.interrupted} ${s.interrupted === 1 ? 'answer is' : 'answers are'} left out of this comparison because the app left the screen while the move was being chosen.`}
+            {s.shownBefore > 0 && <span data-testid="ownmove-shown-before"> {s.shownBefore} more {s.shownBefore === 1 ? 'is' : 'are'} left out because the position had been shown once before it was answered.</span>}
             {' '}About one position in three gets the clock, chosen by the position and not by how you are doing.
             {' '}Counted from {CLOCK_SERIES_FROM}, when the clock began to be announced and to run in sight.
             {earlier > 0 && <span data-testid="ownmove-pace-before"> Before that, with the clock as a line of small text: {line(s.before.timed)} with it, {line(s.before.untimed)} without.</span>}

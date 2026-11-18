@@ -28,6 +28,7 @@ test('the board stays in one place through every phase of a puzzle and on to the
   if (view.width < 500) expect(asked.w).toBeGreaterThanOrEqual(view.width - 34);
   // Nothing to scroll while the position is being looked at.
   expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  await expect(page.getByTestId('flag-item')).toHaveCount(0);
 
   // A wrong move: the verdict takes the place of the question, the board does not move,
   // and what the move leads to plays on the board by itself.
@@ -46,8 +47,14 @@ test('the board stays in one place through every phase of a puzzle and on to the
   expect(await boardBox(page)).toEqual(asked);
   await expect(page.getByTestId('next')).toHaveCount(0);
   expect(await bottomGap(page, 'replay')).toBe(tryGap);
+  // A shown solution can be flagged (ADR-059), and so can the solved position; the flag in the bar moves nothing.
+  await page.getByTestId('flag-item').click();
+  await expect(page.getByTestId('flag-item')).toHaveAttribute('aria-pressed', 'true');
+  expect(await boardBox(page)).toEqual(asked);
   await page.getByTestId('replay').click();
+  await expect(page.getByTestId('flag-item')).toHaveCount(0);
   await solvePuzzle(page);
+  await expect(page.getByTestId('flag-item')).toHaveAttribute('aria-pressed', 'true');
   expect(await boardBox(page)).toEqual(asked);
   expect(await bottomGap(page, 'next')).toBe(tryGap);
 

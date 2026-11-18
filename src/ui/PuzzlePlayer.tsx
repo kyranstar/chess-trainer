@@ -13,7 +13,7 @@ import { lineSan } from '../games/analyse';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { evalText } from '../engine/uci';
 import { useOtherMovesAhead, useResultLines, useSearchedBest } from './Lines';
-import { Ask, ResultTitle, useItem } from './Stage';
+import { Ask, ResultTitle, useFlaggable, useItem } from './Stage';
 
 export interface PuzzlePlayerProps {
   puzzle: Puzzle;
@@ -216,6 +216,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
   const solver = initial.solver;
   const done = phase === 'solved' || phase === 'revealed';
   const owesReplay = phase === 'revealed' && !stage.last;
+  useFlaggable(done ? { id: `lichess:${puzzle.id}`, kind: 'puzzle' } : null);
   // What is played through on the board (see ./Lines.tsx):
   //   after a wrong move, that move and the engine's answer to it, shown unasked;
   //   once the solution is shown, the solution, beside the wrong move if one was made here;

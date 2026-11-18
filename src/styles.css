@@ -160,6 +160,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .run-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .run-side .last-item { min-width: 2.4rem; min-height: 2.4rem; padding: 0; border-radius: 99px; font-size: 1.25rem; font-weight: 600; line-height: 1; color: var(--ink); }
 .run-side .last-item[aria-pressed='true'] { background: var(--pencil-soft); border-color: var(--pencil); }
+/* "Flag this one": in the bar once a position is answered (see Flag.tsx). */
+.run-side .flag-item { min-width: 2.4rem; min-height: 2.4rem; padding: 0; border-radius: 99px; font-size: 1.15rem; line-height: 1; color: var(--muted); }
+.run-side .flag-item[aria-pressed='true'] { background: var(--flag-soft); border-color: var(--flag); color: var(--flag); }
 /* One exercise on the page at a time; the one before it is kept off the page (see KeepLast). */
 .keep, .keep-host, .keep-item { flex: 1; display: flex; flex-direction: column; gap: 0.45rem; min-height: 0; }
 .keep-host[hidden] { display: none; }

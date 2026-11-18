@@ -38,3 +38,39 @@ export function seenPositions(attempts: Pick<Attempt, 'exerciseId'>[]): Set<stri
   }
   return out;
 }
+
+/**
+ * "Your move" positions that are owed (ADR-060): put on screen, left without an answer, and
+ * not asked since in any form. The practice audit of 17 November found 9 of the owner's 56
+ * such positions gone this way, each one the position on screen when he stopped for the day:
+ * shown for a second, recorded as seen, and never asked again. A position that was only
+ * glimpsed is not used up. It is asked again, first, the next time one is due; the answer is
+ * marked `shown-before` and kept out of the timed comparison, where only first looks count.
+ */
+export function owedMoves(attempts: Pick<Attempt, 'exerciseId' | 'exerciseKind' | 'themes'>[]): Set<string> {
+  const left = new Map<string, string>();
+  const asked = new Set<string>();
+  for (const a of attempts) {
+    const p = positionOf(a.exerciseId);
+    if (!p) continue;
+    if (a.exerciseKind === 'own-move' && a.themes.includes('left')) left.set(p, a.exerciseId);
+    else asked.add(p);
+  }
+  return new Set([...left].filter(([p]) => !asked.has(p)).map(([, id]) => id));
+}
+
+/**
+ * The "Your move" positions that can be asked now, oldest game first as they are given: those
+ * owed (see owedMoves) and those never met in any exercise. `shownNow` are exercise ids
+ * already put on screen in this sitting, answered or not: none of them is asked again in it.
+ */
+export function movesToAsk<T extends { id: string; gameId: string; ply: number }>(items: T[], attempts: Pick<Attempt, 'exerciseId' | 'exerciseKind' | 'themes'>[], shownNow: Iterable<string> = []): { owed: T[]; fresh: T[] } {
+  const now = new Set(shownNow);
+  const owedIds = owedMoves(attempts);
+  const met = seenPositions([...attempts, ...[...now].map((exerciseId) => ({ exerciseId }))]);
+  const open = items.filter((m) => !now.has(m.id));
+  return {
+    owed: open.filter((m) => owedIds.has(m.id)),
+    fresh: open.filter((m) => !owedIds.has(m.id) && !met.has(`${m.gameId}:${m.ply}`)),
+  };
+}

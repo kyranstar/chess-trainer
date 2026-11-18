@@ -11,7 +11,7 @@ import { freeTag, GRADE_MARK, gradeHeadline, gradeMove, isPunishingReply, type M
 import { ANNOUNCE_MS, CLOCK_SERIES, clockFace, clockRun, isTimed, lowAt, runStep, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 import { useOtherMovesAhead, useResultLines } from './Lines';
-import { Ask, gameRef, KeepLast, ResultTitle, useItem } from './Stage';
+import { Ask, gameRef, KeepLast, ResultTitle, useFlaggable, useItem } from './Stage';
 
 /** 'ready': a timed position, still covered while it is announced; the clock has not started. */
 type Phase = 'ready' | 'move' | 'predict' | 'checking' | 'done';
@@ -134,6 +134,16 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
       live = false;
     };
   }, [db, pace, item.id]);
+  // A position that was shown before and left without an answer is asked again (ADR-060):
+  // its answer is not a first look, and says so.
+  const shownBefore = useRef(false);
+  useEffect(() => {
+    const since = Date.now();
+    void db.attempts.where('exerciseId').equals(item.id).toArray().then((xs) => {
+      if (xs.some((a) => a.ts < since && a.themes.includes('left'))) shownBefore.current = true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
   // Hiding the page stops the clock but not the thinking: such an answer is practice and is
   // kept out of the timed comparison.
   const interrupted = useRef(false);
@@ -184,7 +194,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     setPhase('done');
     if (recorded.current) return;
     recorded.current = true;
-    const step = pace > 0 && !interrupted.current ? runStep(verdict, timedOut.current) : 'neither';
+    const step = pace > 0 && !interrupted.current && !shownBefore.current ? runStep(verdict, timedOut.current) : 'neither';
     setRunNote(step === 'adds' ? `Streak ${runBefore.current + 1}` : step === 'ends' && runBefore.current > 0 ? `Streak of ${runBefore.current} ended` : null);
     const what = f.mateInOne ? 'mate' : f.loose.length ? 'loose' : 'none';
     const sawIt = !reply ? 'no-reply-named' : isPunishingReply(f, reply.uci) ? 'named-it' : 'named-another';
@@ -196,6 +206,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
         'own-move', verdict, what, sawIt, `pace:${pace}`, `clock:${CLOCK_SERIES}`,
         ...(timedOut.current ? ['late'] : []),
         ...(interrupted.current ? ['interrupted'] : []),
+        ...(shownBefore.current ? ['shown-before'] : []),
         ...(replyMs.current !== null ? [`reply-ms:${replyMs.current}`] : []),
         ...[freeTag(f, my.uci, bestUci ?? null)].filter((t): t is NonNullable<typeof t> => !!t),
         ...(f.threatsBefore.length ? [f.dealtWith.length === f.threatsBefore.length ? 'threat-met' : 'threat-left'] : []),
@@ -244,7 +255,9 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   const lines = useMemo(() => (phase === 'done' && result && mine ? mergeLines(item.fen, [
     { who: 'you', uci: mine.uci, score: result.wp, pv: result.pv },
     { who: 'game', uci: item.played, score: result.game.wp, pv: result.game.pv },
-    ...(result.best ? [{ who: 'best' as const, uci: result.best.uci, score: result.best.wp, pv: result.best.pv }] : []),
+    // A move rated good is within what the engine can tell apart from its own first choice
+    // (ADR-060): that choice is then "also good", not "best", which claimed a difference.
+    ...(result.best ? [{ who: 'best' as const, uci: result.best.uci, score: result.best.wp, pv: result.best.pv, ...(result.verdict === 'good' ? { label: 'Also good' } : {}) }] : []),
   ]) : []), [phase, result, mine, item.fen, item.played]);
   const shownLines = useResultLines(phase === 'done' && lines.length ? item.fen : null, lines, { me: item.color, compare: true, nodes: RATE_NODES, testid: 'own-move-line' });
   const onMine = !!shownLines.selected?.who.includes('you') && shownLines.step === 1;
@@ -269,6 +282,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   const bad = result?.verdict === 'mistake' || result?.verdict === 'blunder';
   // The clock, while the move is being chosen: a bar along the board's lower edge and the
   // time beside the question, red for the last seconds and once the flag has fallen.
+  useFlaggable(phase === 'done' ? { id: item.id, kind: 'own-move' } : null);
   const clocked = pace > 0 && !retrying && phase === 'move';
   const clockState = left === 0 ? 'up' : left <= lowAt(pace) ? 'low' : 'running';
   return (
@@ -327,11 +341,13 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   );
 }
 
-/** "Your move" on its own: positions not yet tried, newest games first, each chosen once and kept. */
-export function OwnMoveRun({ items, done, met, pace, onFinished }: {
-  items: MoveItem[] | null; done: Set<string>;
-  /** Positions already met in any exercise ("<game>:<ply>"): not asked again as new ones. */
-  met?: Set<string>;
+/**
+ * "Your move" on its own: first the positions that were shown and left without an answer
+ * (`owed`), then those not yet met in any exercise (`fresh`), newest games first, each chosen
+ * once and kept. See movesToAsk in src/schedule/position.ts.
+ */
+export function OwnMoveRun({ items, owed, fresh, pace, onFinished }: {
+  items: MoveItem[] | null; owed: MoveItem[]; fresh: MoveItem[];
   /** A clock for every position, for trying one out; normally null. */
   pace: number | null; onFinished: () => void;
 }) {
@@ -341,7 +357,8 @@ export function OwnMoveRun({ items, done, met, pace, onFinished }: {
   if (!items) return <p className="muted">Loading your games</p>;
   if (latch.current?.n !== n) {
     // Newest game first; within a game, in the order the positions arose.
-    const next = items.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.gameId === b.gameId ? a.ply - b.ply : a.gameId < b.gameId ? -1 : 1)).find((m) => !done.has(m.id) && !shown.current.has(m.id) && !met?.has(`${m.gameId}:${m.ply}`));
+    const newestFirst = (xs: MoveItem[]) => xs.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.gameId === b.gameId ? a.ply - b.ply : a.gameId < b.gameId ? -1 : 1));
+    const next = [...newestFirst(owed), ...newestFirst(fresh)].find((m) => !shown.current.has(m.id));
     if (next) {
       latch.current = { n, item: next, pace: pace ?? (isTimed(next.id) ? TIMED_SECONDS : 0) };
       shown.current.add(next.id);

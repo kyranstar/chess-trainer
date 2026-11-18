@@ -262,6 +262,8 @@ test('your move: play your own move in a position from your game and see exactly
   // Before the answer: whose move it is and nothing about what the position is or where it is from (ADR-054).
   await expect(drill).not.toContainText(/Your game|Play your own move|game,/);
   await expect(page.getByTestId('about')).toHaveCount(0);
+  // Nothing to flag before there is an answer (ADR-059).
+  await expect(page.getByTestId('flag-item')).toHaveCount(0);
   const asked = await drill.locator('.board').getAttribute('data-fen');
   // Move 10 of the game. Taking the pawn on e5 puts the knight where the d6 pawn takes it.
   await playMove(page, 'f3e5');
@@ -277,6 +279,36 @@ test('your move: play your own move in a position from your game and see exactly
   expect(['mistake', 'blunder']).toContain(await drill.getAttribute('data-verdict'));
   await expect(page.getByTestId('own-move-grade')).toHaveText(/^(Mistake|Blunder)\.$/);
   await expect(page.getByTestId('own-move-verdict')).not.toContainText(/Best was|points better|In the game you played|can be taken|Recorded as|Ratings are|built-in engine/);
+  // Answered, it can be flagged for a later look (ADR-059): one tap in the bar, which keeps
+  // the position and what the screen said; a second tap takes the flag off.
+  const flags = (() => page.evaluate(() => new Promise<{ key: string; value: { id: string; kind: string; fen: string; said: string; state: Record<string, string>; app: string } }[]>((resolve, reject) => {
+    const open = indexedDB.open('chess-trainer');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const all = open.result.transaction('meta').objectStore('meta').getAll();
+      all.onsuccess = () => { open.result.close(); resolve((all.result as { key: string; value: never }[]).filter((r) => r.key.startsWith('flag:'))); };
+    };
+  })));
+  const flag = page.getByTestId('flag-item');
+  await expect(flag).toHaveAttribute('aria-pressed', 'false');
+  expect(await flags()).toEqual([]);
+  const boardBefore = await drill.locator('.board').boundingBox();
+  await flag.click();
+  await expect(flag).toHaveAttribute('aria-pressed', 'true');
+  await expect(flag).toHaveAttribute('aria-label', /^Flagged/);
+  expect(await drill.locator('.board').boundingBox()).toEqual(boardBefore);
+  const kept = await flags();
+  expect(kept).toHaveLength(1);
+  expect(kept[0]!.key).toMatch(/^flag:move:[^:]+:18$/);
+  expect(kept[0]!.value).toMatchObject({ kind: 'own-move', fen: asked, state: { phase: 'done' } });
+  expect(kept[0]!.value.said).toMatch(/(Mistake|Blunder)\./);
+  expect(kept[0]!.value.said).toContain('Nxe5');
+  expect(['mistake', 'blunder']).toContain(kept[0]!.value.state.verdict);
+  await flag.click();
+  await expect(flag).toHaveAttribute('aria-pressed', 'false');
+  expect(await flags()).toEqual([]);
+  await flag.click();
+  await expect(flag).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('line-you')).toContainText('Nxe5');
   const inGame = page.locator('[data-testid^="line-"][data-who~="game"]');
   await expect(inGame).toContainText('Nbd2');
@@ -421,6 +453,14 @@ test('your move: play your own move in a position from your game and see exactly
   // The next position: a quiet move, and no reply named.
   await page.getByTestId('own-move-next').click();
   await expect(drill).toHaveAttribute('data-phase', 'move');
+  // The flag is the last position's: there is none here until this one is answered, and
+  // going back to the last one with the control in the bar shows it flagged.
+  await expect(flag).toHaveCount(0);
+  await page.getByTestId('last-item').click();
+  await expect(flag).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('last-item').click();
+  await expect(flag).toHaveCount(0);
+  expect(await flags()).toHaveLength(1);
   const fen = (await drill.getAttribute('data-fen'))!;
   expect(fen).not.toContain('2np1n1p'); // a different position from the first
   await playMove(page, 'a2a3');
@@ -600,6 +640,11 @@ test('your move on the clock: it is announced over a covered board and starts wh
   await page.getByTestId('own-move-no-reply').click();
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
   await expect(page.getByTestId('own-move-grade')).not.toContainText('Flag fell');
+  // A move rated good is not set beside a "best" one: the engine's choice is "also good" (ADR-060).
+  const rated = (await drill.getAttribute('data-verdict'))!;
+  if (rated === 'good') await expect(page.getByTestId('line-best')).toContainText('Also good');
+  if (['inaccuracy', 'mistake', 'blunder'].includes(rated)) await expect(page.getByTestId('line-best')).toContainText('Best');
+  await expect(page.getByTestId('line-best')).not.toContainText(rated === 'good' ? 'Best' : 'Also good');
   // A sound move in time starts the streak; anything else says nothing of one.
   const sound = ['best', 'good', 'inaccuracy'].includes((await drill.getAttribute('data-verdict'))!);
   if (sound) await expect(page.getByTestId('own-move-run')).toHaveText(' Streak 1.');
@@ -627,7 +672,7 @@ test('your move on the clock: it is announced over a covered board and starts wh
   await expect(page.getByTestId('ownmove-time')).toHaveCount(0);
 });
 
-test('your move: a position left by a reload never comes back as a first look, and an answer given after the app left the screen is kept out of the timed comparison', async ({ page }) => {
+test('your move: a position left by a reload is asked again, not as a first look, and an answer given after the app left the screen is kept out of the timed comparison', async ({ page }) => {
   const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',
     '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', '[EndDate "2026.11.08"]', '[EndTime "10:20:00"]', '[Link "https://www.chess.com/game/live/900000779"]', '',
     '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d3 d6 6. O-O O-O 7. Re1 a6 8. Bb3 Ba7 9. h3 h6 10. Nbd2 Re8 11. Nf1 Be6 12. Bc2 d5 13. exd5 Bxd5 14. Ng3 Qd7 15. Nh4 Rad8 16. Nhf5 Kh8 17. Qf3 Ne7 18. Nxe7 Qxe7 1-0'].join('\n');
@@ -653,6 +698,14 @@ test('your move: a position left by a reload never comes back as a first look, a
   await page.waitForTimeout(1600);
   await page.reload();
   await expect(drill).toHaveAttribute('data-phase', 'move');
+  // It is owed, not used up (ADR-060): the same position is the first one asked. Its answer
+  // is rated like any other, but it is not a first look.
+  expect(await drill.getAttribute('data-fen')).toBe(first);
+  await playMove(page, 'a2a3');
+  await page.getByTestId('own-move-no-reply').click();
+  await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  await page.getByTestId('own-move-next').click();
+  await expect(drill).toHaveAttribute('data-phase', 'move');
   expect(await drill.getAttribute('data-fen')).not.toBe(first);
 
   // The app goes to the background and comes back while the move is being chosen.
@@ -672,7 +725,8 @@ test('your move: a position left by a reload never comes back as a first look, a
   await expect(pace).toContainText('seconds on the clock: 0 of 0 first looks passed');
   await expect(pace).toContainText('With no clock: 0 of 0 first looks passed');
   await expect(pace).toContainText('1 answer is left out of this comparison');
-  await expect(page.getByTestId('ownmove-clean')).toContainText(/of 1/);
+  await expect(page.getByTestId('ownmove-shown-before')).toHaveText(' 1 more is left out because the position had been shown once before it was answered.');
+  await expect(page.getByTestId('ownmove-clean')).toContainText(/of 2/);
 });
 
 

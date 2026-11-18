@@ -33,7 +33,7 @@ type Row = Record<string, unknown>;
  * Device bookkeeping (device id, download caches, last-sync and last-backup times) is not.
  */
 const SETTING_KEYS = ['openings.band', 'openings.side', 'chesscom.username'];
-const SETTING_PREFIXES = ['lessonProgress:'];
+const SETTING_PREFIXES = ['lessonProgress:', 'flag:'];
 export function isPortableSetting(key: string): boolean {
   return SETTING_KEYS.includes(key) || SETTING_PREFIXES.some((p) => key.startsWith(p));
 }
