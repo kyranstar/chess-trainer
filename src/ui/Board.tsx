@@ -3,7 +3,7 @@ import type { Api } from '@lichess-org/chessground/api';
 import type { Config } from '@lichess-org/chessground/config';
 import type { DrawShape } from '@lichess-org/chessground/draw';
 import type { Key } from '@lichess-org/chessground/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { Who } from '../chess/line';
 import { type Color, isCheck, legalDests, needsPromotion, positionFromFen, type Uci } from '../chess/rules';
 
@@ -43,6 +43,10 @@ export interface BoardProps {
   label?: string;
   /** A brief signal on the board itself: `right:<n>` or `wrong:<n>`; a new value plays it again. */
   flash?: string | null;
+  /** Something laid over the whole board, hiding the position (a timed position being announced). */
+  cover?: ReactNode;
+  /** Something along the board's lower edge, at the board's width, that takes no room of its own (the move clock's bar). */
+  edge?: ReactNode;
 }
 
 /** Asks the board on screen to turn round (sent by the run bar). */
@@ -55,7 +59,7 @@ const PROMOTION: { role: 'q' | 'r' | 'b' | 'n'; name: string; glyph: string }[] 
   { role: 'n', name: 'Knight', glyph: '♞' },
 ];
 
-export function Board({ fen, orientation, movable, lastMove, marks, arrow, arrows, rings, badge, line, onMove, resetKey = 0, label, flash }: BoardProps) {
+export function Board({ fen, orientation, movable, lastMove, marks, arrow, arrows, rings, badge, line, onMove, resetKey = 0, label, flash, cover, edge }: BoardProps) {
   const el = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const api = useRef<Api | null>(null);
@@ -158,6 +162,8 @@ export function Board({ fen, orientation, movable, lastMove, marks, arrow, arrow
           <button className="quiet" data-testid="promo-cancel" onClick={() => { setPromo(null); setRedraw((n) => n + 1); }}>Cancel</button>
         </div>
       )}
+      {cover}
+      {edge}
       <button className="flip" onClick={() => setFlipped((f) => !f)} aria-label="Flip board">Flip</button>
     </div>
   );

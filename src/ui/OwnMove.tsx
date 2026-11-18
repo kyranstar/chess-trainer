@@ -8,12 +8,13 @@ import { lineAt, mergeLines } from '../chess/line';
 import { bestLineFor } from '../engine/interactive';
 import { DEVICE_NODES } from '../games/analyse';
 import { freeTag, GRADE_MARK, gradeHeadline, gradeMove, isPunishingReply, type MoveGrade, type MoveItem, movePicture, type MovePicture, type MoveRating, outcomeOfGrade, reallyLoose } from '../games/ownmove';
-import { isTimed, TIMED_SECONDS } from '../schedule/pace';
+import { ANNOUNCE_MS, CLOCK_SERIES, clockFace, clockRun, isTimed, lowAt, runStep, TIMED_SECONDS } from '../schedule/pace';
 import { Board } from './Board';
 import { useOtherMovesAhead, useResultLines } from './Lines';
 import { Ask, gameRef, KeepLast, ResultTitle, useItem } from './Stage';
 
-type Phase = 'move' | 'predict' | 'checking' | 'done';
+/** 'ready': a timed position, still covered while it is announced; the clock has not started. */
+type Phase = 'ready' | 'move' | 'predict' | 'checking' | 'done';
 /** Both searches behind a rating use the same budget as the game analysis on this device. */
 const RATE_NODES = DEVICE_NODES;
 const MIN_SHOWN_MS = 1000;
@@ -32,8 +33,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   const db = useDb();
   useFocusMode();
   const stage = useItem(onDone);
-  const [phase, setPhase] = useState<Phase>('move');
-  const phaseRef = useRef<Phase>('move');
+  const [phase, setPhase] = useState<Phase>(pace > 0 ? 'ready' : 'move');
+  const phaseRef = useRef<Phase>(phase);
   phaseRef.current = phase;
   const [fen, setFen] = useState(item.fen);
   const [lastMove, setLastMove] = useState<string | null>(null);
@@ -54,18 +55,20 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   useEffect(() => {
     visibleMs.current = 0;
     lastTick.current = performance.now();
-    if (phase !== 'move' && phase !== 'predict') return;
+    if (phase !== 'ready' && phase !== 'move' && phase !== 'predict') return;
     const t = setInterval(() => {
       const now = performance.now();
       // Time spent looking back at the last position is not time spent on this one.
       if (document.visibilityState === 'visible' && activeRef.current) visibleMs.current += now - lastTick.current;
       lastTick.current = now;
+      // The announcement over, the board appears and the clock starts from nought.
+      if (phase === 'ready' && visibleMs.current >= ANNOUNCE_MS) setPhase('move');
       if (phase === 'move' && pace > 0 && !retrying) {
         const remaining = Math.max(0, pace - visibleMs.current / 1000);
         if (remaining === 0) timedOut.current = true;
         setLeft(remaining);
       }
-    }, 250);
+    }, phase === 'ready' ? 50 : 250);
     return () => clearInterval(t);
   }, [pace, phase, retrying]);
   const elapsedInPhase = () => Math.round(visibleMs.current + (document.visibilityState === 'visible' ? performance.now() - lastTick.current : 0));
@@ -100,7 +103,10 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   // is still on screen (not on leaving: a reload or a closed app never gets that far), so the
   // position can never come back later as a first look. The answer replaces this row.
   const exposure = useRef<Promise<Attempt> | null>(null);
+  // While a timed position is being announced it is covered: nothing has been shown yet.
+  const covered = phase === 'ready';
   useEffect(() => {
+    if (covered) return;
     const t = setTimeout(() => {
       if (recorded.current || exposure.current) return;
       exposure.current = recordAttempt(db, {
@@ -110,7 +116,24 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     }, MIN_SHOWN_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id]);
+  }, [item.id, covered]);
+  // What the flag costs (see clockRun): the run of timed moves that were sound and in time,
+  // as it stood before this position. Said on the announcement, and after the answer.
+  const runBefore = useRef(0);
+  const [run, setRun] = useState<number | null>(null);
+  const [runNote, setRunNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (pace <= 0) return;
+    let live = true;
+    void db.attempts.where('conceptId').equals('safety.threat-scan').toArray().then((xs) => {
+      if (!live || recorded.current) return;
+      runBefore.current = clockRun(xs);
+      setRun(runBefore.current);
+    });
+    return () => {
+      live = false;
+    };
+  }, [db, pace, item.id]);
   // Hiding the page stops the clock but not the thinking: such an answer is practice and is
   // kept out of the timed comparison.
   const interrupted = useRef(false);
@@ -161,6 +184,8 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     setPhase('done');
     if (recorded.current) return;
     recorded.current = true;
+    const step = pace > 0 && !interrupted.current ? runStep(verdict, timedOut.current) : 'neither';
+    setRunNote(step === 'adds' ? `Streak ${runBefore.current + 1}` : step === 'ends' && runBefore.current > 0 ? `Streak of ${runBefore.current} ended` : null);
     const what = f.mateInOne ? 'mate' : f.loose.length ? 'loose' : 'none';
     const sawIt = !reply ? 'no-reply-named' : isPunishingReply(f, reply.uci) ? 'named-it' : 'named-another';
     // The answer takes the place of the "shown" row written while the position was on screen.
@@ -168,7 +193,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
     const a = await recordAttempt(db, {
       sessionId, context, exerciseId: item.id, exerciseKind: 'own-move', contentVersion: 'own-move-v3', conceptId: 'safety.threat-scan',
       themes: [
-        'own-move', verdict, what, sawIt, `pace:${pace}`,
+        'own-move', verdict, what, sawIt, `pace:${pace}`, `clock:${CLOCK_SERIES}`,
         ...(timedOut.current ? ['late'] : []),
         ...(interrupted.current ? ['interrupted'] : []),
         ...(replyMs.current !== null ? [`reply-ms:${replyMs.current}`] : []),
@@ -242,6 +267,10 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
   const source = gameRef(item.date, item.ply);
   const good = result?.verdict === 'best' || result?.verdict === 'good';
   const bad = result?.verdict === 'mistake' || result?.verdict === 'blunder';
+  // The clock, while the move is being chosen: a bar along the board's lower edge and the
+  // time beside the question, red for the last seconds and once the flag has fallen.
+  const clocked = pace > 0 && !retrying && phase === 'move';
+  const clockState = left === 0 ? 'up' : left <= lowAt(pace) ? 'low' : 'running';
   return (
     <section className="puzzle" data-testid="own-move" data-phase={phase} data-verdict={result?.verdict ?? ''} data-fen={fen} data-loose={loose.map((l) => l.square).join(' ')}>
       <Board
@@ -252,16 +281,22 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
         rings={onMine ? loose.map((l) => ({ square: l.square, from: l.by.from })) : []}
         badge={onMine && mark && mine ? { square: mine.uci.slice(2, 4), ...mark } : null}
         flash={phase === 'done' && result ? `${good ? 'right' : bad ? 'wrong' : 'none'}:${item.id}:${retrying}` : null}
+        cover={phase === 'ready' ? (
+          <div className="clock-splash" data-testid="own-move-splash" role="status">
+            <span className="clock-splash-word">On the clock</span>
+            <span className="clock-splash-time">{clockFace(pace)}</span>
+            <span className="clock-splash-run" data-testid="own-move-splash-run">{run ? `Streak ${run}` : '\u00A0'}</span>
+          </div>
+        ) : null}
+        edge={clocked ? <span className={`move-clock-bar is-${clockState}`} aria-hidden><i style={{ width: `${(100 * left) / pace}%` }} /></span> : null}
       />
       <div className="say" aria-live="polite">
+        {phase === 'ready' && <Ask title="On the clock" />}
         {phase === 'move' && (
-          <Ask title={`${me} to move`} meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : undefined}>
-            {pace > 0 && !retrying && (
-              <p className={`ask-meta move-clock${left === 0 ? ' is-up' : ''}`} data-testid="own-move-clock" data-left={Math.ceil(left)} role="timer">
-                {left > 0 ? `${Math.ceil(left)} s for this move` : `Over ${pace} s: take your time, it is noted as late.`}
-              </p>
-            )}
-          </Ask>
+          <Ask
+            title={clocked ? <>{me} to move<span className={`move-clock is-${clockState}`} data-testid="own-move-clock" data-left={Math.ceil(left)} data-state={clockState} role="timer" aria-label="Time left for this move">{clockFace(left)}</span></> : `${me} to move`}
+            meta={retrying ? <span data-testid="own-move-retry-note">Second try: not recorded.</span> : clocked && left === 0 ? <span className="move-clock-fell" data-testid="own-move-flag">Flag fell. Take your time: the move is still rated.</span> : undefined}
+          />
         )}
         {(phase === 'predict' || phase === 'checking') && (
           <Ask title={`${them}’s reply to ${mine?.san}?`} meta={phase === 'checking' ? 'Checking your move' : 'Play the reply you had to reckon with.'} />
@@ -271,7 +306,7 @@ export function OwnMoveDrill({ item, sessionId, context, pace = 0, onRecorded, o
             <p className="result-head">
               {mark && <span className={`grade-mark is-${mark.tone}`} aria-hidden>{mark.text}</span>}
               {/* Where the position is from is said only now, under the rating. */}
-              <ResultTitle about={`${source}.`}><strong data-testid="own-move-grade">{gradeHeadline({ grade: result.verdict, late: timedOut.current ? pace : null })}</strong></ResultTitle>
+              <ResultTitle about={<>{source}.{runNote && <span data-testid="own-move-run"> {runNote}.</span>}</>}><strong data-testid="own-move-grade">{gradeHeadline({ grade: result.verdict, late: timedOut.current ? pace : null })}</strong></ResultTitle>
               {!good && <button className="result-side" data-testid="own-move-retry" disabled={!armed} onClick={retry}>Another move</button>}
             </p>
             {shownLines.chips}

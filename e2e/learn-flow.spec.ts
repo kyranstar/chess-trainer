@@ -77,9 +77,21 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await expect(page.getByTestId('line-you')).toBeVisible();
   await expect(page.getByTestId('line-best')).toContainText('Solution');
   await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', start!);
+  // A solution that was shown is played by hand before the run goes on (ADR-058): the main
+  // button is "Play it yourself" and there is no "Next". Looking at the solution a second
+  // time during that go does not buy a way round it either.
+  await expect(page.getByTestId('next')).toHaveCount(0);
+  await expect(page.getByTestId('replay')).toHaveText('Play it yourself');
+  await page.getByTestId('replay').click();
+  await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
+  await expect(page.getByTestId('next')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show solution' }).click();
+  await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  await expect(page.getByTestId('next')).toHaveCount(0);
   await page.getByTestId('replay').click();
   await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
   await solvePuzzle(page);
+  await expect(page.getByTestId('next')).toBeVisible();
   await expect(page.getByTestId('replay-note')).toHaveText('The first attempt stays a miss.');
   await expect(missed).toHaveAttribute('data-outcome', 'fail');
 
@@ -316,6 +328,10 @@ test('a check interrupted by a reload goes on with the answers already given', a
   for (let i = 0; i < 2; i++) {
     await failPuzzle(page);
     await page.getByRole('button', { name: 'Show solution' }).click();
+    // In a check too the shown solution is played by hand; that go is not recorded, so the miss stands.
+    await expect(page.getByTestId('next')).toHaveCount(0);
+    await page.getByTestId('replay').click();
+    await solvePuzzle(page);
     await page.getByTestId('next').click();
   }
   await expect(page.getByTestId('puzzle')).toHaveAttribute('data-phase', 'solving');

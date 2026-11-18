@@ -331,9 +331,33 @@ textarea, input[type='number'], input[type='url'], input[type='text'] {
 .lesson-board { position: sticky; top: 0; z-index: 3; background: var(--paper); padding: 0.25rem 0 0.4rem; }
 .lesson-board .board-wrap { width: min(100%, 44dvh); margin-left: auto; margin-right: auto; }
 
-/* "Your move" on the clock: plain, and red only once the time is up. */
-.move-clock { font-variant-numeric: tabular-nums; font-weight: 600; }
-.move-clock.is-up { color: var(--flag); }
+/*
+ * "Your move" on the clock (ADR-057). A timed position opens covered and announced; then the
+ * clock runs in sight: a bar along the board's lower edge and the time beside the question,
+ * red for the last seconds and once the flag has fallen. Neither moves the board.
+ */
+.clock-splash { position: absolute; inset: 0; z-index: 9; border-radius: 3px; overflow: hidden; display: grid; place-content: center; justify-items: center; gap: 0.35rem; text-align: center; background: #1f3b2c; color: #f1eeda; animation: splash-lift 180ms ease-in 1120ms both; }
+.clock-splash::before { content: ''; position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1; border-radius: 50%; border: 3px solid #e0a526; transform: translate(-50%, -50%) scale(2.4); opacity: 0; animation: splash-ring 620ms ease-out 140ms backwards; }
+.clock-splash-word { position: relative; padding: 0.3rem 0.9rem 0.25rem 1.15rem; background: #b0362d; color: #fff; font-weight: 800; font-size: clamp(0.95rem, 4.6vw, 1.25rem); letter-spacing: 0.24em; text-transform: uppercase; clip-path: polygon(0 0, 100% 0, calc(100% - 0.7rem) 50%, 100% 100%, 0 100%); transform-origin: left center; animation: splash-flag 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
+.clock-splash-time { position: relative; font-size: min(31vw, 8rem); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; animation: splash-slam 380ms cubic-bezier(0.2, 1.5, 0.4, 1) 120ms backwards; }
+.clock-splash-run { position: relative; min-height: 1.4rem; font-weight: 700; font-size: 1.05rem; color: #e0a526; animation: splash-run 240ms ease-out 380ms backwards; }
+@keyframes splash-flag { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes splash-slam { from { transform: scale(2.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes splash-ring { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0.9; } to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; } }
+@keyframes splash-run { from { transform: translateY(0.4rem); opacity: 0; } to { transform: none; opacity: 1; } }
+/* The curtain goes up as the announcement ends; the clock starts when it is gone. */
+@keyframes splash-lift { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 100% 0); } }
+.move-clock-bar { position: absolute; left: 0; right: 0; top: calc(100% + 1px); height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+.move-clock-bar i { display: block; height: 100%; border-radius: 3px; background: var(--felt); transition: width 250ms linear; }
+.move-clock-bar.is-low i { background: var(--flag); }
+.move-clock-bar.is-up { background: var(--flag); animation: clock-fell 420ms ease-in-out; }
+.ask:has(.move-clock) { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.move-clock { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.6rem; line-height: 1; }
+.move-clock.is-low { color: var(--flag); animation: clock-pulse 1s ease-in-out infinite; }
+.move-clock.is-up { color: var(--flag); animation: clock-fell 420ms ease-in-out; }
+.move-clock-fell { color: var(--flag); font-weight: 600; }
+@keyframes clock-pulse { 0%, 100% { transform: none; } 12% { transform: scale(1.14); } 30% { transform: none; } }
+@keyframes clock-fell { 0%, 100% { transform: none; } 20% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 80% { transform: translateX(-2px); } }
 
 /*
  * The result as moves on one board. Chips: you, game, best, always in that order and those

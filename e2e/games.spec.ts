@@ -99,6 +99,21 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(page.getByTestId('line-consequence')).toHaveText('Checkmate.');
   // Chips, moves and the note all fit above the pinned button on a phone.
   if (page.viewportSize()!.width < 500) expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  // The best move has been shown, so it is played by hand before the run goes on (ADR-058):
+  // the main button is "Try again" and there is no "Next". Asking to be shown the move
+  // instead of playing it leaves the same debt, and so does playing the worse move again.
+  await expect(page.getByTestId('own-next')).toHaveCount(0);
+  await expect(page.getByTestId('own-retry')).toHaveText('Try again');
+  await page.getByTestId('own-retry').click();
+  await expect(page.getByTestId('own-retry-note')).toBeVisible();
+  await page.getByRole('button', { name: 'Show the move' }).click();
+  await expect(page.getByTestId('own-verdict')).toContainText('Shown.');
+  await expect(page.getByTestId('own-next')).toHaveCount(0);
+  await expect(page.getByTestId('own-retry')).toHaveText('Play it yourself');
+  await page.getByTestId('own-retry').click();
+  await playMove(page, 'h5e5');
+  await expect(page.getByTestId('own-verdict')).toContainText('Missed.', { timeout: 30_000 });
+  await expect(page.getByTestId('own-next')).toHaveCount(0);
   // A second go at once is practice: it is not recorded (the review count below is still one).
   await page.getByTestId('own-retry').click();
   await expect(page.getByTestId('own-retry-note')).toBeVisible();
@@ -502,7 +517,7 @@ test('a "Your move" position missed today is asked again in tomorrow\'s review; 
   await expect(page.getByTestId('practice-run')).not.toContainText('no longer in the installed content pack');
 });
 
-test('your move on the clock: running over never forces a move or changes its rating, lateness is noted beside it, and Progress counts timed moves apart', async ({ page }) => {
+test('your move on the clock: it is announced over a covered board and starts when the board appears; running over never forces a move or changes its rating; the flag ends the streak; Progress counts timed moves apart', async ({ page }) => {
   // Black has a bishop that can already be taken, and a knight he can take for nothing.
   const pgn = ['[Event "Live Chess"]', '[Site "Chess.com"]', '[Date "2026.11.08"]', '[White "fixture_learner"]', '[Black "opponent_long"]', '[Result "1-0"]', '[UTCDate "2026.11.08"]', '[UTCTime "10:00:00"]',
     '[WhiteElo "455"]', '[BlackElo "470"]', '[TimeControl "600"]', '[Termination "fixture_learner won by resignation"]', '[EndDate "2026.11.08"]', '[EndTime "10:20:00"]', '[Link "https://www.chess.com/game/live/900000778"]', '',
@@ -523,18 +538,60 @@ test('your move on the clock: running over never forces a move or changes its ra
   await expect(page.getByTestId('games-count')).toHaveText('1 games on this device, 1 analysed.', { timeout: 120_000 });
 
   // A two-second clock on every position, chosen by hand here; normally one position in three gets 30 seconds.
+  // The announcement lasts a little over a second and the red part of two seconds less than
+  // one: too short to catch by asking, so everything the exercise shows is noted as it changes.
+  type Seen = { phase: string; splash: string | null; covers: boolean; movable: string; clock: string | null; state: string | null; board: string };
+  await page.evaluate(() => {
+    const seen: Seen[] = ((window as unknown as { __seen: Seen[] }).__seen = []);
+    const note = () => {
+      const drill = document.querySelector('[data-testid=own-move]');
+      const board = drill?.querySelector('.board');
+      if (!drill || !board) return;
+      const splash = drill.querySelector('[data-testid=own-move-splash]');
+      const clock = drill.querySelector('[data-testid=own-move-clock]');
+      const b = board.getBoundingClientRect();
+      const c = splash?.getBoundingClientRect();
+      const now: Seen = {
+        phase: drill.getAttribute('data-phase')!, splash: splash?.textContent ?? null, covers: !!c && Math.abs(c.left - b.left) < 1 && Math.abs(c.top - b.top) < 1 && Math.abs(c.width - b.width) < 1 && Math.abs(c.height - b.height) < 1,
+        movable: board.getAttribute('data-movable')!, clock: clock ? `${clock.textContent} ${clock.getAttribute('data-left')}` : null, state: clock?.getAttribute('data-state') ?? null, board: [b.left, b.top, b.width, b.height].join(' '),
+      };
+      if (JSON.stringify(seen[seen.length - 1]) !== JSON.stringify(now)) seen.push(now);
+    };
+    new MutationObserver(note).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+  });
   await page.goto('./#/practice/run?mode=move&pace=2');
   const drill = page.getByTestId('own-move');
-  await expect(page.getByTestId('own-move-clock')).toContainText('s for this move');
-  await expect(page.getByTestId('own-move-clock')).toContainText('Over 2 s', { timeout: 10_000 });
+  const clock = page.getByTestId('own-move-clock');
+  await expect(clock).toHaveAttribute('data-state', 'up', { timeout: 20_000 });
+  await expect(clock).toHaveText('0:00');
+  await expect(page.getByTestId('own-move-flag')).toHaveText('Flag fell. Take your time: the move is still rated.');
+  const seen = await page.evaluate(() => (window as unknown as { __seen: Seen[] }).__seen);
+  // Announced first (ADR-057): the board is covered and cannot be moved on, and there is no clock yet.
+  const announced = seen.filter((x) => x.phase === 'ready');
+  expect(announced.length).toBeGreaterThan(0);
+  for (const x of announced) {
+    expect(x.splash).toContain('On the clock0:02');
+    expect(x).toMatchObject({ covers: true, movable: 'none', clock: null });
+  }
+  // The board appears, and only then does the clock start: from the whole allowance.
+  const choosing = seen.filter((x) => x.phase === 'move');
+  expect(seen.map((x) => x.phase).join(' ')).toMatch(/^(ready )+(move ?)+$/);
+  expect(choosing[0]).toMatchObject({ splash: null, movable: 'white', clock: '0:02 2', state: 'running' });
+  // Red for the last part of the allowance, and when it is gone the flag has fallen.
+  expect(choosing.map((x) => x.state).filter((x, i, all) => x !== all[i - 1])).toEqual(['running', 'low', 'up']);
+  expect(choosing[choosing.length - 1]).toMatchObject({ clock: '0:00 0', movable: 'white' });
+  // The announcement and the clock take no room: the board never moved.
+  expect(new Set(seen.map((x) => x.board)).size).toBe(1);
   // The position stays; the move is still played, and the facts are still given.
   await expect(drill).toHaveAttribute('data-phase', 'move');
   await playMove(page, 'a2a3');
   await page.getByTestId('own-move-no-reply').click();
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
-  await expect(page.getByTestId('own-move-grade')).toContainText('Late: over 2 s.');
-  // Late is beside the rating, not instead of it: the move still has one.
+  await expect(page.getByTestId('own-move-grade')).toContainText('Flag fell at 2 s.');
+  // The fallen flag is beside the rating, not instead of it: the move still has one.
   await expect(page.getByTestId('own-move-grade')).toContainText(/Best|Good|inaccuracy|mistake|blunder/i);
+  // Nothing was running, so nothing is said to have ended.
+  await expect(page.getByTestId('own-move-run')).toHaveCount(0);
 
   // Next position, in time this time (move 14 of the game: White to move).
   await page.getByTestId('own-move-next').click();
@@ -542,6 +599,20 @@ test('your move on the clock: running over never forces a move or changes its ra
   await playMove(page, 'a2a3');
   await page.getByTestId('own-move-no-reply').click();
   await expect(drill).toHaveAttribute('data-phase', 'done', { timeout: 30_000 });
+  await expect(page.getByTestId('own-move-grade')).not.toContainText('Flag fell');
+  // A sound move in time starts the streak; anything else says nothing of one.
+  const sound = ['best', 'good', 'inaccuracy'].includes((await drill.getAttribute('data-verdict'))!);
+  if (sound) await expect(page.getByTestId('own-move-run')).toHaveText(' Streak 1.');
+  else await expect(page.getByTestId('own-move-run')).toHaveCount(0);
+  // Both answers belong to the series of the announced clock.
+  expect(await page.evaluate(() => new Promise<string[][]>((resolve, reject) => {
+    const open = indexedDB.open('chess-trainer');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const all = open.result.transaction('attempts').objectStore('attempts').getAll();
+      all.onsuccess = () => { open.result.close(); resolve((all.result as { exerciseKind: string; ts: number; themes: string[] }[]).filter((a) => a.exerciseKind === 'own-move').sort((x, y) => x.ts - y.ts).map((a) => a.themes.filter((t) => t === 'clock:2' || t === 'late' || t.startsWith('pace:')))); };
+    };
+  }))).toEqual([['pace:2', 'clock:2', 'late'], ['pace:2', 'clock:2']]);
 
   await page.goto('./#/progress');
   const card = page.getByTestId('card-ownmove');
@@ -550,6 +621,8 @@ test('your move on the clock: running over never forces a move or changes its ra
   // Both were played on the clock; the untimed count stays empty and is shown beside it.
   await expect(page.getByTestId('ownmove-pace')).toContainText('seconds on the clock: ');
   await expect(page.getByTestId('ownmove-pace')).toContainText('With no clock: 0 of 0 first looks passed');
+  await expect(page.getByTestId('ownmove-pace')).toContainText('Counted from 17 November, when the clock began to be announced');
+  await expect(page.getByTestId('ownmove-pace-before')).toHaveCount(0);
   // This game was fetched without move clocks, so nothing is said about time in real games.
   await expect(page.getByTestId('ownmove-time')).toHaveCount(0);
 });

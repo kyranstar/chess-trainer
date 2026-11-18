@@ -15,7 +15,7 @@ import { GameCards, Headline, useGames } from './Games';
 import { bandLabel, useOpeningBook, useOpeningPrefs, useRepertoire } from './Openings';
 import { PuzzlePlayer } from './PuzzlePlayer';
 import { timeUse } from '../games/metrics';
-import { conditionDifference, ownMoveSummary, TIMED_SECONDS } from '../schedule/pace';
+import { CLOCK_SERIES_FROM, conditionDifference, ownMoveSummary, TIMED_SECONDS } from '../schedule/pace';
 
 const DAY = 86_400_000;
 const PERIODS = [
@@ -400,6 +400,8 @@ function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: At
   const rated = passed + s.grades.mistake + s.grades.blunder;
   const answered = rated + s.grades.unrated;
   const diff = conditionDifference(s.timed, s.untimed);
+  const count = (c: typeof s.timed) => c.passed + c.failed + c.unrated;
+  const earlier = count(s.before.timed) + count(s.before.untimed);
   const points = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(Math.round(100 * x))}`;
   const rapid = games ? timeUse(games, 'rapid', { sinceDate }) : null;
   const iv = rated ? wilson(passed, rated) : null;
@@ -426,6 +428,8 @@ function OwnMoveCard({ attempts, since, sinceDate, periodLabel }: { attempts: At
             {diff && ` Timed minus untimed: ${points(diff.diff)} points, plausible range ${points(diff.lo)} to ${points(diff.hi)}; a range that includes 0 shows no difference yet.`}
             {s.interrupted > 0 && ` ${s.interrupted} ${s.interrupted === 1 ? 'answer is' : 'answers are'} left out of this comparison because the app left the screen while the move was being chosen.`}
             {' '}About one position in three gets the clock, chosen by the position and not by how you are doing.
+            {' '}Counted from {CLOCK_SERIES_FROM}, when the clock began to be announced and to run in sight.
+            {earlier > 0 && <span data-testid="ownmove-pace-before"> Before that, with the clock as a line of small text: {line(s.before.timed)} with it, {line(s.before.untimed)} without.</span>}
           </p>
         </>
       )}

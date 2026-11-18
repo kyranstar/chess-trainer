@@ -215,6 +215,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
 
   const solver = initial.solver;
   const done = phase === 'solved' || phase === 'revealed';
+  const owesReplay = phase === 'revealed' && !stage.last;
   // What is played through on the board (see ./Lines.tsx):
   //   after a wrong move, that move and the engine's answer to it, shown unasked;
   //   once the solution is shown, the solution, beside the wrong move if one was made here;
@@ -308,8 +309,6 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
           <div className="result" data-testid="verdict-revealed">
             <div className="result-head">
               <ResultTitle about={about} onAbout={() => setAboutOpen((o) => !o)} open={aboutOpen}><strong>Solution</strong></ResultTitle>
-              {/* A check is a fixed set of first tries: no second go there. */}
-              {props.context !== 'check' && <button className="result-side" data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
             </div>
             {shown.chips}
             {shown.ribbon}
@@ -339,7 +338,14 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
             {wrongSan && <button className="primary" data-testid="try-again" disabled={!armed} onClick={tryAgain}>Try again</button>}
           </>
         )}
-        {done && <button className="primary" data-testid="next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? props.nextLabel ?? 'Next'}</button>}
+        {/*
+          A solution that was shown is played by hand before the run goes on (owner, 2026-11-17;
+          ADR-058): watching it is not finding it. That second go is practice and is never
+          recorded, so it is asked for in a check too, where it cannot change the result. Only
+          the position gone back to with "Last" has no such debt: its button returns.
+        */}
+        {owesReplay && <button className="primary" data-testid="replay" disabled={!armed} onClick={replay}>Play it yourself</button>}
+        {done && !owesReplay && <button className="primary" data-testid="next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? props.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );

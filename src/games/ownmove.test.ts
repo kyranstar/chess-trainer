@@ -217,7 +217,8 @@ describe('what the practice audits found in the messages', () => {
     expect(gradeHeadline({ grade: 'best', late: null })).toBe('Best move.');
     expect(gradeHeadline({ grade: 'good', late: null })).toBe('Good.');
     expect(gradeHeadline({ grade: 'inaccuracy', late: null })).toBe('Inaccuracy.');
-    expect(gradeHeadline({ grade: 'mistake', late: 30 })).toBe('Mistake. Late: over 30 s.');
+    expect(gradeHeadline({ grade: 'mistake', late: 30 })).toBe('Mistake. Flag fell at 30 s.');
+    expect(gradeHeadline({ grade: 'good', late: 30 })).toBe('Good. Flag fell at 30 s.');
     expect(gradeHeadline({ grade: 'blunder', late: null })).toBe('Blunder.');
     expect(gradeHeadline({ grade: 'unrated', late: null })).toBe('Not rated: the engine did not answer.');
     expect(GRADE_MARK.blunder).toEqual({ text: '??', tone: 'bad' });

@@ -39,9 +39,15 @@ test('the board stays in one place through every phase of a puzzle and on to the
   expect(await boardBox(page)).toEqual(asked);
   const tryGap = await bottomGap(page, 'try-again');
 
-  // The solution, shown: still the same board, and "Next" sits where "Try again" was.
+  // The solution, shown: still the same board, and "Play it yourself" sits where "Try again"
+  // was. There is no "Next" until it has been played by hand (ADR-058).
   await page.getByRole('button', { name: 'Show solution' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  expect(await boardBox(page)).toEqual(asked);
+  await expect(page.getByTestId('next')).toHaveCount(0);
+  expect(await bottomGap(page, 'replay')).toBe(tryGap);
+  await page.getByTestId('replay').click();
+  await solvePuzzle(page);
   expect(await boardBox(page)).toEqual(asked);
   expect(await bottomGap(page, 'next')).toBe(tryGap);
 

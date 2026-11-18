@@ -328,6 +328,10 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
           : other === 'not-faulted' ? { text: 'About as good: not scored.', mark: '✓', tone: 'good' }
             : { text: 'Could not be checked: not scored.', mark: null, tone: 'mid' };
   const onMine = !!shown.selected?.who.includes('you') && shown.step === 1;
+  // The best move, once it has been shown (asked for, or after a move that was worse), is
+  // played by hand before the run goes on (owner, 2026-11-17; ADR-058). A move that was not
+  // faulted owes nothing, and neither does the position gone back to with "Last".
+  const owes = !!result && !result.ok && (result.shown || other === 'worse') && !stage.last;
 
   return (
     <section className="puzzle" data-testid="own-drill" data-expected={result ? '' : event.best} data-done={!!result}>
@@ -351,7 +355,7 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
               {head.mark && <span className={`grade-mark is-${head.tone}`} aria-hidden>{head.mark}</span>}
               {/* Where the position is from is said only now, under the verdict. */}
               <ResultTitle about={`${gameRef(game.endDate, event.ply, game.timeClass)}.`}><strong>{head.text}</strong></ResultTitle>
-              {!result.ok && <button className="result-side" data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
+              {!result.ok && !owes && <button className="result-side" data-testid="own-retry" disabled={!armed} onClick={retry}>Try again</button>}
             </p>
             {shown.chips}
             {shown.ribbon}
@@ -361,7 +365,8 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
       </div>
       <div className="actions dock">
         {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
-        {result && <button className="primary" data-testid="own-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
+        {owes && <button className="primary" data-testid="own-retry" disabled={!armed} onClick={retry}>{result?.shown ? 'Play it yourself' : 'Try again'}</button>}
+        {result && !owes && <button className="primary" data-testid="own-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
     </section>
   );

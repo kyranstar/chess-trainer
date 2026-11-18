@@ -261,7 +261,7 @@ export const GRADE_MARK: Record<MoveGrade, { text: string; tone: 'good' | 'mid' 
  * side by side and their bars, not said (owner decision, 2026-11-12).
  */
 export function gradeHeadline(x: { grade: MoveGrade; late: number | null }): string {
-  const late = x.late ? ` Late: over ${x.late} s.` : '';
+  const late = x.late ? ` Flag fell at ${x.late} s.` : '';
   if (x.grade === 'unrated') return `Not rated: the engine did not answer.${late}`;
   return `${{ best: 'Best move', good: 'Good', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder' }[x.grade]}.${late}`;
 }
