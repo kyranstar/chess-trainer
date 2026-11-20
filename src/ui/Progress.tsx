@@ -4,6 +4,7 @@ import { type Learner, useDueReviews, useNow, usePool } from '../app/store';
 import { applyUci, positionFromFen, sanOf } from '../chess/rules';
 import { CONCEPT_BY_ID, LESSON_BY_ID, THEMES } from '../content';
 import type { Attempt } from '../db/types';
+import { withdrawnControls } from '../games/sense';
 import { retention, unseenAccuracy } from '../metrics/metrics';
 import { startRun } from '../puzzles/run';
 import {
@@ -14,6 +15,7 @@ import { Board } from './Board';
 import { BarList, BlockChart, CELL_TEXT, ConceptGrid, DayBars, GameSquares, Legend, LineChart, MarkStrip, RangeRows, shortDate, type Square } from './charts';
 import { GameCards, useGames, useLiveRatings } from './Games';
 import { MORE_PAGES } from './ProgressMore';
+import { DeepSection } from './ProgressDeep';
 import { PuzzlePlayer } from './PuzzlePlayer';
 
 /** Lower bound as a local date string for date-keyed game metrics (the positions lists still take a period). */
@@ -38,7 +40,8 @@ export function useProgress(learner: Learner) {
   const now = useNow();
   const rows = useMemo(() => (games ? rapidRows(games) : []), [games]);
   const start = useMemo(() => trainingStartOf(learner.attempts), [learner.attempts]);
-  return { games, rows, start, tIdx: trainingIndex(rows, start), now };
+  const withdrawn = useMemo(() => withdrawnControls(games ?? []), [games]);
+  return { games, rows, start, tIdx: trainingIndex(rows, start), now, withdrawn };
 }
 
 /** The squares of the early-blunder strip for some rows. */
@@ -81,7 +84,7 @@ function Section({ title, meta, children }: { title: string; meta?: string; chil
 }
 
 export function ProgressHome({ learner }: { learner: Learner }) {
-  const { games, rows, tIdx, now } = useProgress(learner);
+  const { games, rows, tIdx, now, withdrawn } = useProgress(learner);
   const due = useDueReviews(learner.reviews, now);
   const dueFromGames = due.filter((r) => r.itemId.startsWith('pos:') || r.itemId.startsWith('game:')).length;
   return (
@@ -99,10 +102,15 @@ export function ProgressHome({ learner }: { learner: Learner }) {
           <HowCard rows={rows} />
         </Section>
       )}
+      {rows.length > 0 && (
+        <Section title="Deep dive" meta="Openings, tactics, strategy">
+          <DeepSection />
+        </Section>
+      )}
       <Section title="In training" meta="First looks only">
-        <SenseCard attempts={learner.attempts} kind="safe-or-not" />
+        <SenseCard attempts={learner.attempts} kind="safe-or-not" withdrawn={withdrawn} />
         <OwnMoveCard attempts={learner.attempts} />
-        <SenseCard attempts={learner.attempts} kind="chance-or-not" />
+        <SenseCard attempts={learner.attempts} kind="chance-or-not" withdrawn={withdrawn} />
         <PuzzlesCard attempts={learner.attempts} />
       </Section>
       <Section title="Learning">
@@ -280,9 +288,9 @@ export const SENSE_TEXT = {
   'chance-or-not': { id: 'spot-chances', title: 'Spotting chances', there: 'with a chance', not: 'without', ask: '“Anything to win here?”' },
 } as const;
 
-function SenseCard({ attempts, kind }: { attempts: Attempt[]; kind: 'safe-or-not' | 'chance-or-not' }) {
+function SenseCard({ attempts, kind, withdrawn }: { attempts: Attempt[]; kind: 'safe-or-not' | 'chance-or-not'; withdrawn: Set<string> }) {
   const t = SENSE_TEXT[kind];
-  const { spotted, alarms } = senseMarks(attempts, kind);
+  const { spotted, alarms } = senseMarks(attempts, kind, withdrawn);
   const s = rateOfMarks(spotted);
   const f = rateOfMarks(alarms);
   return (
@@ -365,12 +373,12 @@ function ActivityCard({ attempts, now }: { attempts: Attempt[]; now: number }) {
   );
 }
 
-function attemptsForSet(learner: Learner, set: string): { title: string; uuids: string[] } {
+function attemptsForSet(learner: Learner, set: string, withdrawn: Set<string>): { title: string; uuids: string[] } {
   if (set === 'unseen') return { title: 'Unseen puzzles', uuids: unseenAccuracy(learner.attempts).attemptUuids };
   if (set === 'retention') return { title: 'Scheduled reviews', uuids: retention(learner.attempts).attemptUuids };
   if (set === 'own-move') return { title: 'Your move: first looks', uuids: ownMoveMarks(learner.attempts).marks.map((m) => m.uuid) };
   if (set === 'sense:safe-or-not' || set === 'sense:chance-or-not') {
-    const m = senseMarks(learner.attempts, set.slice(6) as 'safe-or-not' | 'chance-or-not');
+    const m = senseMarks(learner.attempts, set.slice(6) as 'safe-or-not' | 'chance-or-not', withdrawn);
     return { title: set.endsWith('safe-or-not') ? 'Is this move safe? First looks' : 'Anything to win? First looks', uuids: [...m.spotted, ...m.alarms].map((x) => x.uuid) };
   }
   if (set.startsWith('concept:')) {
@@ -384,7 +392,9 @@ const OUTCOME_TEXT: Record<Attempt['outcome'], string> = { success: 'solved firs
 
 export function PositionsList({ route, learner }: { route: Route; learner: Learner }) {
   const set = route.query.get('set') ?? 'unseen';
-  const { title, uuids } = attemptsForSet(learner, set);
+  const games = useGames();
+  const withdrawn = useMemo(() => withdrawnControls(games ?? []), [games]);
+  const { title, uuids } = attemptsForSet(learner, set, withdrawn);
   const wanted = new Set(uuids);
   const rows = learner.attempts.filter((a) => wanted.has(a.uuid)).sort((a, b) => b.ts - a.ts);
   return (

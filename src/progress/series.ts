@@ -263,9 +263,11 @@ export function ownMoveMarks(attempts: Attempt[]): { marks: Mark[]; unrated: num
  * First-look answers to "Is this move safe?" or "Anything to win here?", split by what was
  * really there: `spotted` holds the positions with something there (ok = he said so),
  * `alarms` the positions with nothing there (ok = he called something that was not there).
+ * `withdrawn` holds positions no longer asked because their label did not hold (see
+ * withdrawnControls in src/games/sense.ts); answers to them are left out.
  */
-export function senseMarks(attempts: Attempt[], kind: 'safe-or-not' | 'chance-or-not'): { spotted: Mark[]; alarms: Mark[] } {
-  const rows = attempts.filter((a) => a.exerciseKind === 'sense' && a.fresh && a.outcome !== 'skipped' && a.themes[0] === kind).sort(byTs);
+export function senseMarks(attempts: Attempt[], kind: 'safe-or-not' | 'chance-or-not', withdrawn?: Set<string>): { spotted: Mark[]; alarms: Mark[] } {
+  const rows = attempts.filter((a) => a.exerciseKind === 'sense' && a.fresh && a.outcome !== 'skipped' && a.themes[0] === kind && !withdrawn?.has(a.exerciseId)).sort(byTs);
   const positive = (a: Attempt) => a.themes[1] === 'unsafe' || a.themes[1] === 'chance';
   const negative = (a: Attempt) => a.themes[1] === 'safe' || a.themes[1] === 'none';
   return {

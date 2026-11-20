@@ -24,7 +24,7 @@ const FRAMES: { key: Frame; label: string }[] = [
 ];
 const PROVISIONAL_N = 20;
 
-function Seg<K extends string>({ value, options, onChange, label }: { value: K; options: { key: K; label: string }[]; onChange: (k: K) => void; label: string }) {
+export function Seg<K extends string>({ value, options, onChange, label }: { value: K; options: { key: K; label: string }[]; onChange: (k: K) => void; label: string }) {
   return (
     <div className="seg" role="group" aria-label={label}>
       {options.map((o) => (
@@ -70,8 +70,8 @@ export function MetricDetail({ id, learner }: { id: string; learner: Learner }) 
     case 'rating': return <RatingDetail {...f} rows={p.rows} tIdx={p.tIdx} />;
     case 'mistakes': return <MistakesDetail {...f} rows={p.rows} tIdx={p.tIdx} />;
     case 'chances': return <ChancesDetail {...f} rows={p.rows} />;
-    case 'danger': return <SenseDetail {...f} learner={learner} kind="safe-or-not" />;
-    case 'spot-chances': return <SenseDetail {...f} learner={learner} kind="chance-or-not" />;
+    case 'danger': return <SenseDetail {...f} learner={learner} kind="safe-or-not" withdrawn={p.withdrawn} />;
+    case 'spot-chances': return <SenseDetail {...f} learner={learner} kind="chance-or-not" withdrawn={p.withdrawn} />;
     case 'own-move': return <OwnMoveDetail {...f} learner={learner} />;
     case 'puzzles': return <PuzzlesDetail {...f} learner={learner} />;
     case 'checks': return <ChecksDetail learner={learner} now={p.now} />;
@@ -187,9 +187,9 @@ function ChancesDetail({ frame, setFrame, rows }: FrameProps & { rows: GameRow[]
   );
 }
 
-function SenseDetail({ frame, setFrame, learner, kind }: FrameProps & { learner: Learner; kind: 'safe-or-not' | 'chance-or-not' }) {
+function SenseDetail({ frame, setFrame, learner, kind, withdrawn }: FrameProps & { learner: Learner; kind: 'safe-or-not' | 'chance-or-not'; withdrawn: Set<string> }) {
   const t = SENSE_TEXT[kind];
-  const all = senseMarks(learner.attempts, kind);
+  const all = senseMarks(learner.attempts, kind, withdrawn);
   const take = (m: Mark[]) => (frame === 'recent' ? m.slice(-10) : frame === 'trend' ? m.slice(-20) : m);
   const spotted = take(all.spotted);
   const alarms = take(all.alarms);

@@ -19,6 +19,8 @@ import { useOtherMovesAhead, useResultLines } from './Lines';
 import { Ask, gameRef, KeepLast, ResultTitle, useFlaggable, useItem, useRunNote } from './Stage';
 import { reviewKey } from '../schedule/position';
 import { byPhase, byType, chanceList, rapidRows } from '../progress/series';
+import { cohortGames, DEEP_AREAS } from '../progress/deep';
+import { type Motif, MOTIF_NAME, motifEvents } from '../games/motifs';
 
 export function useGames(): GameRecord[] | undefined {
   const db = useDb();
@@ -175,7 +177,14 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
   );
 }
 
-function eventsFor(games: GameRecord[], kind: string, sinceDate: string | undefined, span: string | null): { title: string; rows: EventRef[] } {
+function eventsFor(games: GameRecord[], kind: string, sinceDate: string | undefined, span: string | null, cohort: string | null): { title: string; rows: EventRef[] } {
+  // The deep dive's tactics (ADR-062): "motif:against:hanging", "motif:missed:fork", "motif:taken:pin".
+  if (kind.startsWith('motif:')) {
+    const [, side, motif] = kind.split(':');
+    const evs = motifEvents(cohortGames(games, cohort === 'all' ? 'all' : 'rapid')).filter((e) => e.motif === motif && (side === 'against' ? e.side === 'against' : e.side === 'for' && e.taken === (side === 'taken')));
+    const name = MOTIF_NAME[motif as Motif] ?? 'Tactics';
+    return { title: side === 'against' ? `${name}: against you` : `${name}: chances ${side}`, rows: evs.map((e) => ({ game: e.game, event: e.event })) };
+  }
   if (kind === 'missed') return { title: 'Missed tactical chances', rows: missedOpportunities(games, { sinceDate }).events };
   if (kind === 'early') return { title: 'Early blunders in rapid games', rows: earlyBlunderGames(games, { timeClass: 'rapid', sinceDate }).events };
   if (kind === 'errors') return { title: 'Major errors', rows: majorErrors(games, { sinceDate }).events };
@@ -200,10 +209,13 @@ export function GameEventsList({ route, sinceDateOf }: { route: Route; sinceDate
   const kind = route.query.get('kind') ?? 'errors';
   const period = route.query.get('period') ?? 'all';
   if (!games) return <div className="page"><p className="muted">Loading</p></div>;
-  const { title, rows } = eventsFor(games, kind, sinceDateOf(period), route.query.get('span'));
+  const { title, rows } = eventsFor(games, kind, sinceDateOf(period), route.query.get('span'), route.query.get('c'));
+  const back = route.query.get('back');
+  const [bp, bq = ''] = (back ?? 'progress').split('?');
+  const backLabel = back ? (DEEP_AREAS.find((a) => bp === `progress/deep/${a.key}`)?.title ?? 'Back') : 'Progress';
   return (
     <div className="page" data-testid="game-events">
-      <a className="back" href={href('progress')}>Progress</a>
+      <a className="back" href={href(bp!, bq ? Object.fromEntries(new URLSearchParams(bq)) : undefined)}>{backLabel}</a>
       <h1>{title}</h1>
       <p className="muted">{rows.length} position{rows.length === 1 ? '' : 's'} from your games, newest first. These are exactly the rows behind the number.</p>
       <ul className="attempt-list">

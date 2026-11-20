@@ -21,7 +21,7 @@ import { applyUci, type Color, fenOf, positionFromFen, sanOf } from '../chess/ru
 import type { Attempt } from '../db/types';
 import { type Interval, wilson } from '../metrics/metrics';
 import { lineEnd, material, UNDECIDED } from './analyse';
-import type { GameRecord } from './types';
+import type { DecisionFact, GameRecord } from './types';
 
 export type SenseKind = 'safe-or-not' | 'chance-or-not';
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -45,6 +45,14 @@ export const SAFE_LOSS = 3;
 export const UNSAFE_MIN_LOSS = 10;
 /** A chance must be clearly better than the next move to be asked as a chance. */
 export const CHANCE_GAP = 10;
+/**
+ * A position is asked as "nothing here" only if the move played in the game lost less than
+ * this much expected score. Where it lost more, a move clearly better than the game's was
+ * there: the result screen showed it beside "nothing to win here", and playing it was scored
+ * as a false alarm (the owner's flag of 20 November; on 14 November hxg3, the engine's first
+ * choice, was marked "Wrong: there was nothing to win").
+ */
+export const NOTHING_MAX_LOSS = CHANCE_GAP;
 
 export interface SenseItem {
   id: string;
@@ -175,9 +183,35 @@ export function chanceItems(games: GameRecord[], opts: { minControlPly?: number 
         // accepted when it is played.
         const clear = e.secondWp !== null && (e.opportunity === 'mate' ? (f.mateIn === undefined || f.mateIn <= 3) : !f.unsure && e.bestWp - e.secondWp >= CHANCE_GAP);
         if (clear) out.push({ ...base, truth: true, best: e.best, bestSan: e.bestSan, bestLine: e.bestLine, bestWp: e.bestWp });
-      } else if (!f.mating && !f.unsure && f.best <= 0 && ply >= minPly) {
+      } else if (quietControl(f, loss) && ply >= minPly) {
         out.push({ ...base, truth: false });
       }
+    }
+  }
+  return out;
+}
+
+/** The test for a "nothing here" control, on one decision of the measurement record. */
+function quietControl(f: DecisionFact, loss: number | undefined): boolean {
+  return !f.mating && !f.unsure && f.best <= 0 && loss !== undefined && loss < NOTHING_MAX_LOSS;
+}
+
+/**
+ * Positions that were asked as "nothing here" before NOTHING_MAX_LOSS and are not any more:
+ * answers to them are left out of Progress, because the label they were scored against did not
+ * hold (the move played in the game lost ten points or more to a better one).
+ */
+export function withdrawnControls(games: GameRecord[]): Set<string> {
+  const out = new Set<string>();
+  for (const g of games) {
+    const m = g.measure;
+    if (!m?.facts) continue;
+    const opportunity = new Set(m.events.filter((e) => e.opportunity).map((e) => e.ply));
+    const lossAt = new Map(m.decisions.map(([p, loss]) => [p, loss]));
+    for (const f of m.facts) {
+      if (opportunity.has(f.ply) || f.mating || f.unsure || f.best > 0) continue;
+      const loss = lossAt.get(f.ply);
+      if (loss !== undefined && loss >= NOTHING_MAX_LOSS) out.add(`sense:chance-or-not:${g.id}:${f.ply}`);
     }
   }
   return out;

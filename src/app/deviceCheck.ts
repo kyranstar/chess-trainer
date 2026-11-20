@@ -93,10 +93,10 @@ export async function runBrowserChecks(db: TrainerDB): Promise<CheckResult[]> {
   const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
   out.push(result('service-worker', 'Offline engine', reg?.active ? 'pass' : 'fail', reg?.active ? `Service worker active${navigator.serviceWorker.controller ? ' and controlling this page' : '; it takes over on the next launch'}.` : 'No active service worker yet. Stay online, reload once, and run the check again.'));
 
-  const wanted = ['./index.html', './packs/lichess-core.json', './packs/openings-lichess.json'];
+  const wanted = ['./index.html', './packs/lichess-core.json', './packs/openings-lichess.json', './packs/opening-names.json'];
   const cached = 'caches' in window ? await Promise.all(wanted.map((u) => caches.match(new URL(u, document.baseURI).href, { ignoreSearch: true }))) : [];
   const missing = wanted.filter((_, i) => !cached[i]);
-  out.push(result('offline-cache', 'Files stored for offline use', cached.length && missing.length === 0 ? 'pass' : 'fail', cached.length && missing.length === 0 ? 'The app, the practice positions and the opening data are in the offline cache.' : `Not cached yet: ${missing.join(', ') || 'cache storage unavailable'}.`));
+  out.push(result('offline-cache', 'Files stored for offline use', cached.length && missing.length === 0 ? 'pass' : 'fail', cached.length && missing.length === 0 ? 'The app, the practice positions, the opening data and the opening names are in the offline cache.' : `Not cached yet: ${missing.join(', ') || 'cache storage unavailable'}.`));
 
   const pack = await packStatus(db);
   let packOk = pack.state === 'installed' && pack.puzzleCount === pack.manifest?.count;

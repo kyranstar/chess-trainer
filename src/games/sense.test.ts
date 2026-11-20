@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fenAfter, positionFromFen, sanOf } from '../chess/rules';
 import fixture from './fixtures/my-games.fixture.json';
-import { chanceItems, gradeChance, gradeSafety, pickSense, safetyItems, senseStats, type SenseItem, verifyReply } from './sense';
+import { chanceItems, gradeChance, gradeSafety, NOTHING_MAX_LOSS, pickSense, safetyItems, senseStats, type SenseItem, verifyReply, withdrawnControls } from './sense';
 import { withMeasure } from './fixtures/measure';
 import type { GameRecord } from './types';
 import type { Attempt } from '../db/types';
+import { senseMarks } from '../progress/series';
 
 const games = (fixture.games.map((g) => ({ ...g, importedAt: 1, updatedAt: 1, analysisKey: 'k', majorLoss: 20 })) as unknown as GameRecord[]).map((g) => withMeasure(g));
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -336,5 +337,33 @@ describe('what the second practice audit found (12 November)', () => {
     expect(nf6.bestWp).toBeGreaterThan(nf6.playedWp!);
     for (const i of chanceItems(games)) expect(i.played).toBeDefined();
     for (const i of safetyItems(games).filter((x) => !x.truth)) expect(i.playedWp).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('the owner\'s flag of 20 November: "nothing to win" beside a move four pawns better', () => {
+  // His blitz game of 19 October, move 11 as White: d4 lost 21.5 points to Be3 on the phone
+  // (+1.2 against +5.2 on a deep search), with no material in the short line. Asked as
+  // "anything to win?", the answer "nothing" was scored right while Be3 +3.59 stood under it;
+  // in another such position (14 November) the engine's own first choice hxg3 was scored as a
+  // false alarm.
+  const moves = ['e2e4', 'e7e6', 'g1f3', 'c7c5', 'f1c4', 'g8f6', 'b1c3', 'b8c6', 'e1g1', 'g7g6', 'd2d3', 'f8g7', 'c1f4', 'a7a5', 'e4e5', 'f6h5', 'd1d2', 'b7b5', 'c4b5', 'c6b4', 'd3d4'];
+  const gameWith = (rows: { ply: number; loss: number }[]): GameRecord => ({
+    ...games[0]!, id: 'flag20', color: 'white', moves,
+    measure: { decisions: rows.map((r) => [r.ply, r.loss, null]), events: [], facts: rows.map((r) => ({ ply: r.ply, wp: 80, played: 0, best: 0 })) }, measureKey: 'k',
+  });
+
+  it('a position where the game\'s move lost ten points or more is not asked as "nothing here"', () => {
+    const g = gameWith([{ ply: 18, loss: 2 }, { ply: 20, loss: 21.5 }, { ply: 16, loss: NOTHING_MAX_LOSS - 0.1 }, { ply: 14, loss: NOTHING_MAX_LOSS }]);
+    const quiet = chanceItems([g]).filter((i) => !i.truth).map((i) => i.ply).sort((a, b) => a - b);
+    expect(quiet).toEqual([16, 18]);
+  });
+
+  it('answers to positions asked under the old rule are named, so Progress can leave them out', () => {
+    const g = gameWith([{ ply: 18, loss: 2 }, { ply: 20, loss: 21.5 }]);
+    expect([...withdrawnControls([g])]).toEqual(['sense:chance-or-not:flag20:20']);
+    const at = (id: string, verdict: string, ts: number) => ({ exerciseKind: 'sense', exerciseId: id, fresh: true, outcome: verdict === 'correct-rejection' ? 'success' : 'fail', themes: ['chance-or-not', 'none', verdict], ts, uuid: `${id}${ts}` }) as unknown as Attempt;
+    const attempts = [at('sense:chance-or-not:flag20:20', 'false-alarm', 1), at('sense:chance-or-not:flag20:18', 'correct-rejection', 2)];
+    expect(senseMarks(attempts, 'chance-or-not').alarms).toHaveLength(2);
+    expect(senseMarks(attempts, 'chance-or-not', withdrawnControls([g])).alarms.map((m) => m.uuid)).toEqual(['sense:chance-or-not:flag20:182']);
   });
 });

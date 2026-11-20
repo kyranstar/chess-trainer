@@ -36,6 +36,26 @@ Every actionable card should display `[trend] [sample n] [defined period] [confi
 | Practice | days with an answer of 28 | positions per day | daily bars |
 
 
+## Deep dive (ADR-062)
+Filter: rated rapid (default) or every game of every kind; Openings also by colour. Puzzle cards are first looks and ignore the filter.
+| Card | Number | Definition |
+|---|---|---|
+| Your opening tree | the most played line while a fifth of the games still follow it | first three moves each; cell width = share of games; colour = his score (≥60%, ≤40%, between; outline under 3 games) |
+| Openings you play | the most played opening | deepest named position (Lichess `chess-openings`, CC0) in the first 40 plies; won/drawn/lost and score (a draw is half) |
+| After the opening | games ahead after move 10 | expected score before his 11th move (measurement record); ahead ≥ 60, behind ≤ 40 |
+| Tactics, both ways | the motif that came up most | against: big mistakes labelled losing material or allowing mate, named by the refutation; for: clear chances (one move better by 20+, counted once), named by the best line, taken or missed |
+| Where your pieces fall | pieces of the most lost kind | the loose piece taken, else his pieces taken less one of equal value per piece he took back; a capture on a line's last move not counted; Black mirrored by rank |
+| Puzzle tactics | the theme with the lowest share solved | first-look puzzles by Lichess theme, themes seen 5+ times, Wilson range |
+| Puzzle difficulty | share solved | first-look puzzles per 200 rating points, Wilson range |
+| Your games, move by move | median move of each game's largest single loss | over games where it was 20+ points; last 20 games |
+| Winning and saving | winning positions won | winning: expected score ≥ 75 before one of his moves; lost: ≤ 25; saved = not lost |
+| King safety | games castled by move 10 | from the moves; results by group are what happened, not an effect |
+| Time left | his share of the starting time at move 20, and his opponents' | median per move while ≥ 10 games reached it; daily games out |
+| Thinking time | median seconds per move | big mistakes per 100 moves by time taken (clock before − after + increment), moves 11+, expected score 10–90, clustered by game |
+| How games end | losses on time (else wins by mate) | Chess.com's termination words |
+
+Motif names are board facts worked out by legal-move generation (`src/games/motifs.ts`), never interpretation: hanging piece, fork, pin or skewer, discovered attack, mate, other.
+
 ## Evidence discipline
 - Report analysis coverage: analyzed decision count / eligible decisions, analyzed games / eligible games. Do not pool games with inconsistent engine settings without labeling.
 - Flag e.g. `<20 relevant observations` as provisional by policy; threshold to be evaluated, not treated as statistical magic.

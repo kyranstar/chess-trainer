@@ -49,6 +49,21 @@ describe('where a line is decided', () => {
     expect(consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6'], 'black', BEFORE)!.text).toBe('Knight taken on e5. You end 2 points ahead.');
   });
 
+  it('says only the capture when the number beside the line points the other way (the owner\'s flag of 18 November)', () => {
+    // His game of 26 September, Black to move: 18...Bd5 19.Rhf1 Be6 20.Rde1 Bxa2 21.Re3 Bd5.
+    // A pawn up along the line, but the chip read −0.65 for him (level on a deep search).
+    const asked = '3rr1k1/1pp2p1p/1pp1b3/4P3/8/3B1PP1/PPP5/2KR3R b - - 0 18';
+    const pv = ['e6d5', 'h1f1', 'd5e6', 'd1e1', 'e6a2', 'e1e3', 'a2d5'];
+    expect(consequenceOf(asked, pv, 'black')!.text).toBe('Pawn taken on a2. You end 1 point ahead.');
+    expect(consequenceOf(asked, pv, 'black', undefined, 44.1)).toMatchObject({ ply: 5, kind: 'material', square: 'a2', text: 'Pawn taken on a2.' });
+    // A number that agrees, or that rounds to level, leaves the count in.
+    expect(consequenceOf(asked, pv, 'black', undefined, 58)!.text).toBe('Pawn taken on a2. You end 1 point ahead.');
+    expect(consequenceOf(asked, pv, 'black', undefined, 50)!.text).toBe('Pawn taken on a2. You end 1 point ahead.');
+    // Behind beside a plus number: only the capture.
+    expect(consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6'], 'white', BEFORE, 61)!.text).toBe('Knight taken on e5.');
+    expect(consequenceOf(AFTER, ['d6e5', 'b1c3', 'g8f6'], 'white', BEFORE, 30)!.text).toBe('Knight taken on e5. You end 2 points behind.');
+  });
+
   it('claims nothing when the line stops on a capture: the recapture may be next', () => {
     expect(consequenceOf(AFTER, ['d6e5'], 'white', BEFORE)).toBeNull();
     expect(consequenceOf(AFTER, ['b8c6', 'e5c6'], 'white', BEFORE)).toBeNull();

@@ -199,7 +199,9 @@ export function useResultLines(start: string | null, lines: MoveLine[], opts: Li
   // piece of it can show a capture that the rest of the line takes back: a fallback to the
   // first moves, tried in ADR-052, told the learner he ended five points ahead after a wrong
   // puzzle move whose rook was won back three moves later (withdrawn in ADR-053).
-  const decided = useMemo(() => (start && full.length ? consequenceOf(start, full, opts.me) : null), [start, full, opts.me]);
+  // The number beside the line: the count of material is not said against it (consequenceOf).
+  const shownScore = line ? line.score ?? (got && got !== 'loading' ? got.score : null) : null;
+  const decided = useMemo(() => (start && full.length ? consequenceOf(start, full, opts.me, undefined, shownScore) : null), [start, full, opts.me, shownScore]);
   // How much of the line can be stepped through, and where a replay "to where it is decided"
   // rests. The line that opens with the result may ask for a least number of moves (the
   // engine's answer to a wrong puzzle move is always shown): see replaySpan.

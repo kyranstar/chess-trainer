@@ -61,6 +61,44 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await page.getByTestId('seg-colour').click();
   await expect(page.getByTestId('how-rows').locator('li')).toHaveCount(2);
 
+  // The deep dive (ADR-062): three pages behind one section; every card opens what it counts.
+  const noSideScroll = async () => expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  await page.goto('./#/progress');
+  await expect(page.getByTestId('deep-dive')).toBeVisible();
+  await expect(page.getByTestId('deep-dive').locator('a.deep-tile')).toHaveCount(3);
+  await page.getByTestId('deep-tile-openings').click();
+  const tree = page.getByTestId('deep-tree');
+  await expect(tree.locator('rect.oc').first()).toBeVisible();
+  await noSideScroll();
+  await tree.locator('.ch-hit').first().click();
+  await expect(tree.locator('.ch-readout')).toContainText('game');
+  await page.getByTestId('tree-games').click();
+  await expect(page.getByTestId('deep-games').getByTestId('deep-game-row').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Openings' }).click();
+  await expect(page.getByTestId('deep-openings')).toBeVisible();
+  await page.getByTestId('seg-all').click();
+  await expect(page).toHaveURL(/c=all/);
+  await expect(page.getByTestId('deep-families').getByTestId('family-row').first()).toBeVisible();
+  // Tactics, both ways: the missed Qxf7# is a mate chance; its row opens that position, and Back returns to Tactics.
+  await page.goto('./#/progress/deep/tactics?c=all');
+  const motifs = page.getByTestId('deep-motifs');
+  await expect(motifs).toContainText('Mate');
+  await noSideScroll();
+  await motifs.locator('[aria-label^="Mate:"]').click();
+  await page.getByTestId('motif-readout').getByRole('link', { name: /missed/ }).click();
+  await expect(page.getByTestId('event-row').filter({ hasText: 'Qxf7#' })).toHaveCount(1);
+  await page.getByRole('link', { name: 'Tactics' }).click();
+  await expect(page.getByTestId('deep-tactics')).toBeVisible();
+  await expect(page).toHaveURL(/c=all/);
+  // Strategy: games move by move, winning and saving, the clock, how games ended.
+  await page.goto('./#/progress/deep/strategy?c=all');
+  for (const id of ['deep-ribbons', 'deep-conversion', 'deep-castling', 'deep-endings']) await expect(page.getByTestId(id)).toBeVisible();
+  await page.getByTestId('deep-ribbons').locator('.ch-hit').first().click();
+  await page.getByTestId('ribbon-game').click();
+  await expect(page.getByTestId('game-breakdown')).toBeVisible();
+  await page.goto('./#/progress/deep/strategy');
+  await noSideScroll();
+
   // Every time control, under More: ratings per time control and never blended.
   await page.goto('./#/progress/more/games');
   await expect(page.getByTestId('rating-rapid')).toHaveAttribute('data-current', '455');

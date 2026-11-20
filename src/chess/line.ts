@@ -3,6 +3,7 @@ import { parseSan } from 'chessops/san';
 import type { Chess } from 'chessops/chess';
 import type { Color, Role } from 'chessops/types';
 import { makeSquare, makeUci, parseUci } from 'chessops/util';
+import { evalText } from '../engine/uci';
 import { applyUci, canonicalUci, fenOf, positionFromFen, sanOf } from './rules';
 
 /**
@@ -73,8 +74,13 @@ export interface Consequence {
  * next), an even exchange, or a line with no capture. `beforeFen` is the position before the
  * learner's own move when the line starts after it, so that what that move took is counted.
  * This is a count of material along one continuation, not a judgement of the position.
+ *
+ * `score` is the engine's number shown beside the line (expected score for `me`). Where it
+ * points the other way ("You end 1 point ahead" beside −0.65), only the capture is said: the
+ * count is true along the line but reads as a verdict that the number contradicts (the owner's
+ * flag of 18 November, on 18…Bd5 19.Rhf1 Be6 20.Rde1 Bxa2, level on a deep search).
  */
-export function consequenceOf(fromFen: string, pv: string[], me: Color, beforeFen?: string): Consequence | null {
+export function consequenceOf(fromFen: string, pv: string[], me: Color, beforeFen?: string, score?: number | null): Consequence | null {
   let pos: Chess;
   let start: number;
   try {
@@ -126,6 +132,9 @@ export function consequenceOf(fromFen: string, pv: string[], me: Color, beforeFe
   // follows it is an even exchange, and the replay should not run on through that.
   const it = changes.find((c) => c.balance === now)!;
   const points = Math.abs(net);
+  const shown = score === undefined || score === null ? null : evalText(score);
+  const against = shown !== null && shown !== '0.00' && (net > 0 ? shown.startsWith('−') : shown.startsWith('+'));
+  if (against) return { ply: it.ply, kind: 'material', square: it.square, text: `${it.what}.` };
   return { ply: it.ply, kind: 'material', square: it.square, text: `${it.what}. You end ${points} point${points === 1 ? '' : 's'} ${net > 0 ? 'ahead' : 'behind'}.` };
 }
 

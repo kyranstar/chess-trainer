@@ -12,6 +12,7 @@ import { GameEventsList, GameEventView } from './ui/Games';
 import { PositionsList, PositionView, ProgressHome, sinceDateOf } from './ui/Progress';
 import { GameBreakdown, GamesList, HowYouPlay, MetricDetail } from './ui/ProgressDetail';
 import { MorePageView } from './ui/ProgressMore';
+import { DeepGamesList, DeepPage } from './ui/ProgressDeep';
 import { BaselineRun, SessionRun, Today } from './ui/Today';
 
 const db = openDb();
@@ -87,6 +88,8 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
     else if (route.parts[1] === 'games') page = <GamesList learner={learner} />;
     else if (route.parts[1] === 'how') page = <HowYouPlay learner={learner} />;
     else if (route.parts[1] === 'more' && route.parts[2]) page = <MorePageView key={route.parts[2]} page={route.parts[2]} learner={learner} />;
+    else if (route.parts[1] === 'deep' && route.parts[2]) page = <DeepPage key={route.query.toString() + route.parts[2]} area={route.parts[2]} route={route} learner={learner} />;
+    else if (route.parts[1] === 'deep-games') page = <DeepGamesList key={route.query.toString()} route={route} />;
     else page = <ProgressHome learner={learner} />;
   } else page = <Today learner={learner} />;
 
