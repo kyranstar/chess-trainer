@@ -95,7 +95,7 @@ export function DeepSection() {
       </a>
       <a className="pcard deep-tile" href={href('progress/deep/tactics')} data-testid="deep-tile-tactics">
         <span className="pcard-head"><span className="pcard-title">Tactics</span><span className="chev" aria-hidden>›</span></span>
-        <span className="deep-hook">{top ? <><strong>{MOTIF_NAME[top.motif]}</strong>: {top.against.length} against you, {top.taken.length} of {top.taken.length + top.missed.length} chances taken</> : 'No tactics found in your games yet'}</span>
+        <span className="deep-hook">{top && top.motif !== 'other' ? <><strong>{MOTIF_NAME[top.motif]}</strong>: {top.against.length} against you, {top.taken.length} of {top.taken.length + top.missed.length} chances taken</> : 'No named tactic in your games yet'}</span>
         {mini.length > 0 && <SideBars compact rows={mini.map((r) => ({ key: r.motif, label: MOTIF_NAME[r.motif], left: r.against.length, right: r.taken.length, rightHollow: r.missed.length }))} headLeft="Against you" headRight="Chances" title="The tactics that came up most in your games, against you and for you." />}
       </a>
       <a className="pcard deep-tile" href={href('progress/deep/strategy')} data-testid="deep-tile-strategy">
@@ -267,8 +267,8 @@ function TacticsPage({ games, cohort, learner }: { games: GameRecord[]; cohort: 
   return (
     <>
       <DCard testid="deep-motifs" title="Tactics, both ways"
-        value={top ? <><strong className="pcard-mid">{MOTIF_NAME[top.motif]}</strong><span className="pcard-unit">came up most</span></> : undefined}
-        sub={top ? <>{against} big mistakes against you · {chances} clear chances for you · {gamesText(games.length, cohort)}</> : 'No big mistake lost material and no clear chance came up in these games.'}
+        value={top && top.motif !== 'other' ? <><strong className="pcard-mid">{MOTIF_NAME[top.motif]}</strong><span className="pcard-unit">came up most</span></> : undefined}
+        sub={top ? <>{plural(against, 'big mistake')} against you · {plural(chances, 'clear chance')} for you · {gamesText(games.length, cohort)}</> : 'No big mistake lost material and no clear chance came up in these games.'}
         provisional={against + chances > 0 && against + chances < PROVISIONAL_N}>
         {rows.length > 0 && (
           <>
