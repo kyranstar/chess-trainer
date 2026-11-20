@@ -6,7 +6,6 @@ import { STARTING_PROFILE } from '../app/profile';
 import { applyUci, fenAfter, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { runSyncRound, useSyncState } from '../app/useAutoSync';
-import { DEFAULT_USERNAME } from '../games/autosync';
 import type { RatingSnapshot } from '../games/chesscom';
 import { clockPressure, CLOCK_MIN_DECISIONS, type DrillPosition, drillPositions, earlyBlunderGames, type EventRef, gameCoverage, majorErrors, missedOpportunities, ratingSeries, UNDECIDED_BELOW } from '../games/metrics';
 import type { GameRecord, TimeClass } from '../games/types';
@@ -447,7 +446,7 @@ export function GamesImport() {
 
   useEffect(() => {
     void getMeta<string>(db, 'chesscom.username').then((u) => {
-      const name = u ?? DEFAULT_USERNAME;
+      const name = u ?? '';
       if (!typed.current) setUsername(name);
       setSaved(name);
     });

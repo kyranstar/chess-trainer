@@ -11,12 +11,10 @@ import { type SyncFetch, type SyncReport, syncChessCom } from './chesscom';
 export const SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
 /** After a "too many requests" answer, automatic refreshes wait this long. */
 export const RATE_LIMIT_WAIT_MS = 60 * 60 * 1000;
-/** Username baked into the published build by the deploy script (from the git-ignored `data/deploy.env`); empty in every other build. It can be changed in the app. */
-export const DEFAULT_USERNAME: string = (import.meta.env?.VITE_CHESSCOM_USERNAME as string | undefined) ?? '';
-
+/** The Chess.com account linked on this device; empty when none (the published build no longer carries a default, ADR-063). */
 export async function getUsername(db: TrainerDB): Promise<string> {
   const stored = await getMeta<string>(db, 'chesscom.username');
-  return (stored ?? DEFAULT_USERNAME).trim();
+  return (stored ?? '').trim();
 }
 
 /** Runs a sync if a username is set and the last successful one is old enough. */
