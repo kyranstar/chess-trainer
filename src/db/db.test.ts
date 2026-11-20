@@ -144,7 +144,7 @@ describe('backup and restore', () => {
     const b = await exportBackup(await seeded(), T0);
     expect(b.manifest.format).toBe('chess-trainer-backup');
     expect(b.manifest.schemaVersion).toBe(4);
-    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0, repertoire: 0, games: 0, settings: 0 });
+    expect(b.manifest.itemCounts).toEqual({ attempts: 3, lessonEvents: 1, sessions: 1, gameJournal: 0, repertoire: 0, games: 0, settings: 0, settingStamps: 0 });
     expect(b.manifest.contentHashes.attempts).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 

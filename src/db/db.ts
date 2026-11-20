@@ -14,6 +14,7 @@ import type { GameRecord } from '../games/types';
 import type { RepertoireEntry } from '../openings/repertoire';
 import { reviewKey, sameItemIds } from '../schedule/position';
 import { applyAttempt, isDue, rebuildReviewStates, SCHEDULER_VERSION } from '../schedule/review';
+import { stampMiddleware } from './stamps';
 import type { Attempt, AttemptDraft, GameJournalDraft, GameJournalEntry, LessonEvent, MetaRow, PackRow, PuzzleRow, ReviewState, SessionRecord } from './types';
 
 export const DB_NAME = 'chess-trainer';
@@ -48,6 +49,8 @@ export class TrainerDB extends Dexie {
     this.version(3).stores({ repertoire: 'id, side, positionKey' });
     // v4 (M4): the learner's own games with engine analysis from the Mac pipeline. Additive only.
     this.version(4).stores({ games: 'id, endDate, timeClass' });
+    // Portable settings carry the time they changed, for the account copy's merge (ADR-063).
+    this.use(stampMiddleware);
   }
 }
 

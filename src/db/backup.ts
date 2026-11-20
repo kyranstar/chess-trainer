@@ -13,6 +13,7 @@ import { getDeviceId, rebuildReviews, SCHEMA_VERSION, type TrainerDB } from './d
 import type { Attempt, GameJournalEntry, LessonEvent, SessionRecord } from './types';
 import type { GameRecord } from '../games/types';
 import type { RepertoireEntry } from '../openings/repertoire';
+import { isPortableSetting, type SettingStamp, STAMP_PREFIX, stampKey } from './stamps';
 
 export const BACKUP_FORMAT = 'chess-trainer-backup';
 
@@ -28,15 +29,8 @@ const TABLES = [
 export type BackupTable = (typeof TABLES)[number]['name'];
 type Row = Record<string, unknown>;
 
-/**
- * Preferences that are the learner's own choices and worth carrying to another device.
- * Device bookkeeping (device id, download caches, last-sync and last-backup times) is not.
- */
-const SETTING_KEYS = ['openings.band', 'openings.side', 'chesscom.username'];
-const SETTING_PREFIXES = ['lessonProgress:', 'flag:'];
-export function isPortableSetting(key: string): boolean {
-  return SETTING_KEYS.includes(key) || SETTING_PREFIXES.some((p) => key.startsWith(p));
-}
+/** Which preferences travel between devices: see src/db/stamps.ts. */
+export { isPortableSetting };
 export interface SettingRow { key: string; value: unknown }
 
 export interface BackupData {
@@ -48,6 +42,11 @@ export interface BackupData {
   games?: GameRecord[];
   /** Optional in every schema version: files written before preferences were included have none. */
   settings?: SettingRow[];
+  /**
+   * When each portable setting last changed, removals included (ADR-063). Optional: a file
+   * without it restores as before, filling only the settings missing on the device.
+   */
+  settingStamps?: SettingStamp[];
 }
 
 export interface BackupManifest {
@@ -56,8 +55,8 @@ export interface BackupManifest {
   exporterVersion: string;
   exportTime: string; // ISO UTC
   deviceId: string;
-  itemCounts: Partial<Record<BackupTable | 'settings', number>>;
-  contentHashes: Partial<Record<BackupTable | 'settings', string>>;
+  itemCounts: Partial<Record<BackupTable | 'settings' | 'settingStamps', number>>;
+  contentHashes: Partial<Record<BackupTable | 'settings' | 'settingStamps', string>>;
 }
 
 export interface BackupFile {
@@ -107,6 +106,10 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
   data.settings = settings;
   itemCounts.settings = settings.length;
   contentHashes.settings = await hashOf(settings, 'key');
+  const stamps = sorted((await db.meta.where('key').startsWith(STAMP_PREFIX).toArray()).map((r) => r.value as Row), 'key');
+  data.settingStamps = stamps;
+  itemCounts.settingStamps = stamps.length;
+  contentHashes.settingStamps = await hashOf(stamps, 'key');
   return {
     manifest: {
       format: BACKUP_FORMAT,
@@ -157,8 +160,40 @@ export async function parseBackup(text: string): Promise<BackupFile> {
     if (!Array.isArray(settings) || settings.some((r) => typeof r?.key !== 'string')) throw new Error('Backup contains a malformed preferences section.');
     if ((await hashOf(settings, 'key')) !== m.contentHashes?.settings) throw new Error('Backup is damaged: the preferences do not match their checksum.');
   }
+  const stamps = data.settingStamps;
+  if (stamps !== undefined) {
+    if (!Array.isArray(stamps) || stamps.some((r) => typeof r?.key !== 'string' || typeof r.ts !== 'number' || typeof r.deleted !== 'boolean')) throw new Error('Backup contains a malformed preferences section.');
+    if ((await hashOf(stamps, 'key')) !== m.contentHashes?.settingStamps) throw new Error('Backup is damaged: the preferences do not match their checksum.');
+  }
   for (const a of b.data.attempts) if (typeof a.exerciseId !== 'string' || typeof a.ts !== 'number') throw new Error('Backup contains a malformed attempt.');
   return b as BackupFile;
+}
+
+/**
+ * Settings from a file. With change times (ADR-063): per key, the later change wins, a removal
+ * included; a setting written before times were kept counts as time 0, and on a tie the
+ * device's own value stays. Without them (older files): only settings missing here are filled.
+ * Runs inside the import's transaction; the incoming time is written after the value, so the
+ * stamp kept is the file's and not the moment of the import.
+ */
+async function mergeSettings(db: TrainerDB, settings: SettingRow[], stamps: SettingStamp[] | undefined): Promise<void> {
+  const incoming = new Map(settings.filter((r) => isPortableSetting(r.key)).map((r) => [r.key, r.value]));
+  if (!stamps) {
+    for (const [key, value] of incoming) if ((await db.meta.get(key)) === undefined) await db.meta.put({ key, value });
+    return;
+  }
+  const theirs = new Map(stamps.filter((s) => isPortableSetting(s.key)).map((s) => [s.key, s]));
+  for (const key of new Set([...incoming.keys(), ...theirs.keys()])) {
+    const mine = (await db.meta.get(stampKey(key)))?.value as SettingStamp | undefined;
+    const have = (await db.meta.get(key)) !== undefined;
+    const mineTs = mine?.ts ?? (have ? 0 : -1);
+    const their = theirs.get(key) ?? { key, ts: 0, deleted: false };
+    if (their.ts < mineTs || (their.ts === mineTs && (have || mine))) continue;
+    if (their.deleted) await db.meta.delete(key);
+    else if (incoming.has(key)) await db.meta.put({ key, value: incoming.get(key) });
+    else continue;
+    await db.meta.put({ key: stampKey(key), value: their });
+  }
 }
 
 export async function importBackup(db: TrainerDB, text: string): Promise<ImportReport> {
@@ -166,10 +201,7 @@ export async function importBackup(db: TrainerDB, text: string): Promise<ImportR
   const data = backup.data as unknown as Record<string, Row[] | undefined>;
   const added = Object.fromEntries(TABLES.map((t) => [t.name, 0])) as Record<BackupTable, number>;
   await db.transaction('rw', [...TABLES.map((t) => db.table(t.name)), db.reviewStates, db.meta], async () => {
-    // A preference already chosen on this device is kept; only missing ones are filled in.
-    for (const r of backup.data.settings ?? []) {
-      if (isPortableSetting(r.key) && (await db.meta.get(r.key)) === undefined) await db.meta.put({ key: r.key, value: r.value });
-    }
+    await mergeSettings(db, backup.data.settings ?? [], backup.data.settingStamps);
     for (const t of TABLES) {
       const rows = data[t.name] ?? [];
       const table = db.table(t.name);
