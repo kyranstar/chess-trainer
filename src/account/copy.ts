@@ -54,7 +54,7 @@ async function sha256(text: string): Promise<string> {
 }
 
 /** A device that has recorded nothing yet (a new phone) has nothing of its own to send. */
-async function hasNoPractice(db: TrainerDB): Promise<boolean> {
+export async function hasNoPractice(db: TrainerDB): Promise<boolean> {
   return (await db.attempts.count()) === 0 && (await db.lessonEvents.count()) === 0 && (await db.sessions.count()) === 0;
 }
 

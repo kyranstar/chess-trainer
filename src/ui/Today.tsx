@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { go, href } from '../app/router';
+import { useAccount } from '../account/context';
+import { greeting } from '../account/greeting';
 import { type Learner, useDb, useDueReviews, useJournal, useAppCached, useNow, useOnline, usePack, usePool, useRecentSessions, useTodaySession } from '../app/store';
 import { CONCEPT_BY_ID } from '../content';
 import type { Concept } from '../content/types';
@@ -125,6 +127,7 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
 
 export function Today({ learner }: { learner: Learner }) {
   const db = useDb();
+  const account = useAccount();
   const online = useOnline();
   const pack = usePack();
   const appCached = useAppCached();
@@ -169,7 +172,7 @@ export function Today({ learner }: { learner: Learner }) {
     return (
       <div className="page" data-testid="today" data-state="unplanned">
         <p className="kicker">{dateLabel}</p>
-        <h1>Today</h1>
+        {account ? <h1 data-testid="greeting">{greeting(new Date(now), account.name)}</h1> : <h1>Today</h1>}
         <div className="actions start-actions">
           {/* Fixed places and sizes: the suggestion can change a moment after launch (a game fetched from
               Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
@@ -213,7 +216,7 @@ export function Today({ learner }: { learner: Learner }) {
   return (
     <div className="page" data-testid="today" data-state={session.status}>
       <p className="kicker">{dateLabel}</p>
-      <h1>Today</h1>
+      {account ? <h1 data-testid="greeting">{greeting(new Date(now), account.name)}</h1> : <h1>Today</h1>}
       {session.status === 'done' ? (
         session.kind === 'play' ? <PlaySummary session={session} entry={journal.find((j) => j.sessionId === session.id)} /> : <Summary session={session} learner={learner} />
       ) : (

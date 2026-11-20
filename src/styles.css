@@ -654,3 +654,21 @@ a.pcard:active { background: var(--paper); }
 .about-list { display: grid; gap: 0.5rem; margin: 0; }
 .about-list dt { font-weight: 700; display: inline; font-size: 0.92rem; }
 .about-list dd { display: inline; margin: 0 0 0 0.3rem; color: var(--muted); font-size: 0.92rem; }
+
+/* Before the app, with accounts (ADR-063): install first, welcome, not on the list, first open. */
+.page.onboard { min-height: 100dvh; justify-content: center; gap: 1.1rem; padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
+.onboard-mark { width: 64px; height: 64px; border-radius: 14px; }
+.onboard h1 { margin-bottom: 0; }
+.onboard .lede { color: var(--muted); }
+.actions.stack { flex-direction: column; align-items: stretch; }
+.actions.stack > button { width: 100%; }
+button.link.quiet-link { color: var(--muted); align-self: center; padding: 0.6rem; min-height: 2.75rem; }
+.install-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.install-steps li { display: grid; grid-template-columns: 2.5rem 1fr; gap: 0.75rem; align-items: center; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0.75rem; }
+.install-steps .glyph { width: 2rem; height: 2rem; justify-self: center; color: var(--best); border-radius: 6px; }
+.link-chesscom { display: flex; flex-direction: column; gap: 1.1rem; }
+.player-card { display: grid; grid-template-columns: 56px 1fr; gap: 0.9rem; align-items: center; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0.9rem; }
+.player-card img, .player-initial { width: 56px; height: 56px; border-radius: 8px; }
+.player-initial { display: grid; place-items: center; background: var(--felt); color: var(--felt-ink); font-weight: 700; font-size: 1.5rem; }
+.player-name { font-weight: 700; font-size: 1.1rem; }
+.player-ratings { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.25rem; }

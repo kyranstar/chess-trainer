@@ -1,8 +1,9 @@
 import { Component, type ReactNode, useEffect, useState } from 'react';
 import { href, useRoute } from './app/router';
-import { DbContext, useLearner, useOnline, usePack } from './app/store';
+import { useDb, useLearner, useOnline, usePack } from './app/store';
+import { AccountGate } from './account/Gate';
 import { useAutoSync, useRemoteCopy } from './app/useAutoSync';
-import { openDb, ensureReviewPolicy } from './db/db';
+import { ensureReviewPolicy } from './db/db';
 import { installPack, packStatus } from './db/pack';
 import { ConceptPage, LearnHome } from './ui/Learn';
 import { OpeningsHome } from './ui/Openings';
@@ -14,8 +15,6 @@ import { GameBreakdown, GamesList, HowYouPlay, MetricDetail } from './ui/Progres
 import { MorePageView } from './ui/ProgressMore';
 import { DeepGamesList, DeepPage } from './ui/ProgressDeep';
 import { BaselineRun, SessionRun, Today } from './ui/Today';
-
-const db = openDb();
 
 const TABS = [
   { key: 'today', label: 'Today' },
@@ -48,6 +47,7 @@ class ScreenBoundary extends Component<{ resetKey: string; children: ReactNode }
 
 function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate: () => void }) {
   const route = useRoute();
+  const db = useDb();
   const learner = useLearner();
   const online = useOnline();
   const [packError, setPackError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
         if ((await packStatus(db)).state === 'missing') setPackError((e as Error).message);
       }
     })();
-  }, [online]);
+  }, [db, online]);
 
   let page;
   if (tab === 'today') page = route.parts[1] === 'run' ? <SessionRun learner={learner} /> : route.parts[1] === 'baseline' ? <BaselineRun learner={learner} /> : <Today learner={learner} />;
@@ -116,8 +116,8 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
 
 export function App({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate: () => void }) {
   return (
-    <DbContext.Provider value={db}>
+    <AccountGate>
       <Shell updateReady={updateReady} applyUpdate={applyUpdate} />
-    </DbContext.Provider>
+    </AccountGate>
   );
 }

@@ -39,3 +39,38 @@ export function preferRedirect(): boolean {
   const p = platform();
   return p === 'ios' || p === 'android' || isInstalled();
 }
+
+interface InstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+let deferred: InstallPromptEvent | null = null;
+const promptListeners = new Set<() => void>();
+if (typeof window !== 'undefined') {
+  // Chrome on Android and the desktop offer their own install prompt; it is kept for a button.
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e as InstallPromptEvent;
+    promptListeners.forEach((l) => l());
+  });
+  window.addEventListener('appinstalled', () => {
+    deferred = null;
+    promptListeners.forEach((l) => l());
+  });
+}
+
+/** The browser's own install prompt where it offers one (Android and desktop Chrome), else null. */
+export function installPrompt(): (() => Promise<boolean>) | null {
+  const e = deferred;
+  if (!e) return null;
+  return async () => {
+    await e.prompt();
+    const choice = await e.userChoice;
+    deferred = null;
+    return choice.outcome === 'accepted';
+  };
+}
+export function onInstallPromptChange(l: () => void): () => void {
+  promptListeners.add(l);
+  return () => void promptListeners.delete(l);
+}
