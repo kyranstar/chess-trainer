@@ -1,0 +1,64 @@
+rules_version = '2';
+// Who may read and write what (ADR-063). The invite list is enforced here, not in the app.
+// No address is written in this file: the admin is whoever has a document under /admins,
+// created once by hand in the Firebase console. Tested in firebase/rules.test.ts.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function verified() {
+      return request.auth != null && request.auth.token.email is string && request.auth.token.email_verified == true;
+    }
+    function me() {
+      return request.auth.token.email.lower();
+    }
+    function isAdmin() {
+      return verified() && exists(/databases/$(database)/documents/admins/$(me()));
+    }
+    function invited() {
+      return verified() && exists(/databases/$(database)/documents/invites/$(me()));
+    }
+    function member() {
+      return isAdmin() || invited();
+    }
+    function self(uid) {
+      return request.auth != null && request.auth.uid == uid && member();
+    }
+
+    // Read by the address itself only, to learn whether it is the admin. Never written by a client.
+    match /admins/{email} {
+      allow get: if verified() && email == me();
+    }
+
+    // The list. Anyone signed in may look up their own entry (that is how the app learns it is
+    // not on the list); only the admin lists or changes it.
+    match /invites/{email} {
+      allow get: if isAdmin() || (verified() && email == me());
+      allow list, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.email == email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.invitedAt is number;
+    }
+
+    // A profile: the person's own, and readable by the admin for the admin page.
+    match /users/{uid} {
+      allow get: if self(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if self(uid) && request.resource.data.uid == uid && request.resource.data.email == me();
+
+      // The account copy. Its manifest (a time and a size) is readable by the admin; its
+      // content only by the person. The admin may delete it, as clean-up after a removal.
+      match /copy/manifest {
+        allow get: if self(uid) || isAdmin();
+        allow create, update: if self(uid);
+        allow delete: if self(uid) || isAdmin();
+
+        match /chunks/{i} {
+          allow get, list, create, update: if self(uid);
+          allow delete: if self(uid) || isAdmin();
+        }
+      }
+    }
+  }
+}

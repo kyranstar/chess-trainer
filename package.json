@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "e2e:churn": "playwright test -c e2e-churn/playwright.config.ts",
-    "check": "npm run typecheck && npm run test && npm run build && npm run e2e"
+    "check": "npm run typecheck && npm run test && npm run build && npm run e2e",
+    "test:rules": "firebase emulators:exec --config firebase/firebase.json --only auth,firestore --project demo-chess-trainer 'vitest run -c vitest.rules.config.ts'"
   },
   "dependencies": {
     "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
@@ -31,12 +32,14 @@
     "ts-fsrs": "5.4.2"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
     "@playwright/test": "1.65.0",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
     "fake-indexeddb": "6.2.8",
+    "firebase-tools": "15.37.0",
     "jsdom": "31.0.0",
     "typescript": "7.0.2",
     "vite": "8.3.7",

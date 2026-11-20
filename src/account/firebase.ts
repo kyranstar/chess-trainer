@@ -22,6 +22,8 @@ import { type Access, type AccountService, type CopyInfo, firstName, type Invite
 
 export interface FirebaseSetup {
   config: FirebaseOptions;
+  /** Tests: a name per instance, since one process holds several. */
+  name?: string;
   /** Tests: the local emulators, and no persistence or popups. */
   emulators?: { auth: string; firestoreHost: string; firestorePort: number };
 }
@@ -52,7 +54,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 export function firebaseAccountService(setup: FirebaseSetup): AccountService & { auth: Auth; fs: Firestore } {
-  const app = initializeApp(setup.config);
+  const app = initializeApp(setup.config, setup.name);
   const auth = initializeAuth(app, setup.emulators
     ? { persistence: inMemoryPersistence }
     : { persistence: indexedDBLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver });
