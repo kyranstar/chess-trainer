@@ -105,7 +105,9 @@ Within Firebase, for where the sign-in helper lives:
 - **Popup only:** no helper to host, but popups are the weak case on phones and in installed
   apps, which is where friends will use it.
 
-The owner picked accounts with an account copy ("B") over progress on the phone only ("A").
+The owner picked accounts with an account copy ("B") over progress on the phone only ("A"),
+approved this design on 2026-11-20 with: all of the complexity hidden from the user, no
+design for a failed Google sign-in, and sign-in once only.
 The how (Firebase, the helper's location, the copy as merged backups) was left to the builder
 and is the builder's call as stated here.
 
@@ -166,61 +168,64 @@ has its own database) plus Firebase Auth, versions pinned.
 
 ### Screens and flow
 
-1. **Welcome** (not signed in): the app's name, one line on what it is, "Continue with Google".
-2. **Not on the list** (signed in, not invited): "x@gmail.com isn't on the list. Ask Kyran to
+**Sign in once, and never think about it again** (owner, 2026-11-20). An app installed on an
+iPhone or iPad (and a Safari web app on the Mac) has its own storage, separate from Safari's:
+signing in in Safari and then installing would mean signing in a second time. So on those the
+install step comes first and sign-in happens inside the installed app; on Android and desktop
+Chrome the installed app shares the browser's storage, so sign-in comes first. The session is
+kept on the device and does not expire by itself. No screen mentions accounts, copies,
+databases or merging unless something needs the person's attention. A failed sign-in is not
+given a fallback (owner: not a case to design for); it shows the error and the button again.
+
+1. **Install first** (iPhone/iPad Safari or Chrome, or Mac Safari, not already installed):
+   "Add Chess Trainer to your Home Screen" with the steps: Share → Add to Home Screen → Add,
+   then open it from the Home Screen. A quiet "Use it in the browser instead" continues to
+   sign-in in the browser. Glyphs drawn in SVG, no screenshots of other companies' screens.
+   Detect "installed" with `display-mode: standalone` and `navigator.standalone`.
+2. **Welcome** (not signed in): the app's name, one line on what it is, "Continue with Google",
+   and one small line that progress is saved to the person's account in the owner's Firebase
+   project (the fact must be said; wording is the builder's).
+3. **Not on the list** (signed in, not invited): "x@gmail.com isn't on the list. Ask Kyran to
    add it." and "Use another account". Nothing else of the app is reachable.
-3. **First open of an invited account**: "Hi Sam" and then, in order and each skippable:
-   - **Install** (only in a phone browser that is not already the installed app): steps for
-     the platform. iPhone/iPad: Share → Add to Home Screen → Add, then open it from the Home
-     Screen and sign in once there (an installed iPhone app has its own storage; the account
-     copy brings progress across). Android Chrome: the browser's own install prompt as a
-     button, else menu → Install app. Desktop is not prompted. Detect "installed" with
-     `display-mode: standalone` and `navigator.standalone`. Glyphs drawn in SVG, no
-     screenshots of other companies' screens.
+4. **First open of an invited account**: "Hi Sam", then, each skippable:
+   - **Install** (Android Chrome or desktop Chrome, not installed): the browser's own install
+     prompt as a button where the browser offers one; otherwise skipped.
    - **Link Chess.com**: a username field, checked with the public player endpoint; shows the
      player's name, avatar and ratings to confirm ("That's me"). Stored in the local setting
      the app already uses and in the profile. "I don't play on Chess.com" skips; games can be
      linked later from Account.
-   - **Restore**: if the account has a copy and this device's database for the account is
-     empty, "Bringing back your progress" until it is merged.
-   Then Today.
-4. **Today** greets by name: "Good morning / afternoon / evening, Sam" with the date.
-5. **Account** page (from Today's header, a small initial or avatar): name, address, Chess.com
+   - If the account already has a copy (a second device), progress is brought in behind a
+     short "Getting your progress" before Today; no choice is asked.
+   Then Today. On later opens: straight to Today.
+5. **Today** greets by name: "Good morning / afternoon / evening, Sam" with the date.
+6. **Account** page (from Today's header, a small initial or avatar): name, address, Chess.com
    link (change / unlink), "Saved to your account 3 min ago" or why not, "Install on your
    phone" (the guide), "Sign out". For the admin also "Manage access" and, moved here from
    Progress → More → Your data, the private GitHub copy. The backup file download/restore stays
    where it is.
-6. **Admin: Manage access**: a form (name, Google address) and a list: name, address, state
+7. **Admin: Manage access**: a form (name, Google address) and a list: name, address, state
    (invited, not signed in yet / signed in, last seen / Chess.com linked or not), with
    "Remove access". Once someone is removed, "Delete their saved progress" appears for them
    (with a confirmation): it deletes the server copy only, as clean-up after a removal; a
    person with access would simply send it again (builder's call, from the review). The admin
    cannot be removed.
-7. **Not on the list, with progress on this device** (someone removed): besides the message,
+8. **Not on the list, with progress on this device** (someone removed): besides the message,
    "Download your progress" (the existing backup file) when this device holds data for that
    account, so nobody loses their own practice by being removed.
 
 ### Local data per account
 
 - Each account has its own IndexedDB database on a device: `chess-trainer:<uid>`.
-- The existing database `chess-trainer` (the owner's phone today) may be adopted **only by the
-  admin account**, and only after one confirmation on that device: "This device has practice
-  from before accounts: 408 answers, the last on 20 November. Add it to your account?" with
-  "Add to my account" and "Leave it out". Builder's call, from the review: every device that
-  ever opened the published app holds the owner's games (the build fetched them by default),
-  so a friend must never adopt one, and a browser of the owner's holding only test data must
-  not be merged into his history unasked (merges cannot be undone). Adopted, it is used under
-  its old name for that account from then on (no copy, no rename; the mapping is kept in the
-  device's storage). Left out, it stays untouched on the device.
+- The existing database `chess-trainer` (the owner's phone today) is adopted **only by the
+  admin account**, automatically and without a question, the first time the admin signs in on
+  that device (owner, 2026-11-20: the complexity stays hidden). Every device that ever opened
+  the published app holds the owner's games (the build fetched them by default), so a friend
+  never adopts one; on a friend's device it is left untouched. Adopted, it is used under its
+  old name for that account from then on (no copy, no rename; the mapping is kept in the
+  device's storage).
 - After adoption, if the database has games but no stored Chess.com username, the username is
   set to the player name common to all stored games. This replaces the built-in default, which
   is removed from the published build.
-- **No lock-out of existing progress** (builder's call, from the review): while the old
-  database holds practice and has not been adopted or left out, the Welcome screen also offers
-  "Continue on this device only", which opens the app on that database exactly as today (no
-  account copy, no admin). Sign-in on the installed iPhone app cannot be tested by the
-  builder; if it failed, the owner's daily practice would otherwise be blocked. The code is
-  public, so this opens nothing that was closed.
 - The app's module-level caches that hold database-derived data (the puzzle pool, sync state,
   the review-policy check) are reset when the account changes. Content caches are shared.
 
