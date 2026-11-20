@@ -81,6 +81,11 @@ test('opens offline once allowed', async ({ page, context }, info) => {
   await signIn(page);
   await openApp(page, '#/today');
   await expect(page.getByTestId('greeting')).toBeVisible();
+  // The app must be stored first: offline, only the service worker can serve it.
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await expect(page.getByTestId('offline-ready')).toHaveAttribute('data-ready', 'true');
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByTestId('greeting')).toBeVisible();
