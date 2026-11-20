@@ -12,6 +12,7 @@
  */
 import { exportBackup, serializeBackup } from './backup';
 import { getMeta, setMeta, type TrainerDB } from './db';
+import { type SettingStamp, STAMP_PREFIX } from './stamps';
 
 export const REMOTE_REPO_KEY = 'remote.repo';
 export const REMOTE_TOKEN_KEY = 'remote.token';
@@ -58,15 +59,18 @@ export async function dataSignature(db: TrainerDB): Promise<string> {
   const games = await db.games.toArray();
   // Flags (src/db/flags.ts): one set, replaced or taken off is something new to send.
   const flags = (await db.meta.where('key').startsWith('flag:').toArray()).map((r) => (r.value as { ts?: number }).ts ?? 0);
+  // Any portable setting changed or removed (src/db/stamps.ts) is something new to send.
+  const stamps = (await db.meta.where('key').startsWith(STAMP_PREFIX).toArray()).map((r) => (r.value as SettingStamp).ts);
   return [
     await db.attempts.count(), await db.lessonEvents.count(), await db.repertoire.count(), await db.gameJournal.count(),
     sessions.reduce((m, s) => Math.max(m, s.updatedAt ?? 0), 0),
     games.length, games.filter((g) => g.measure).length,
     flags.length, flags.reduce((m, t) => Math.max(m, t), 0),
+    stamps.length, stamps.reduce((m, t) => Math.max(m, t), 0),
   ].join('|');
 }
 
-async function gzipBase64(text: string): Promise<{ base64: string; bytes: number }> {
+export async function gzipBase64(text: string): Promise<{ base64: string; bytes: number }> {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
   let binary = '';

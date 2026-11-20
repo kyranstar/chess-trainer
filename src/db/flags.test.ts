@@ -52,8 +52,8 @@ describe('a position flagged for a later look', () => {
     await setFlag(db, flag('move:g1:19', 300));
     const replaced = await dataSignature(db);
     await clearFlag(db, 'move:g1:19');
-    expect(new Set([none, one, replaced]).size).toBe(3);
-    expect(await dataSignature(db)).toBe(none);
+    // Taking it off is itself something to send: the removal travels (ADR-063).
+    expect(new Set([none, one, replaced, await dataSignature(db)]).size).toBe(4);
 
     // And it is sent: with nothing else changed since the last upload, a new flag goes out.
     await setRemote(db, 'someone/chess-trainer-data', 'test-token-not-a-real-one');
