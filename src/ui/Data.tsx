@@ -8,11 +8,25 @@ import { installPack } from '../db/pack';
 import { browserRemoteFetch, clearRemote, DEFAULT_REMOTE_REPO, REMOTE_REPO_KEY, REMOTE_STATE_KEY, remoteMessage, type RemoteState, setRemote, uploadBackup } from '../db/remote';
 import { GamesImport } from './Games';
 import { currentRole } from '../account/role';
+import { currentLook, LOOK_SETTING, type LookId } from './looks';
+import { LookPicker } from './LookPicker';
 
 /**
  * A copy of the backup in the learner's own private GitHub repository (ADR-048). Off until a
  * repository and a token are entered here; the token stays on this device.
  */
+/** Without accounts the look is chosen here (with accounts it is on the Account page; ADR-064). */
+function LocalLook() {
+  const db = useDb();
+  const [look, setLook] = useState<LookId>(currentLook());
+  return (
+    <section className="card" data-testid="card-look">
+      <h2>Look</h2>
+      <LookPicker value={look} onPick={(id) => { setLook(id); void setMeta(db, LOOK_SETTING, id); }} />
+    </section>
+  );
+}
+
 export function RemoteCopy() {
   const db = useDb();
   const repo = useLiveQuery(() => getMeta<string>(db, REMOTE_REPO_KEY), [db]);
@@ -188,6 +202,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
         </div>
       </section>
 
+      {currentRole() === 'local' && <LocalLook />}
       {currentRole() === 'local' && <RemoteCopy />}
 
       <GamesImport />

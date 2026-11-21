@@ -671,3 +671,17 @@ button.danger { background: var(--flag); border-color: var(--flag); color: #fff;
 }
 .flag-sheet-title { font-weight: 700; }
 .flag-sheet input { font: inherit; padding: 0.6rem 0.7rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Pick a look (ADR-064): three tiles, each drawn in its own look. */
+.look-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.look-tile { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.35rem; padding: 0.5rem; min-height: 0; text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--rule); border-radius: var(--radius-card); }
+.look-tile.is-on { border-color: var(--felt); box-shadow: 0 0 0 1px var(--felt); }
+.look-preview { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem; border-radius: calc(var(--radius-card) - 6px); aspect-ratio: 3 / 4; overflow: hidden; }
+.look-card { display: flex; gap: 0.35rem; padding: 0.3rem; border: 1px solid; align-items: center; }
+.look-board { width: 1.6rem; height: 1.6rem; flex: none; background-size: 50% 50%; border-radius: 2px; }
+.look-lines { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; }
+.look-lines span { height: 0.25rem; border-radius: 2px; opacity: 0.8; }
+.look-lines span:last-child { width: 70%; }
+.look-button { margin-top: auto; font-size: 0.65rem; font-weight: 700; text-align: center; padding: 0.3rem; }
+.look-name { font-weight: 700; font-size: 0.95rem; }
+.look-blurb { font-size: 0.78rem; color: var(--muted); line-height: 1.25; }

@@ -14,7 +14,9 @@ import { AccountContext, type AccountInfo } from './context';
 import { hasNoPractice, pullCopy } from './copy';
 import { dbNameFor, inferUsername } from './device';
 import { installFirst } from './install';
-import { AccessError, FirstOpen, InstallFirst, NotInvited, Restoring, Splash, Welcome } from './Onboarding';
+import { AccessError, FirstOpen, InstallFirst, LookStep, lookAskedKey, NotInvited, Restoring, Splash, Welcome } from './Onboarding';
+import { getMeta } from '../db/db';
+import { applyLook, isLookId, LOOK_SETTING } from '../ui/looks';
 import { setRole } from './role';
 import { getAccountService } from './service';
 import type { Access, AccountService } from './types';
@@ -33,6 +35,9 @@ export function AccountGate({ children }: { children: ReactNode }) {
 function LocalMode({ children }: { children: ReactNode }) {
   const db = useMemo(() => openDb(), []);
   setRole('local');
+  useEffect(() => {
+    void getMeta<string>(db, LOOK_SETTING).then((look) => isLookId(look) && applyLook(look));
+  }, [db]);
   return <DbContext.Provider value={db}>{children}</DbContext.Provider>;
 }
 
@@ -51,7 +56,7 @@ function onboardedHere(uid: string): boolean {
 
 const RESTORE_WAIT_MS = 6_000;
 
-type Opened = { uid: string; db: TrainerDB; phase: 'restoring' | 'first-open' | 'ready' };
+type Opened = { uid: string; db: TrainerDB; phase: 'restoring' | 'first-open' | 'pick-look' | 'ready' };
 
 function Accounts({ service, children }: { service: AccountService; children: ReactNode }) {
   const [access, setAccess] = useState<Access>({ kind: 'checking' });
@@ -95,7 +100,17 @@ function Accounts({ service, children }: { service: AccountService; children: Re
           // Not merged now: the copy is tried again in the background once the app is open.
         }
       }
-      setOpened({ uid: a.uid, db, phase });
+      // The account's look (it travels with the account); asked once of accounts set up before looks existed.
+      const look = await getMeta<string>(db, LOOK_SETTING);
+      if (isLookId(look)) applyLook(look);
+      const lookAsked = isLookId(look) || (() => {
+        try {
+          return localStorage.getItem(lookAskedKey(a.uid)) === '1';
+        } catch {
+          return true;
+        }
+      })();
+      setOpened({ uid: a.uid, db, phase: phase === 'ready' && !lookAsked ? 'pick-look' : phase });
     })();
     // Opens once per account; later answers for the same account only refresh the name.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,6 +123,7 @@ function Accounts({ service, children }: { service: AccountService; children: Re
   if (access.kind === 'error') return <AccessError service={service} message={access.message} />;
   if (!opened || opened.uid !== access.uid) return <Splash />;
   if (opened.phase === 'restoring') return <Restoring />;
+  if (opened.phase === 'pick-look') return <LookStep db={opened.db} uid={access.uid} onDone={() => setOpened({ ...opened, phase: 'ready' })} />;
   if (opened.phase === 'first-open') {
     return <FirstOpen db={opened.db} service={service} uid={access.uid} name={access.name} onDone={() => setOpened({ ...opened, phase: 'ready' })} />;
   }

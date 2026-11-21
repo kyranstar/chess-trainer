@@ -13,6 +13,8 @@ import { useAccount } from './context';
 import { COPY_AT, COPY_ERROR } from './copy';
 import { isInstalled, platform } from './install';
 import { InstallSteps, LinkChessCom } from './Onboarding';
+import { currentLook, LOOK_SETTING, type LookId } from '../ui/looks';
+import { LookPicker } from '../ui/LookPicker';
 
 /** "just now", "12 min ago", "today at 9:40", "Nov 19". */
 export function whenSaid(at: number, now: number = Date.now()): string {
@@ -40,6 +42,7 @@ export function AccountPage() {
   const copyAt = useLiveQuery(() => getMeta<number>(db, COPY_AT), [db]);
   const copyError = useLiveQuery(() => getMeta<string>(db, COPY_ERROR), [db]);
   const [changing, setChanging] = useState(false);
+  const [look, setLook] = useState<LookId>(currentLook());
   if (!account) {
     return (
       <div className="page" data-testid="account">
@@ -74,6 +77,11 @@ export function AccountPage() {
             </div>
           </>
         )}
+      </section>
+
+      <section className="card" data-testid="account-look">
+        <h2>Look</h2>
+        <LookPicker value={look} onPick={(id) => { setLook(id); void setMeta(db, LOOK_SETTING, id); }} />
       </section>
 
       <section className="card">

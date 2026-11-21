@@ -6,7 +6,8 @@
  * Account page (`copy.error`); nothing interrupts practice.
  */
 import { useEffect, useRef } from 'react';
-import { setMeta, type TrainerDB } from '../db/db';
+import { getMeta, setMeta, type TrainerDB } from '../db/db';
+import { applyLook, currentLook, isLookId, LOOK_SETTING } from '../ui/looks';
 import type { AccountInfo } from './context';
 import { COPY_ERROR, syncOnce } from './copy';
 
@@ -25,6 +26,9 @@ export function useCopySync(db: TrainerDB, account: AccountInfo): void {
       const { db: d, account: a } = ref.current;
       try {
         const r = await syncOnce(d, a.service.copyStore(a.uid), kind, Date.now(), lastPush);
+        // A look chosen on another device arrives with the copy.
+        const look = await getMeta<string>(d, LOOK_SETTING);
+        if (isLookId(look) && look !== currentLook()) applyLook(look);
         if (kind === 'pull' && !seen) {
           seen = true;
           void a.service.saveProfile(a.uid, { lastSeenAt: Date.now(), appVersion: __APP_VERSION__ }).catch(() => {});

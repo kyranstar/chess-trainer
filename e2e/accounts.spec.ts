@@ -11,12 +11,17 @@ function state(extra: Record<string, unknown> = {}) {
   return { signedIn: null, invites: [{ email: SAM, name: 'Sam', invitedAt: 1 }], admins: [ADMIN], profiles: [], copies: {}, ...extra };
 }
 /** Sets the fake "server" once per browser (a reload keeps what the app wrote) and who signs in. */
-async function fakeAccounts(page: Page, as: string, opts: { browserOk?: boolean; state?: Record<string, unknown> } = {}) {
-  await page.addInitScript(([s, a, ok]) => {
+async function fakeAccounts(page: Page, as: string, opts: { browserOk?: boolean; state?: Record<string, unknown>; askLook?: boolean } = {}) {
+  await page.addInitScript(([s, a, ok, ask]) => {
     if (!localStorage.getItem('ct.fake')) localStorage.setItem('ct.fake', s as string);
     localStorage.setItem('ct.fake.as', a as string);
     if (ok) localStorage.setItem('ct.browserOk', '1');
-  }, [JSON.stringify(opts.state ?? state()), as, opts.browserOk ?? true] as const);
+    // Accounts already past first open are asked for a look once (ADR-064); most tests are not about that.
+    if (!ask && !localStorage.getItem('ct.lookTested')) {
+      localStorage.setItem(`ct.lookAsked.fake-${String(a).toLowerCase()}`, '1');
+      localStorage.setItem('ct.lookTested', '1');
+    }
+  }, [JSON.stringify(opts.state ?? state()), as, opts.browserOk ?? true, opts.askLook ?? false] as const);
 }
 async function mockChessCom(page: Page) {
   await page.route('**/api.chess.com/pub/player/samplays', (r) => r.fulfill({ json: { username: 'samplays', name: 'Sam P', avatar: undefined } }));
@@ -42,6 +47,7 @@ test('an invited friend: hello, Chess.com, greeting', async ({ page }) => {
   await signIn(page);
   await expect(page.getByTestId('hello')).toContainText('Sam');
   await page.getByTestId('hello-continue').click();
+  await page.getByTestId('look-continue').click();
   await page.getByTestId('chesscom-input').fill('nobody-here');
   await page.getByTestId('chesscom-check').click();
   await expect(page.getByTestId('chesscom-error')).toBeVisible();
@@ -61,6 +67,7 @@ test('skipping Chess.com still reaches Today', async ({ page }) => {
   await fakeAccounts(page, SAM);
   await signIn(page);
   await page.getByTestId('hello-continue').click();
+  await page.getByTestId('look-continue').click();
   await page.getByTestId('chesscom-skip').click();
   await expect(page.getByTestId('greeting')).toBeVisible();
 });
@@ -230,4 +237,42 @@ test('a friend has no flag on any screen', async ({ page }) => {
   await openApp(page, '#/practice/run?concept=mate.in-one');
   await expect(page.getByTestId('puzzle')).toHaveAttribute('data-phase', 'solving');
   await expect(page.getByTestId('screen-flag')).toHaveCount(0);
+});
+
+test('first open: pick a look, and it stays', async ({ page }) => {
+  await fakeAccounts(page, SAM);
+  await signIn(page);
+  await page.getByTestId('hello-continue').click();
+  await expect(page.getByTestId('look-picker')).toBeVisible();
+  await page.getByTestId('look-night').click();
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'night');
+  await page.getByTestId('look-continue').click();
+  await page.getByTestId('chesscom-skip').click();
+  await expect(page.getByTestId('greeting')).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('greeting')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'night');
+});
+
+test('an account set up before looks existed is asked once', async ({ page }) => {
+  await fakeAccounts(page, SAM, { askLook: true, state: state({ profiles: [profileOf(SAM, 'Sam')] }) });
+  await signIn(page);
+  await expect(page.getByTestId('look-picker')).toBeVisible();
+  await page.getByTestId('look-studio').click();
+  await page.getByTestId('look-continue').click();
+  await expect(page.getByTestId('greeting')).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('greeting')).toBeVisible();
+  await expect(page.getByTestId('look-picker')).toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'studio');
+});
+
+test('the look can be changed on the Account page', async ({ page }) => {
+  await fakeAccounts(page, SAM, { state: state({ profiles: [profileOf(SAM, 'Sam')] }) });
+  await signIn(page);
+  await openApp(page, '#/account');
+  await page.getByTestId('look-night').click();
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'night');
+  await page.getByTestId('look-clubroom').click();
+  await expect(page.locator('html')).toHaveAttribute('data-look', 'clubroom');
 });

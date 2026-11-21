@@ -11,6 +11,8 @@ import { openDb, setMeta, type TrainerDB } from '../db/db';
 import { CHESSCOM_API } from '../games/chesscom';
 import { accountDbName, LEGACY_DB, LEGACY_OWNER_KEY } from './device';
 import { BROWSER_OK_KEY, installPrompt, onInstallPromptChange, platform } from './install';
+import { currentLook, LOOK_SETTING, type LookId } from '../ui/looks';
+import { LookPicker } from '../ui/LookPicker';
 import type { AccountService } from './types';
 
 function AppMark() {
@@ -253,9 +255,33 @@ export function LinkChessCom({ db, service, uid, onDone, skipLabel, compact = fa
   );
 }
 
-/** First open of an invited account: hello, install where the browser offers it, Chess.com. */
+export const lookAskedKey = (uid: string): string => `ct.lookAsked.${uid}`;
+
+/** Pick a look (ADR-064): on first open after hello, and once for accounts set up before looks existed. */
+export function LookStep({ db, uid, onDone }: { db: TrainerDB; uid: string; onDone: () => void }) {
+  const [look, setLook] = useState<LookId>(currentLook());
+  async function done() {
+    await setMeta(db, LOOK_SETTING, look);
+    try {
+      localStorage.setItem(lookAskedKey(uid), '1');
+    } catch {
+      // Storage blocked: the setting in the account is what counts.
+    }
+    onDone();
+  }
+  return (
+    <Screen testid="first-look">
+      <h1>Pick a look</h1>
+      <p className="lede">You can change it any time on your Account page.</p>
+      <LookPicker value={look} onPick={setLook} />
+      <button className="primary big" data-testid="look-continue" onClick={() => void done()}>Continue</button>
+    </Screen>
+  );
+}
+
+/** First open of an invited account: hello, a look, install where the browser offers it, Chess.com. */
 export function FirstOpen({ db, service, uid, name, onDone }: { db: TrainerDB; service: AccountService; uid: string; name: string; onDone: () => void }) {
-  const [step, setStep] = useState<'hello' | 'install' | 'link'>('hello');
+  const [step, setStep] = useState<'hello' | 'look' | 'install' | 'link'>('hello');
   const [, bump] = useState(0);
   useEffect(() => onInstallPromptChange(() => bump((x) => x + 1)), []);
   const prompt = installPrompt();
@@ -273,11 +299,12 @@ export function FirstOpen({ db, service, uid, name, onDone }: { db: TrainerDB; s
       <Screen testid="hello">
         <AppMark />
         <h1>Hi, {name}</h1>
-        <p className="lede">Welcome to Chess Trainer. One quick step and you’re in.</p>
-        <button className="primary big" data-testid="hello-continue" onClick={() => setStep(prompt ? 'install' : 'link')}>Continue</button>
+        <p className="lede">Welcome to Chess Trainer. Two quick steps and you’re in.</p>
+        <button className="primary big" data-testid="hello-continue" onClick={() => setStep('look')}>Continue</button>
       </Screen>
     );
   }
+  if (step === 'look') return <LookStep db={db} uid={uid} onDone={() => setStep(prompt ? 'install' : 'link')} />;
   if (step === 'install' && prompt) {
     return (
       <Screen testid="install-offer">
