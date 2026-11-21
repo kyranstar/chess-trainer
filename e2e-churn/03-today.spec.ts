@@ -17,7 +17,7 @@ async function studyDay(page: Page) {
 }
 
 const topButton = (page: Page) => page.evaluate(() => {
-  const b = document.querySelector('[data-testid=today] .actions button')!;
+  const b = document.querySelector('[data-testid=today] [data-testid=start-session]')!;
   const r = b.getBoundingClientRect();
   return { testid: b.getAttribute('data-testid'), text: b.textContent, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
 });

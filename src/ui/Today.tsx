@@ -183,10 +183,10 @@ export function Today({ learner }: { learner: Learner }) {
             from Chess.com counts as a play day); only which one is filled changes (ADR-051). */}
         <section className="card today-card" data-testid="today-card">
           <div className="today-card-head">
-            <h2>Today’s training</h2>
+            {/* The heading says a play day in the same line, so nothing below it moves when the suggestion changes. */}
+            <h2>{suggestion.kind === 'play' ? 'Today is a play day' : 'Today’s training'}</h2>
             <span className="muted" data-testid="today-length">{length} min</span>
           </div>
-          {suggestion.kind === 'play' && <p className="today-play">Today is a play day: one rapid game, then a short look back.</p>}
           <Scoresheet session={preview} activeIndex={-1} />
           <button className={suggestion.kind === 'study' ? 'primary big' : 'big'} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start training</button>
         </section>
