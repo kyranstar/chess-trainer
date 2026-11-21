@@ -7,7 +7,7 @@ import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { formatPct } from '../metrics/metrics';
 import { declineEntry, DOUBTFUL_KEY, refreshRepertoire } from '../openings/auto';
 import { DEFAULT_BAND, loadOpeningBook } from '../openings/book';
-import { COURSES, courseFor, leftRepertoire, needsConfirming } from '../openings/courses';
+import { activeCourses, courseFor, leftRepertoire, needsConfirming } from '../openings/courses';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import type { Doubtful } from '../openings/fromGames';
 import { entriesFromPgn, repertoireToPgn } from '../openings/pgn';
@@ -356,7 +356,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
       <section className="card" data-testid="courses-card">
         <h2>Your courses</h2>
         <ul className="attempt-list">
-          {COURSES.filter((c) => c.side === prefs.side).map((c) => (
+          {activeCourses().filter((c) => c.side === prefs.side).map((c) => (
             <li key={c.id} data-testid="course-row">
               <span className="journal-row">
                 <span className="concept-name">{c.title}</span>
@@ -365,7 +365,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
               </span>
             </li>
           ))}
-          {COURSES.every((c) => c.side !== prefs.side) && <li className="muted">No course recorded for this side.</li>}
+          {activeCourses().every((c) => c.side !== prefs.side) && <li className="muted">No course recorded for this side.</li>}
         </ul>
         <p className="definition-small" data-testid="course-note">The courses stay on Chessreps: its terms do not allow their lines to be copied or collected, so the app does not know them. It learns a course move from you, when you confirm it or play it on the board here, and then holds you to it.</p>
       </section>

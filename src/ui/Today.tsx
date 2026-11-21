@@ -125,6 +125,11 @@ function Summary({ session, learner }: { session: SessionRecord; learner: Learne
   );
 }
 
+/** The way to the Account page: the account's initial, in the corner of Today (ADR-063). */
+function AccountLink({ name }: { name: string }) {
+  return <a className="account-link" data-testid="account-link" href={href('account')} aria-label="Account">{(name.trim()[0] ?? '?').toUpperCase()}</a>;
+}
+
 export function Today({ learner }: { learner: Learner }) {
   const db = useDb();
   const account = useAccount();
@@ -171,7 +176,7 @@ export function Today({ learner }: { learner: Learner }) {
   if (!session) {
     return (
       <div className="page" data-testid="today" data-state="unplanned">
-        <p className="kicker">{dateLabel}</p>
+        <div className="page-head"><p className="kicker">{dateLabel}</p>{account && <AccountLink name={account.name} />}</div>
         {account ? <h1 data-testid="greeting">{greeting(new Date(now), account.name)}</h1> : <h1>Today</h1>}
         <div className="actions start-actions">
           {/* Fixed places and sizes: the suggestion can change a moment after launch (a game fetched from
@@ -215,7 +220,7 @@ export function Today({ learner }: { learner: Learner }) {
   const idx = activeBlockIndex(session);
   return (
     <div className="page" data-testid="today" data-state={session.status}>
-      <p className="kicker">{dateLabel}</p>
+      <div className="page-head"><p className="kicker">{dateLabel}</p>{account && <AccountLink name={account.name} />}</div>
       {account ? <h1 data-testid="greeting">{greeting(new Date(now), account.name)}</h1> : <h1>Today</h1>}
       {session.status === 'done' ? (
         session.kind === 'play' ? <PlaySummary session={session} entry={journal.find((j) => j.sessionId === session.id)} /> : <Summary session={session} learner={learner} />

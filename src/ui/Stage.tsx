@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { noteScreenChange } from '../app/tapGuard';
 import { FLIP_EVENT } from './Board';
 import { FlagButton, type Flaggable } from './Flag';
+import { isAdminLike } from '../account/role';
 
 const RunNoteContext = createContext<(note: string | null) => void>(() => {});
 
@@ -193,7 +194,7 @@ export function RunFrame({ back, title, clock, side, testid, attrs, children }: 
             )}
             {note && !viewing && <span className="run-note" data-testid="run-note">{note}</span>}
             {side}
-            {flag && <FlagButton key={flag.id} item={flag} />}
+            {flag && isAdminLike() && <FlagButton key={flag.id} item={flag} />}
             <button className="quiet flip-bar" data-testid="flip-board" aria-label="Flip board" onClick={() => window.dispatchEvent(new Event(FLIP_EVENT))}>⇅</button>
           </span>
         </header>

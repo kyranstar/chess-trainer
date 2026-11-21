@@ -46,6 +46,27 @@ function OpenGlyph() {
   return <img className="glyph" src="icon.svg" alt="" />;
 }
 
+/** The steps to add the app to the Home Screen (or, on a Mac with Safari, the Dock). */
+export function InstallSteps({ mac = false }: { mac?: boolean }) {
+  return (
+    <ol className="install-steps">
+      {mac ? (
+        <>
+          <li><ShareGlyph /><span>In Safari’s menu bar, choose <strong>File</strong>, then <strong>Add to Dock</strong>.</span></li>
+          <li><AddGlyph /><span>Choose <strong>Add</strong>.</span></li>
+          <li><OpenGlyph /><span>Open <strong>Chess Trainer</strong> from your Dock.</span></li>
+        </>
+      ) : (
+        <>
+          <li><ShareGlyph /><span>Tap <strong>Share</strong> in Safari’s toolbar.</span></li>
+          <li><AddGlyph /><span>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</span></li>
+          <li><OpenGlyph /><span>Open <strong>Chess Trainer</strong> from your Home Screen.</span></li>
+        </>
+      )}
+    </ol>
+  );
+}
+
 /** iPhone, iPad and Safari on the Mac: install before signing in, so sign-in happens once, in the installed app. */
 export function InstallFirst({ onBrowser }: { onBrowser: () => void }) {
   const mac = platform() === 'mac-safari';
@@ -54,21 +75,7 @@ export function InstallFirst({ onBrowser }: { onBrowser: () => void }) {
       <AppMark />
       <h1>{mac ? 'Add Chess Trainer to your Dock' : 'Add Chess Trainer to your Home Screen'}</h1>
       <p className="lede">It opens like an app, works offline, and you sign in once, there.</p>
-      <ol className="install-steps">
-        {mac ? (
-          <>
-            <li><ShareGlyph /><span>In Safari’s menu bar, choose <strong>File</strong>, then <strong>Add to Dock</strong>.</span></li>
-            <li><AddGlyph /><span>Choose <strong>Add</strong>.</span></li>
-            <li><OpenGlyph /><span>Open <strong>Chess Trainer</strong> from your Dock.</span></li>
-          </>
-        ) : (
-          <>
-            <li><ShareGlyph /><span>Tap <strong>Share</strong> in Safari’s toolbar.</span></li>
-            <li><AddGlyph /><span>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</span></li>
-            <li><OpenGlyph /><span>Open <strong>Chess Trainer</strong> from your Home Screen.</span></li>
-          </>
-        )}
-      </ol>
+      <InstallSteps mac={mac} />
       <button className="link quiet-link" data-testid="install-browser" onClick={() => {
         try {
           localStorage.setItem(BROWSER_OK_KEY, '1');
@@ -184,8 +191,10 @@ async function lookUp(name: string): Promise<Player | 'none'> {
 }
 
 /** Find a Chess.com account and confirm it by its name and ratings. Used on first open and on the Account page. */
-export function LinkChessCom({ db, service, uid, onDone, skipLabel }: {
+export function LinkChessCom({ db, service, uid, onDone, skipLabel, compact = false }: {
   db: TrainerDB; service: AccountService; uid: string; onDone: () => void; skipLabel: string;
+  /** Inside the Account page: no heading of its own. */
+  compact?: boolean;
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -212,8 +221,8 @@ export function LinkChessCom({ db, service, uid, onDone, skipLabel }: {
   }
   return (
     <div className="link-chesscom" data-testid="link-chesscom">
-      <h1>Your Chess.com account</h1>
-      <p className="lede">Your games come in by themselves, and practice is built from them.</p>
+      {!compact && <h1>Your Chess.com account</h1>}
+      {!compact && <p className="lede">Your games come in by themselves, and practice is built from them.</p>}
       {found ? (
         <>
           <div className="player-card" data-testid="chesscom-found">

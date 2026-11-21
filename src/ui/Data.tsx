@@ -7,12 +7,13 @@ import { getMeta, setMeta } from '../db/db';
 import { installPack } from '../db/pack';
 import { browserRemoteFetch, clearRemote, DEFAULT_REMOTE_REPO, REMOTE_REPO_KEY, REMOTE_STATE_KEY, remoteMessage, type RemoteState, setRemote, uploadBackup } from '../db/remote';
 import { GamesImport } from './Games';
+import { currentRole } from '../account/role';
 
 /**
  * A copy of the backup in the learner's own private GitHub repository (ADR-048). Off until a
  * repository and a token are entered here; the token stays on this device.
  */
-function RemoteCopy() {
+export function RemoteCopy() {
   const db = useDb();
   const repo = useLiveQuery(() => getMeta<string>(db, REMOTE_REPO_KEY), [db]);
   const state = useLiveQuery(() => getMeta<RemoteState>(db, REMOTE_STATE_KEY), [db]);
@@ -157,10 +158,16 @@ export function DataPanel({ learner }: { learner: Learner }) {
     <>
       <section className="card" data-testid="card-data">
         <h2>Your data</h2>
-        <p>
-          Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. {remoteRepo ? `A copy of the backup is sent to your private repository ${remoteRepo} (set up below); nothing else is uploaded.` : 'Nothing is uploaded.'} The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
-          {' '}Progress lives on this device only; a backup file is the way to keep a copy or to move it to another device.
-        </p>
+        {currentRole() === 'local' ? (
+          <p>
+            Everything is stored only in this browser on this device: {learner.attempts.length} attempts, {learner.events.length} lesson records. {remoteRepo ? `A copy of the backup is sent to your private repository ${remoteRepo} (set up below); nothing else is uploaded.` : 'Nothing is uploaded.'} The only outside service the app ever contacts is Chess.com’s public API, to read your own games and ratings, and only if a username is set below.
+            {' '}Progress lives on this device only; a backup file is the way to keep a copy or to move it to another device.
+          </p>
+        ) : (
+          <p>
+            Stored on this device, with a copy saved to your account so another device picks up where this one left off: {learner.attempts.length} attempts, {learner.events.length} lesson records. Besides your account, the only outside service the app contacts is Chess.com’s public API, to read your own games and ratings. A backup file is another copy you keep yourself.
+          </p>
+        )}
         <p className="definition-small" data-testid="last-backup">
           {lastBackup ? `Last backup made ${new Date(lastBackup).toLocaleString()}.` : 'No backup has been made from this device.'}
           {' '}Browsers can clear site storage, so a backup file is the only durable copy.
@@ -181,7 +188,7 @@ export function DataPanel({ learner }: { learner: Learner }) {
         </div>
       </section>
 
-      <RemoteCopy />
+      {currentRole() === 'local' && <RemoteCopy />}
 
       <GamesImport />
 

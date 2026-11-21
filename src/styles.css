@@ -672,3 +672,11 @@ button.link.quiet-link { color: var(--muted); align-self: center; padding: 0.6re
 .player-initial { display: grid; place-items: center; background: var(--felt); color: var(--felt-ink); font-weight: 700; font-size: 1.5rem; }
 .player-name { font-weight: 700; font-size: 1.1rem; }
 .player-ratings { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.account-link { width: 2.25rem; height: 2.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--felt); color: var(--felt-ink); font-weight: 700; text-decoration: none; flex: none; }
+.account-email { margin-top: -0.6rem; }
+.admin-invite { display: flex; flex-direction: column; gap: 0.75rem; }
+.admin-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.admin-row { display: flex; flex-direction: column; gap: 0.6rem; }
+.admin-name { font-weight: 700; }
+button.danger { background: var(--flag); border-color: var(--flag); color: #fff; }

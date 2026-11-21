@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { openApp } from './helpers';
+import { failPuzzle, openApp } from './helpers';
 
 /**
  * Accounts (ADR-063) on the stand-in account service (src/account/fake.ts): the build under
@@ -121,4 +121,80 @@ test('a second device gets the progress', async ({ browser }, info) => {
   await openApp(pb, '#/learn');
   await expect(pb.getByTestId('concept-safety.hanging-pieces')).toHaveAttribute('data-stage', 'started');
   await b.close();
+});
+
+const profileOf = (email: string, name: string) => ({ uid: `fake-${email}`, email, name, chesscom: null, createdAt: 1, lastSeenAt: Date.UTC(2026, 10, 19), appVersion: 't', onboarded: true, copyAt: null });
+
+test('the admin invites and removes', async ({ page }) => {
+  const manifest = { rev: 1, chunks: 1, bytes: 100, sha256: 'x', exportTime: '2026-11-20T10:00:00.000Z', deviceId: 'd', appVersion: 't', schemaVersion: 4 };
+  await fakeAccounts(page, ADMIN, { state: state({ profiles: [profileOf(ADMIN, 'Kyran'), profileOf(SAM, 'Sam')], copies: { [`fake-${SAM}`]: { manifest, chunks: ['x'] } } }) });
+  await signIn(page);
+  await openApp(page, '#/today');
+  await page.getByTestId('account-link').click();
+  await page.getByTestId('manage-access').click();
+  await page.getByTestId('invite-name').fill('Eve');
+  await page.getByTestId('invite-email').fill('Eve@Example.com');
+  await page.getByTestId('invite-add').click();
+  const eve = page.getByTestId('invite-row').filter({ hasText: 'eve@example.com' });
+  await expect(eve).toContainText('Invited, not signed in yet');
+  const sam = page.getByTestId('invite-row').filter({ hasText: SAM });
+  await expect(sam).toContainText('Last seen');
+  await expect(page.getByTestId('invite-row').filter({ hasText: ADMIN }).getByTestId('invite-remove')).toHaveCount(0);
+  await sam.getByTestId('invite-remove').click();
+  await expect(sam).toContainText('Access removed');
+  await sam.getByTestId('delete-copy').click();
+  await sam.getByTestId('delete-copy-confirm').click();
+  await expect(sam.getByTestId('delete-copy')).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ct.fake')!).copies))).toEqual([]);
+});
+
+test('a friend sees none of the owner things', async ({ page }) => {
+  await fakeAccounts(page, SAM, { state: state({ profiles: [profileOf(SAM, 'Sam')] }) });
+  await signIn(page);
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  await failPuzzle(page);
+  await page.getByRole('button', { name: 'Show solution' }).click();
+  await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  await expect(page.getByTestId('flag-item')).toHaveCount(0);
+  await openApp(page, '#/progress/more/data');
+  await expect(page.getByTestId('card-data')).toBeVisible();
+  await expect(page.getByTestId('card-remote')).toHaveCount(0);
+  await openApp(page, '#/account');
+  await expect(page.getByTestId('account')).toContainText(SAM);
+  await expect(page.getByTestId('card-remote')).toHaveCount(0);
+  await expect(page.getByTestId('manage-access')).toHaveCount(0);
+  await openApp(page, '#/practice/openings');
+  await page.getByTestId('openings-more').locator('summary').click();
+  await expect(page.getByTestId('course-row')).toHaveCount(0);
+  await page.goto('./#/admin');
+  await expect(page.getByTestId('greeting')).toBeVisible();
+});
+
+test('the admin keeps the owner things', async ({ page }) => {
+  await fakeAccounts(page, ADMIN, { state: state({ profiles: [profileOf(ADMIN, 'Kyran')] }) });
+  await signIn(page);
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  await failPuzzle(page);
+  await page.getByRole('button', { name: 'Show solution' }).click();
+  await expect(page.getByTestId('verdict-revealed')).toBeVisible();
+  await expect(page.getByTestId('flag-item')).toBeVisible();
+  await openApp(page, '#/account');
+  await expect(page.getByTestId('card-remote')).toBeVisible();
+  await openApp(page, '#/practice/openings');
+  await page.getByTestId('openings-more').locator('summary').click();
+  await expect(page.getByTestId('course-row').first()).toBeVisible();
+});
+
+test('unlinking Chess.com from the account page', async ({ page }) => {
+  await mockChessCom(page);
+  await fakeAccounts(page, SAM, { state: state({ profiles: [profileOf(SAM, 'Sam')] }) });
+  await signIn(page);
+  await openApp(page, '#/account');
+  await page.getByTestId('chesscom-change').click();
+  await page.getByTestId('chesscom-input').fill('samplays');
+  await page.getByTestId('chesscom-check').click();
+  await page.getByTestId('chesscom-confirm').click();
+  await expect(page.getByTestId('account-chesscom')).toContainText('samplays');
+  await page.getByTestId('chesscom-unlink').click();
+  await expect(page.getByTestId('account-chesscom')).toContainText('Not linked');
 });

@@ -16,6 +16,7 @@
  */
 import { applyUci, fenOf, isLegalUci, positionFromFen, positionKey, sameMove, sanOf } from '../chess/rules';
 import { type RepertoireEntry, type Side, START_FEN } from './repertoire';
+import { isAdminLike } from '../account/role';
 
 export interface Course {
   id: string;
@@ -36,10 +37,18 @@ export const COURSES: Course[] = [
   { id: 'qga', title: 'Queen’s Gambit Accepted', author: 'FM Aleksa Alimpic', provider: 'Chessreps', url: 'https://www.chessreps.com/', side: 'black', root: ['d4', 'd5', 'c4'] },
 ];
 
+/**
+ * The courses in play on this device: the owner's subscriptions, so none for an invited friend
+ * (ADR-063), who gets suggestions everywhere as if no course were owned.
+ */
+export function activeCourses(): Course[] {
+  return isAdminLike() ? COURSES : [];
+}
+
 /** The course whose opening a decision lies in (the most specific one), for the side it is for. `path` is one move order to the position. */
 export function courseFor(side: Side, path: string[]): Course | null {
   let found: Course | null = null;
-  for (const c of COURSES) {
+  for (const c of activeCourses()) {
     if (c.side !== side || path.length < c.root.length || !c.root.every((san, i) => path[i] === san)) continue;
     if (!found || c.root.length > found.root.length) found = c;
   }

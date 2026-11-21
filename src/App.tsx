@@ -2,6 +2,8 @@ import { Component, type ReactNode, useEffect, useState } from 'react';
 import { href, useRoute } from './app/router';
 import { useDb, useLearner, useOnline, usePack } from './app/store';
 import { AccountGate } from './account/Gate';
+import { AccountPage } from './account/AccountPage';
+import { AdminPage } from './account/AdminPage';
 import { useAutoSync, useRemoteCopy } from './app/useAutoSync';
 import { ensureReviewPolicy } from './db/db';
 import { installPack, packStatus } from './db/pack';
@@ -91,7 +93,9 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
     else if (route.parts[1] === 'deep' && route.parts[2]) page = <DeepPage key={route.query.toString() + route.parts[2]} area={route.parts[2]} route={route} learner={learner} />;
     else if (route.parts[1] === 'deep-games') page = <DeepGamesList key={route.query.toString()} route={route} />;
     else page = <ProgressHome learner={learner} />;
-  } else page = <Today learner={learner} />;
+  } else if (tab === 'account') page = <AccountPage />;
+  else if (tab === 'admin') page = <AdminPage />;
+  else page = <Today learner={learner} />;
 
   return (
     <div className="app" data-testid="app" data-pack={pack?.state ?? 'checking'} data-ready={learner.ready}>

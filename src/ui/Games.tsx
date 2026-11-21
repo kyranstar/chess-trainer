@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { href, type Route } from '../app/router';
 import { type Learner, useDb, useDueReviews, useFocusMode, useNow } from '../app/store';
 import { STARTING_PROFILE } from '../app/profile';
+import { isAdminLike } from '../account/role';
 import { applyUci, fenAfter, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { runSyncRound, useSyncState } from '../app/useAutoSync';
@@ -57,6 +58,14 @@ export function GameCards({ sinceDate, periodLabel, period }: { sinceDate: strin
   const games = useGames();
   const live = useLiveRatings();
   if (!games) return null;
+  if (games.length === 0 && !isAdminLike()) {
+    return (
+      <section className="card" data-testid="card-ratings">
+        <h2>Game ratings</h2>
+        <p className="definition-small">No games on this device yet. Link your Chess.com account on the Account page and they arrive by themselves.</p>
+      </section>
+    );
+  }
   if (games.length === 0) {
     return (
       <section className="card" data-testid="card-ratings">
