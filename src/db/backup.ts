@@ -16,6 +16,8 @@ import type { RepertoireEntry } from '../openings/repertoire';
 import { isPortableSetting, type SettingStamp, STAMP_PREFIX, stampKey } from './stamps';
 
 export const BACKUP_FORMAT = 'chess-trainer-backup';
+const GAMES_OF = 'chesscom.gamesOf';
+const DECLINED = 'openings.declined';
 
 /** `append`: immutable rows, add if the id is new. `newer`: editable rows, the later `updatedAt` wins. */
 const TABLES = [
@@ -55,6 +57,8 @@ export interface BackupManifest {
   exporterVersion: string;
   exportTime: string; // ISO UTC
   deviceId: string;
+  /** Whose Chess.com games the file holds (ADR-063): another player's games are never merged in. */
+  gamesOf?: string;
   itemCounts: Partial<Record<BackupTable | 'settings' | 'settingStamps', number>>;
   contentHashes: Partial<Record<BackupTable | 'settings' | 'settingStamps', string>>;
 }
@@ -117,6 +121,7 @@ export async function exportBackup(db: TrainerDB, now: number = Date.now()): Pro
       exporterVersion: __APP_VERSION__,
       exportTime: new Date(now).toISOString(),
       deviceId: await getDeviceId(db),
+      ...((await db.meta.get(GAMES_OF))?.value ? { gamesOf: String((await db.meta.get(GAMES_OF))!.value) } : {}),
       itemCounts,
       contentHashes,
     },
@@ -202,8 +207,17 @@ export async function importBackup(db: TrainerDB, text: string): Promise<ImportR
   const added = Object.fromEntries(TABLES.map((t) => [t.name, 0])) as Record<BackupTable, number>;
   await db.transaction('rw', [...TABLES.map((t) => db.table(t.name)), db.reviewStates, db.meta], async () => {
     await mergeSettings(db, backup.data.settings ?? [], backup.data.settingStamps);
+    // Repertoire positions removed on purpose stay removed, whichever device removed them.
+    const declined = new Set(((await db.meta.get(DECLINED))?.value as string[] | undefined) ?? []);
+    // Games fetched for another Chess.com player never join this device's.
+    const localPlayer = (await db.meta.get(GAMES_OF))?.value as string | undefined;
+    const theirPlayer = backup.manifest.gamesOf;
+    const skipGames = !!theirPlayer && !!localPlayer && theirPlayer !== localPlayer;
+    if (theirPlayer && !localPlayer && (data.games?.length ?? 0) > 0) await db.meta.put({ key: GAMES_OF, value: theirPlayer });
     for (const t of TABLES) {
-      const rows = data[t.name] ?? [];
+      let rows = data[t.name] ?? [];
+      if (t.name === 'games' && skipGames) rows = [];
+      if (t.name === 'repertoire') rows = rows.filter((r) => !declined.has(String(r.id)));
       const table = db.table(t.name);
       if (t.mode === 'append') {
         const have = new Set((await table.toCollection().primaryKeys()) as string[]);
@@ -218,6 +232,7 @@ export async function importBackup(db: TrainerDB, text: string): Promise<ImportR
         }
       }
     }
+    if (declined.size) await db.repertoire.bulkDelete([...declined]);
     await rebuildReviews(db);
   });
   return { manifest: backup.manifest, added, reviewItems: await db.reviewStates.count() };

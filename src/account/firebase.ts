@@ -32,6 +32,26 @@ const ACCESS_KEY = 'ct.access';
 const CHECK_TIMEOUT_MS = 10_000;
 const MAX_CHUNKS = 64;
 
+/** The answer kept from the last open, whoever it was for: the app opens on it at once. */
+function bootAccess(): Access {
+  try {
+    const a = JSON.parse(localStorage.getItem(ACCESS_KEY) ?? 'null') as Access | null;
+    return a && a.kind === 'allowed' ? a : { kind: 'checking' };
+  } catch {
+    return { kind: 'checking' };
+  }
+}
+
+/** A redirect sign-in is under way in this tab (Firebase marks it in session storage). */
+function redirectPending(): boolean {
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) if (sessionStorage.key(i)?.startsWith('firebase:pendingRedirect:')) return true;
+  } catch {
+    // No session storage: assume none.
+  }
+  return false;
+}
+
 function cached(uid: string): Access | null {
   try {
     const a = JSON.parse(localStorage.getItem(ACCESS_KEY) ?? 'null') as Access | null;
@@ -57,14 +77,18 @@ export function firebaseAccountService(setup: FirebaseSetup): AccountService & {
   const app = initializeApp(setup.config, setup.name);
   const auth = initializeAuth(app, setup.emulators
     ? { persistence: inMemoryPersistence }
-    : { persistence: indexedDBLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver });
+    // No popup/redirect resolver here: given one, Firebase loads its helper frame from the network
+    // before its first answer on Safari. It is passed to the sign-in calls instead.
+    : { persistence: indexedDBLocalPersistence });
   const fs = getFirestore(app);
   if (setup.emulators) {
     connectAuthEmulator(auth, setup.emulators.auth, { disableWarnings: true });
     connectFirestoreEmulator(fs, setup.emulators.firestoreHost, setup.emulators.firestorePort);
   }
   const listeners = new Set<(a: Access) => void>();
-  let current: Access = { kind: 'checking' };
+  // Opening never waits on the network once an account has been let in on this device: the kept
+  // answer comes first, and Firebase's own (which can take a minute on a dead connection) follows.
+  let current: Access = setup.emulators && typeof localStorage === 'undefined' ? { kind: 'checking' } : bootAccess();
   let redirectError: string | undefined;
   const emit = (a: Access) => {
     current = a;
@@ -104,8 +128,8 @@ export function firebaseAccountService(setup: FirebaseSetup): AccountService & {
     }
   }
 
-  if (!setup.emulators) {
-    void getRedirectResult(auth).catch((e: { code?: string; message?: string }) => {
+  if (!setup.emulators && redirectPending()) {
+    void getRedirectResult(auth, browserPopupRedirectResolver).catch((e: { code?: string; message?: string }) => {
       redirectError = e.code === 'auth/redirect-cancelled-by-user' ? undefined : (e.message ?? 'Sign-in did not finish.');
       if (current.kind === 'signed-out' || current.kind === 'checking') emit({ kind: 'signed-out', error: redirectError });
     });
@@ -160,12 +184,12 @@ export function firebaseAccountService(setup: FirebaseSetup): AccountService & {
     async signIn() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      if (preferRedirect()) return signInWithRedirect(auth, provider);
+      if (preferRedirect()) return signInWithRedirect(auth, provider, browserPopupRedirectResolver);
       try {
-        await signInWithPopup(auth, provider);
+        await signInWithPopup(auth, provider, browserPopupRedirectResolver);
       } catch (e) {
         const code = (e as { code?: string }).code;
-        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') return signInWithRedirect(auth, provider);
+        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') return signInWithRedirect(auth, provider, browserPopupRedirectResolver);
         if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') throw e;
       }
     },

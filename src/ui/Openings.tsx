@@ -5,7 +5,7 @@ import { type Learner, useDb, useDueReviews, useFocusMode, useNow } from '../app
 import { applyUci, fenOf, positionFromFen, sameMove, sanOf } from '../chess/rules';
 import { getMeta, recordAttempt, setMeta } from '../db/db';
 import { formatPct } from '../metrics/metrics';
-import { declineEntry, DOUBTFUL_KEY, refreshRepertoire } from '../openings/auto';
+import { declineEntry, DOUBTFUL_KEY, putByHand, refreshRepertoire } from '../openings/auto';
 import { DEFAULT_BAND, loadOpeningBook } from '../openings/book';
 import { activeCourses, courseFor, leftRepertoire, needsConfirming } from '../openings/courses';
 import { useArmed, useScreenChange } from '../app/tapGuard';
@@ -111,7 +111,7 @@ export function OpeningDrill({ entry, book, band, sessionId, onDone }: {
   async function adopt() {
     if (!playedUci.current) return;
     const mine = makeEntry(entry.side, entry.fen, entry.path, playedUci.current, Date.now());
-    await db.repertoire.put(mine);
+    await putByHand(db, [mine]);
     setAdopted(mine.san);
     void refreshRepertoire(db);
   }
@@ -178,7 +178,7 @@ function ConfirmMove({ entry, book, band, onDone }: { entry: RepertoireEntry; bo
   const ev = choice && !same && book ? classifyMove(book, entry.positionKey, choice, [band]) : null;
 
   async function save(uci: string) {
-    await db.repertoire.put(makeEntry(entry.side, entry.fen, entry.path, uci, Date.now()));
+    await putByHand(db, [makeEntry(entry.side, entry.fen, entry.path, uci, Date.now())]);
     void refreshRepertoire(db);
     onDone();
   }
@@ -215,7 +215,7 @@ function GapBuilder({ gap, side, book, band, onSaved, onSkip }: { gap: Decision;
 
   async function save() {
     if (!choice) return;
-    await db.repertoire.put(makeEntry(side, gap.fen, gap.path, choice, Date.now()));
+    await putByHand(db, [makeEntry(side, gap.fen, gap.path, choice, Date.now())]);
     onSaved();
   }
 
@@ -257,7 +257,7 @@ export function OpeningsHome({ learner }: { learner: Learner }) {
       const have = new Map(entries.filter((e) => e.side === prefs.side).map((e) => [e.positionKey, e]));
       const fresh = r.entries.filter((e) => !have.has(e.positionKey));
       const differing = r.entries.filter((e) => have.has(e.positionKey) && have.get(e.positionKey)!.uci !== e.uci).length;
-      await db.repertoire.bulkPut(fresh);
+      await putByHand(db, fresh);
       setPgnMessage({
         kind: 'ok',
         text: `Read ${r.games} game${r.games === 1 ? '' : 's'}: added ${fresh.length} position${fresh.length === 1 ? '' : 's'}. ${differing} already had a different move recorded and ${r.conflicts.length} appeared with two different moves in the file; in both cases the earlier choice was kept.`,

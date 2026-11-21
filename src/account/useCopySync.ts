@@ -7,9 +7,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { setMeta, type TrainerDB } from '../db/db';
-import { REMOTE_MIN_INTERVAL_MS } from '../db/remote';
 import type { AccountInfo } from './context';
-import { COPY_AT, COPY_ERROR, hasNoPractice, pullCopy, pushCopy } from './copy';
+import { COPY_ERROR, syncOnce } from './copy';
 
 const TICK_MS = 30_000;
 
@@ -24,28 +23,15 @@ export function useCopySync(db: TrainerDB, account: AccountInfo): void {
       if (busy || !navigator.onLine) return;
       busy = true;
       const { db: d, account: a } = ref.current;
-      const store = a.service.copyStore(a.uid);
       try {
-        if (kind === 'pull') {
-          const r = await pullCopy(d, store);
-          if (r.heldBack) await setMeta(d, COPY_ERROR, 'newer-app');
-          if (!seen) {
-            seen = true;
-            void a.service.saveProfile(a.uid, { lastSeenAt: Date.now(), appVersion: __APP_VERSION__ }).catch(() => {});
-          }
+        const r = await syncOnce(d, a.service.copyStore(a.uid), kind, Date.now(), lastPush);
+        if (kind === 'pull' && !seen) {
+          seen = true;
+          void a.service.saveProfile(a.uid, { lastSeenAt: Date.now(), appVersion: __APP_VERSION__ }).catch(() => {});
         }
-        if (await hasNoPractice(d)) return;
-        if (kind === 'tick' && Date.now() - lastPush < REMOTE_MIN_INTERVAL_MS) return;
-        const before = (await d.meta.get(COPY_AT))?.value as number | undefined;
-        const r = await pushCopy(d, store, Date.now());
-        if (!r.ok) {
-          await setMeta(d, COPY_ERROR, r.reason === 'error' ? (r.detail ?? 'error') : r.reason);
-          return;
-        }
-        await d.meta.delete(COPY_ERROR);
-        if (r.at !== before) {
-          lastPush = r.at;
-          void a.service.saveProfile(a.uid, { copyAt: r.at, lastSeenAt: Date.now() }).catch(() => {});
+        if (r.pushedAt) {
+          lastPush = r.pushedAt;
+          void a.service.saveProfile(a.uid, { copyAt: r.pushedAt, lastSeenAt: Date.now() }).catch(() => {});
         }
       } catch (e) {
         await setMeta(d, COPY_ERROR, (e as Error).message).catch(() => {});

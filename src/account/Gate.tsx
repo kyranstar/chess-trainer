@@ -49,6 +49,8 @@ function onboardedHere(uid: string): boolean {
   }
 }
 
+const RESTORE_WAIT_MS = 6_000;
+
 type Opened = { uid: string; db: TrainerDB; phase: 'restoring' | 'first-open' | 'ready' };
 
 function Accounts({ service, children }: { service: AccountService; children: ReactNode }) {
@@ -82,7 +84,10 @@ function Accounts({ service, children }: { service: AccountService; children: Re
       if (navigator.onLine && (await hasNoPractice(db))) {
         try {
           const store = service.copyStore(a.uid);
-          if (await store.readManifest()) {
+          // A dead connection must not hold the app: after a few seconds it opens without the copy,
+          // which is then merged in the background.
+          const manifest = await Promise.race([store.readManifest(), new Promise<null>((r) => setTimeout(() => r(null), RESTORE_WAIT_MS))]);
+          if (manifest) {
             setOpened({ uid: a.uid, db, phase: 'restoring' });
             await pullCopy(db, store);
           }

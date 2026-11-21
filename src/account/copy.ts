@@ -14,7 +14,7 @@
  */
 import { exportBackup, importBackup, serializeBackup } from '../db/backup';
 import { getDeviceId, getMeta, SCHEMA_VERSION, setMeta, type TrainerDB } from '../db/db';
-import { dataSignature, decodeRemoteFile, gzipBase64 } from '../db/remote';
+import { dataSignature, decodeRemoteFile, gzipBase64, REMOTE_MIN_INTERVAL_MS } from '../db/remote';
 
 export interface CopyManifest {
   rev: number;
@@ -61,7 +61,17 @@ export async function hasNoPractice(db: TrainerDB): Promise<boolean> {
 /** Merges the account's copy if it is newer than the last one merged here. */
 export async function pullCopy(db: TrainerDB, store: CopyStore): Promise<PullResult> {
   const m = await store.readManifest();
-  if (!m || m.rev <= ((await getMeta<number>(db, COPY_REV)) ?? 0)) return { merged: false };
+  const localRev = (await getMeta<number>(db, COPY_REV)) ?? 0;
+  if (!m || m.rev < localRev) {
+    // The account's copy is gone or older than the last one merged here (deleted by the admin,
+    // or in the console): forget what was sent, so the next push writes the whole copy again.
+    if (localRev !== (m?.rev ?? 0)) {
+      await setMeta(db, COPY_REV, m?.rev ?? 0);
+      await db.meta.delete(COPY_SIGNATURE);
+    }
+    return { merged: false };
+  }
+  if (m.rev === localRev) return { merged: false };
   if (m.schemaVersion > SCHEMA_VERSION) return { merged: false, heldBack: 'newer-app' };
   const base64 = (await store.readChunks(m)).join('');
   if ((await sha256(base64)) !== m.sha256) throw new Error('The copy in your account is damaged; it was not merged.');
@@ -103,6 +113,35 @@ export async function pushCopy(db: TrainerDB, store: CopyStore, now: number): Pr
   } catch (e) {
     return e instanceof TypeError ? { ok: false, reason: 'offline' } : { ok: false, reason: 'error', detail: (e as Error).message };
   }
+}
+
+/**
+ * One round of keeping the copy in step (the hook in useCopySync.ts runs it): merge the
+ * account's copy when asked to, then send this device's data if it changed. A copy from a
+ * newer version of the app is not merged, and nothing is sent over it until the app updates;
+ * its notice stays for the Account page. A device with no practice of its own sends nothing.
+ * Returns the time of a write that happened, for the profile.
+ */
+export async function syncOnce(db: TrainerDB, store: CopyStore, kind: 'pull' | 'tick' | 'hidden', now: number, lastPush = 0): Promise<{ pushedAt?: number }> {
+  if (kind === 'pull') {
+    const r = await pullCopy(db, store);
+    if (r.heldBack) {
+      await setMeta(db, COPY_ERROR, 'newer-app');
+      return {};
+    }
+    if ((await getMeta<string>(db, COPY_ERROR)) === 'newer-app') await db.meta.delete(COPY_ERROR);
+  }
+  if ((await getMeta<string>(db, COPY_ERROR)) === 'newer-app') return {};
+  if (await hasNoPractice(db)) return {};
+  if (kind === 'tick' && now - lastPush < REMOTE_MIN_INTERVAL_MS) return {};
+  const before = await getMeta<number>(db, COPY_AT);
+  const r = await pushCopy(db, store, now);
+  if (!r.ok) {
+    await setMeta(db, COPY_ERROR, r.reason === 'error' ? (r.detail ?? 'error') : r.reason);
+    return {};
+  }
+  await db.meta.delete(COPY_ERROR);
+  return r.at !== before ? { pushedAt: r.at } : {};
 }
 
 /** A copy store in memory, for tests and the stand-in account service. */

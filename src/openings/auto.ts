@@ -30,13 +30,24 @@ export interface RepertoireUpdate {
   doubtful: Doubtful[];
 }
 
-/** Removes an entry at the learner's request; if the app had put it there, it will not put it back. */
+/**
+ * Removes an entry at the learner's request. The app will not put a move back in that position
+ * by itself, and the removal is kept (also for a move recorded by hand) so that a merge with
+ * another device's copy does not bring the row back (ADR-063).
+ */
 export async function declineEntry(db: TrainerDB, entry: RepertoireEntry): Promise<void> {
   await db.repertoire.delete(entry.id);
-  if (!entry.source) return;
   const declined = new Set((await getMeta<string[]>(db, DECLINED_KEY)) ?? []);
   declined.add(entry.id);
   await setMeta(db, DECLINED_KEY, [...declined]);
+}
+
+/** Records moves the learner chose by hand; a position he had removed is his again. */
+export async function putByHand(db: TrainerDB, entries: RepertoireEntry[]): Promise<void> {
+  const ids = new Set(entries.map((e) => e.id));
+  const declined = (await getMeta<string[]>(db, DECLINED_KEY)) ?? [];
+  if (declined.some((id) => ids.has(id))) await setMeta(db, DECLINED_KEY, declined.filter((id) => !ids.has(id)));
+  await db.repertoire.bulkPut(entries);
 }
 
 export async function updateRepertoire(db: TrainerDB, book: OpeningBook, band: number, now: number): Promise<RepertoireUpdate> {
