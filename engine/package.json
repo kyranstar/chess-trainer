@@ -1,0 +1,5 @@
+{
+  "type": "commonjs",
+  "private": true,
+  "description": "Marks the vendored engine file as CommonJS so Node can load it in tests."
+}
