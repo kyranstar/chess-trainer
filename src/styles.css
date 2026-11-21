@@ -656,7 +656,7 @@ a.pcard:active { background: var(--paper); }
 .about-list dd { display: inline; margin: 0 0 0 0.3rem; color: var(--muted); font-size: 0.92rem; }
 
 /* Before the app, with accounts (ADR-063): install first, welcome, not on the list, first open. */
-.page.onboard { min-height: 100dvh; justify-content: center; gap: 1.1rem; padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
+.page.onboard { min-height: 100dvh; justify-content: center; gap: 1.1rem; padding-bottom: calc(2rem + env(safe-area-inset-bottom)); width: 100%; max-width: 30rem; margin: 0 auto; }
 .onboard-mark { width: 64px; height: 64px; border-radius: 14px; }
 .onboard h1 { margin-bottom: 0; }
 .onboard .lede { color: var(--muted); }
