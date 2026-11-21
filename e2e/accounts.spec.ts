@@ -198,3 +198,36 @@ test('unlinking Chess.com from the account page', async ({ page }) => {
   await page.getByTestId('chesscom-unlink').click();
   await expect(page.getByTestId('account-chesscom')).toContainText('Not linked');
 });
+
+test('the admin flags any screen with a note; a friend has no flag', async ({ page }) => {
+  await fakeAccounts(page, ADMIN, { state: state({ profiles: [profileOf(ADMIN, 'Kyran')] }) });
+  await signIn(page);
+  await openApp(page, '#/learn');
+  await page.getByTestId('screen-flag').click();
+  await page.getByTestId('flag-note').fill('Too much text at the top');
+  await page.getByTestId('flag-save').click();
+  await expect(page.getByTestId('flag-sheet')).toHaveCount(0);
+  // Before a puzzle is answered there is no position flag, but the screen can be flagged from the bar.
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  await expect(page.getByTestId('puzzle')).toHaveAttribute('data-phase', 'solving');
+  await expect(page.getByTestId('flag-item')).toHaveCount(0);
+  // One flag in sight: the bar's (the corner one is hidden on exercise screens).
+  await expect(page.getByTestId('screen-flag').filter({ visible: true })).toHaveCount(1);
+  await expect(page.locator('.run-bar').getByTestId('screen-flag')).toBeVisible();
+  await openApp(page, '#/progress/more/data');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('backup-download').click()]);
+  const backup = JSON.parse(await (await download.createReadStream()).toArray().then((c) => Buffer.concat(c).toString('utf8')));
+  const flags = backup.data.settings.filter((r: { key: string }) => r.key.startsWith('flag:')).map((r: { value: unknown }) => r.value);
+  expect(flags).toContainEqual(expect.objectContaining({ kind: 'screen', route: '#/learn', heading: 'Learn', note: 'Too much text at the top' }));
+});
+
+test('a friend has no flag on any screen', async ({ page }) => {
+  await fakeAccounts(page, SAM, { state: state({ profiles: [profileOf(SAM, 'Sam')] }) });
+  await signIn(page);
+  await openApp(page, '#/learn');
+  await expect(page.getByTestId('learn-home')).toBeVisible();
+  await expect(page.getByTestId('screen-flag')).toHaveCount(0);
+  await openApp(page, '#/practice/run?concept=mate.in-one');
+  await expect(page.getByTestId('puzzle')).toHaveAttribute('data-phase', 'solving');
+  await expect(page.getByTestId('screen-flag')).toHaveCount(0);
+});

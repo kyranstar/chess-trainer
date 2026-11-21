@@ -28,6 +28,26 @@ export interface Flag {
   state: Record<string, string>;
   /** The version of the app that showed it. */
   app: string;
+  /** A flag on any screen (owner request, 2026-11-20; ADR-063): where it was set, the screen's heading, and the owner's note. */
+  route?: string;
+  heading?: string;
+  note?: string;
+}
+
+/**
+ * A flag on a screen that is not an answered position: the route, the screen's first heading,
+ * the board on it if there is one, what the screen said (trimmed), and the owner's note.
+ */
+export function screenFlag(root: ParentNode, route: string, note: string, ts: number): Flag {
+  const heading = root.querySelector('h1, h2')?.textContent?.trim() ?? '';
+  const text = ((root as HTMLElement).innerText ?? root.textContent ?? '').replace(/\s*\n\s*/g, ' | ').replace(/\s+/g, ' ').trim();
+  const n = note.trim();
+  return {
+    id: `screen:${route}:${ts}`, kind: 'screen', ts,
+    fen: root.querySelector('.board[data-fen]')?.getAttribute('data-fen') ?? null,
+    said: text.slice(0, 800), state: {}, app: __APP_VERSION__, route, heading,
+    ...(n ? { note: n.slice(0, 500) } : {}),
+  };
 }
 
 export async function setFlag(db: TrainerDB, flag: Flag): Promise<void> {

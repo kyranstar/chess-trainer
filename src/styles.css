@@ -680,3 +680,19 @@ button.link.quiet-link { color: var(--muted); align-self: center; padding: 0.6re
 .admin-row { display: flex; flex-direction: column; gap: 0.6rem; }
 .admin-name { font-weight: 700; }
 button.danger { background: var(--flag); border-color: var(--flag); color: #fff; }
+/* A flag on any screen, for the admin (ADR-063): in the run bar, or in the corner above the tabs. */
+.run-side .flag-item-like { min-width: 2.4rem; min-height: 2.4rem; padding: 0; border-radius: 99px; font-size: 1.15rem; line-height: 1; color: var(--muted); }
+.screen-flag[aria-pressed='true'] { background: var(--flag-soft); border-color: var(--flag); color: var(--flag); }
+.screen-flag-float {
+  position: fixed; right: 0.75rem; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + 0.75rem); z-index: 21;
+  width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; border-radius: 99px; font-size: 1.1rem; line-height: 1;
+  background: var(--surface); color: var(--muted); box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.app:has(.page.run) .screen-flag-float, .app:has(.page.onboard) .screen-flag-float { display: none; }
+.flag-sheet {
+  position: fixed; left: 0.75rem; right: 0.75rem; bottom: calc(env(safe-area-inset-bottom) + 0.75rem); z-index: 40;
+  max-width: 32rem; margin: 0 auto; display: flex; flex-direction: column; gap: 0.7rem;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 1rem; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+.flag-sheet-title { font-weight: 700; }
+.flag-sheet input { font: inherit; padding: 0.6rem 0.7rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink); }

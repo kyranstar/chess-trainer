@@ -40,6 +40,9 @@ console.log(`Backup written ${backup.manifest.exportTime}: ${flags.length} flag$
 for (const f of open) {
   const attempts = backup.data.attempts.filter((a) => a.exerciseId === f.id).sort((a, b) => a.ts - b.ts);
   console.log(`\n[${f.kind}] ${f.id}   flagged ${new Date(f.ts).toISOString()}   app ${f.app}${handled[f.id] ? '   (handled before, flagged again)' : ''}`);
+  // A flag on any screen (ADR-063): where it was set, its heading and the owner's note.
+  if (f.route) console.log(`  screen: ${f.route}${f.heading ? `   "${f.heading}"` : ''}`);
+  if (f.note) console.log(`  note: ${f.note}`);
   console.log(`  position: ${f.fen ?? 'not recorded'}`);
   console.log(`  the screen said: ${f.said}`);
   console.log(`  state: ${JSON.stringify(f.state)}`);

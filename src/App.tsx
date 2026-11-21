@@ -2,6 +2,8 @@ import { Component, type ReactNode, useEffect, useState } from 'react';
 import { href, useRoute } from './app/router';
 import { useDb, useLearner, useOnline, usePack } from './app/store';
 import { AccountGate } from './account/Gate';
+import { currentRole } from './account/role';
+import { ScreenFlag } from './ui/Flag';
 import { AccountPage } from './account/AccountPage';
 import { AdminPage } from './account/AdminPage';
 import { useAutoSync, useRemoteCopy } from './app/useAutoSync';
@@ -107,6 +109,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
         </p>
       )}
       <main><ScreenBoundary resetKey={window.location.hash}>{page}</ScreenBoundary></main>
+      {currentRole() === 'admin' && <ScreenFlag floating />}
       <nav className="tabs" aria-label="Main">
         {TABS.map((t) => (
           <a key={t.key} href={href(t.key)} className={tab === t.key ? 'is-on' : ''} aria-current={tab === t.key ? 'page' : undefined} data-testid={`tab-${t.key}`}>
