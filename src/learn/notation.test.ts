@@ -1,7 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { LESSONS } from '../content';
-import { modernLesson } from './notation';
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+import { makeSan } from 'chessops/san';
+import { parseUci } from 'chessops/util';
+import { modernLesson, READINGS } from './notation';
 
 const texts = (l: (typeof LESSONS)[number]) => l.steps.flatMap((s) => [...('paragraphs' in s ? s.paragraphs : []), ...('before' in s ? (s.before ?? []) : []), ...('after' in s ? s.after : [])]);
 
@@ -56,6 +60,20 @@ describe('lessons in modern notation (owner, 2026-11-20)', () => {
     const t = texts(modernLesson(lesson).lesson).join(' ');
     expect(t).not.toMatch(/\bKt\b|\bP[a-h][1-8]x|\bO - O\b| ch\b|\b[KQRB]-[a-h][1-8]|\bP-[a-h][1-8]/);
     expect(t).not.toMatch(/[+#]\s+mate\b/);
+    // A descriptive square named in a sentence ("played to B 4").
+    expect(t).not.toMatch(/\b(?:to|on|at|from|of) (?:[KQ] ?)?(?:Kt|B|R|K|Q) ?[1-8]\b/);
+  });
+
+  it.each(READINGS.map((r) => [r.shown, r] as const))('a reading made by hand is legal in its position: %s', (_shown, r) => {
+    const pos = Chess.fromSetup(parseFen(r.fen).unwrap()).unwrap();
+    const move = parseUci(r.uci)!;
+    expect(pos.isLegal(move)).toBe(true);
+    const san = makeSan(pos, move);
+    // What is shown is the move as today's notation writes it in that position (a square for a square named in prose).
+    expect(r.shown.endsWith(san) || r.shown.endsWith(r.uci.slice(2, 4))).toBe(true);
+    const lesson = LESSONS.find((l) => l.id === r.lesson)!;
+    expect(texts(lesson).join(' ')).toContain(r.printed);
+    expect(texts(modernLesson(lesson).lesson).join(' ')).toContain(r.shown);
   });
 
   it('the lesson as stored is not changed', () => {

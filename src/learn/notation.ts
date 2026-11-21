@@ -132,6 +132,18 @@ const PROSE_SIDE: { lesson: string; phrase: string; side: 'white' | 'black' }[] 
   { lesson: 'capablanca-control-of-centre', phrase: 'To prevent Kt - Q 5', side: 'white' },
 ];
 
+/**
+ * Two places where the book's words cannot be rewritten mechanically, read once (ADR-064), each
+ * checked by a test against its position:
+ *  - "R-e8" where both Black rooks can go to e8: today's notation must say which; the f-rook, the
+ *    one that goes to e8 in such positions (the a-rook keeps its file);
+ *  - "played to B 4", a square named in a sentence, not a move: from f1 the Bishop's only B4 is c4.
+ */
+export const READINGS: { lesson: string; printed: string; shown: string; fen: string; uci: string }[] = [
+  { lesson: 'lasker-pin', printed: 'third time with R-e8', shown: 'third time with Rfe8', fen: 'r4rk1/pppbqppp/1bn2n2/4p1B1/3P4/1BN2N1P/PPPQ1PP1/R3R1K1 b - - 0 1', uci: 'f8e8' },
+  { lesson: 'capablanca-opening-strategy', printed: 'played to B 4', shown: 'played to c4', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4', uci: 'f1c4' },
+];
+
 /** The position with the other side to move (a null move): to read a move named for the side that just moved. */
 function flipped(pos: Chess): Chess | null {
   const fen = makeFen(pos.toSetup()).split(' ');
@@ -195,7 +207,8 @@ export function modernLesson(lesson: Lesson): { lesson: Lesson; unresolved: Unre
   const placed: Placed[] = [];
 
   /** `question`: the text leads into a question whose position and answer are known. */
-  const convert = (text: string, step: number, question?: { fen: string; move: string }): string => {
+  const convert = (raw: string, step: number, question?: { fen: string; move: string }): string => {
+    const text = READINGS.reduce((t, r) => (r.lesson === lesson.id ? t.split(r.printed).join(r.shown) : t), raw);
     const found = find(text, dialect);
     const pieces: string[] = [];
     let last = 0;
