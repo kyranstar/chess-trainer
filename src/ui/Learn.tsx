@@ -2,9 +2,10 @@ import { type ReactNode, useState } from 'react';
 import { go, href } from '../app/router';
 import { type Learner, useDb, useOnline } from '../app/store';
 import { CONCEPT_BY_ID, CONCEPTS, LESSON_BY_ID, LINK_PROVIDERS, SOURCE_BY_ID, THEMES } from '../content';
-import type { Concept, LessonLink } from '../content/types';
+import type { Concept, Lesson, LessonLink } from '../content/types';
 import { recordLessonEvent } from '../db/db';
 import { CHECK, type ConceptStatus, KPK_CHECK, needsRefresh, nextToLearn } from '../learn/curriculum';
+import { learnedCount, learnLabel, statusLine } from '../learn/labels';
 import { formatPct } from '../metrics/metrics';
 import { LessonPlayer } from './LessonPlayer';
 import { CheckRunner } from './runners';
@@ -36,22 +37,18 @@ export function evidenceText(s: ConceptStatus): string {
 export function LearnHome({ learner }: { learner: Learner }) {
   const online = useOnline();
   const areas = [...new Set(CONCEPTS.map((c) => c.area))];
-  const counts = {
-    demonstrated: learner.statuses.filter((s) => s.stage === 'demonstrated').length,
-    taught: learner.statuses.filter((s) => s.stage === 'taught').length,
-    offline: learner.statuses.filter((s) => s.offlineLesson).length,
-  };
-  // Where the curriculum stands: the first concept, in its order, that is open and not yet studied.
   // The same choice the daily session makes, so "next" means one thing in the app.
   const next = nextToLearn(learner.statuses, { online }).pick;
   return (
     <div className="page" data-testid="learn-home">
       <h1>Learn</h1>
-      <p className="muted small" data-testid="learn-counts">
-        {counts.demonstrated} of {CONCEPTS.length} demonstrated, {counts.taught} studied and awaiting a check. {counts.offline} have a lesson on this device; the rest need a connection{online ? '' : ' (you are offline now)'}.
-      </p>
+      <p className="muted" data-testid="learn-counts">{learnedCount(learner.statuses)} of {CONCEPTS.length} learned{online ? '' : ' · offline: lessons that need a connection wait for one'}</p>
       {next && (
-        <a className="button primary big" data-testid="learn-next" href={href(`learn/${next.concept.id}`)}>Next: {next.concept.title}</a>
+        <section className="card up-next">
+          <p className="kicker">Up next</p>
+          <h2>{next.concept.title}</h2>
+          <a className="button primary big" data-testid="learn-next" href={href(`learn/${next.concept.id}`)}>Start</a>
+        </section>
       )}
       {areas.map((area) => (
         <section key={area} className="concept-group">
@@ -63,11 +60,11 @@ export function LearnHome({ learner }: { learner: Learner }) {
                   <span className={`stage-mark stage-${s.stage}`} aria-hidden />
                   <span className="concept-name">{s.concept.title}</span>
                   <span className="concept-meta">
-                    {/* The dot already says "not started"; the words are for what it cannot say. */}
                     {[
-                      s.stage === 'new' ? '' : stageText(s),
-                      !s.prereqsMet && s.stage === 'new' ? `After ${s.unmetPrereqs.map((p) => CONCEPT_BY_ID.get(p)?.title).join(', ')}` : '',
-                      s.offlineLesson ? 'Lesson on device' : s.hasAnyLesson ? 'Online lesson' : 'No lesson yet',
+                      learnLabel(s),
+                      !s.prereqsMet && s.stage === 'new' ? `after ${s.unmetPrereqs.map((p) => CONCEPT_BY_ID.get(p)?.title).join(', ')}` : '',
+                      !online && !s.offlineLesson && s.hasAnyLesson ? 'needs a connection' : '',
+                      !s.hasAnyLesson ? 'no lesson yet' : '',
                     ].filter(Boolean).join(' · ')}
                   </span>
                 </a>
@@ -124,66 +121,48 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   }
 
   const page = (inner: ReactNode) => (embedded ? inner : <div className="page"><a className="back" href={href('learn')}>Learn</a>{inner}</div>);
+  const label = learnLabel(status);
+  const local = concept.localLessons.map((id) => LESSON_BY_ID.get(id)!);
+  const lessonButton = (l: Lesson, main: boolean) => (
+    <button key={l.id} className={main ? 'primary big' : 'big'} data-testid="start-lesson" onClick={() => setMode({ kind: 'lesson', id: l.id })}>
+      {status.stage === 'started' ? 'Continue the lesson' : status.taughtVia === 'local-lesson' || label === 'Learned' ? 'Read the lesson again' : 'Start the lesson'}
+    </button>
+  );
+  const checkButton = (main: boolean) => status.assessable && (
+    <button className={main ? 'primary big' : 'big'} data-testid="start-check" onClick={() => setMode({ kind: 'check' })}>
+      {label === 'Learned' ? 'Take another check' : label === 'Check due' ? 'Take the check' : 'Skip ahead with a pre-test'}
+    </button>
+  );
+  const practiseButton = (main: boolean) => (concept.themes.length > 0 || concept.assessment.kind === 'kpk-playout') && (
+    <button className={main ? 'primary big' : 'big'} onClick={() => go('practice/run', concept.assessment.kind === 'kpk-playout' ? { mode: 'kpk' } : { concept: concept.id })}>Practise</button>
+  );
+  // One main action, the one the concept's state calls for; the rest are secondary.
+  const actions = label === 'Not started' || label === 'Started'
+    ? [...local.map((l, i) => lessonButton(l, i === 0)), checkButton(local.length === 0), practiseButton(false)]
+    : label === 'Check due'
+      ? [checkButton(true), ...local.map((l) => lessonButton(l, false)), practiseButton(false)]
+      : [practiseButton(true), ...local.map((l) => lessonButton(l, false)), checkButton(false)];
   return page(
     <div className="concept" data-testid="concept" data-concept={concept.id} data-stage={status.stage}>
       {!embedded && <p className="kicker">{concept.area}</p>}
       <h1>{concept.title}</h1>
-      {def && (
-        <p className="definition">
-          {def.description}
-        </p>
+      {def && <p className="definition">{def.description}</p>}
+      <p className="concept-status" data-testid="concept-stage">{statusLine(status)}</p>
+      {status.unmetPrereqs.length > 0 && status.stage === 'new' && (
+        <p className="muted small">Comes after {status.unmetPrereqs.map((p, i) => <span key={p}>{i > 0 && ', '}<a href={href(`learn/${p}`)}>{CONCEPT_BY_ID.get(p)?.title}</a></span>)}.</p>
       )}
-      <dl className="facts">
-        <dt>Status</dt>
-        <dd data-testid="concept-stage">{stageText(status)}</dd>
-        <dt>Evidence</dt>
-        <dd data-testid="concept-evidence">{evidenceText(status)}</dd>
-        {concept.prereqs.length > 0 && (
-          <>
-            <dt>Comes after</dt>
-            <dd>
-              {concept.prereqs.map((p, i) => (
-                <span key={p}>
-                  {i > 0 && ', '}
-                  <a href={href(`learn/${p}`)}>{CONCEPT_BY_ID.get(p)?.title}</a>
-                  {status.unmetPrereqs.includes(p) ? ' (not yet demonstrated)' : ''}
-                </span>
-              ))}
-            </dd>
-          </>
-        )}
-      </dl>
-
-      {concept.localLessons.length > 0 && (
-        <section>
-          <h2>Lesson on this device</h2>
-          {concept.localLessons.map((id) => {
-            const l = LESSON_BY_ID.get(id)!;
-            const src = SOURCE_BY_ID.get(l.sourceId)!;
-            return (
-              <div className="resource" key={id}>
-                <p className="resource-title">{l.title}</p>
-                <p className="muted">{src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes.</p>
-                <button className="primary" data-testid="start-lesson" onClick={() => setMode({ kind: 'lesson', id })}>
-                  {status.taughtVia === 'local-lesson' ? 'Read again' : 'Start lesson'}
-                </button>
-              </div>
-            );
-          })}
-        </section>
-      )}
+      <div className="actions stack">{actions}</div>
+      {status.lastCheck && <p className="muted small" data-testid="last-check">Last check: {status.lastCheck.passed ? 'passed' : 'not passed'}{status.lastCheck.total ? ` (${status.lastCheck.correct} of ${status.lastCheck.total})` : ''}.</p>}
 
       {concept.links.length > 0 && (
-        <section>
-          <h2>Lessons elsewhere</h2>
-          <p className="muted small">These open on another site. Mark a lesson finished yourself when you come back.</p>
+        <details className="more" open={local.length === 0 || !!opened || openedBefore} data-testid="more-lessons">
+          <summary>More lessons{online ? '' : ' (need a connection)'}</summary>
+          <p className="muted small">These open on another site. Mark one finished yourself when you come back.</p>
           {!online && <p className="note" data-testid="offline-links">You are offline. These lessons need a connection.</p>}
           {concept.links.map((l) => (
             <div className="resource" key={l.url}>
               <p className="resource-title">{l.title}</p>
-              <p className="muted">
-                {providerName(l)}{l.author ? `, ${l.author}` : ''}{l.level ? `, level ${l.level}` : ''}. {l.access[0]!.toUpperCase()}{l.access.slice(1)}.{l.note ? ` ${l.note}` : ''}
-              </p>
+              <p className="muted">{providerName(l)}{l.author ? `, ${l.author}` : ''}{l.level ? `, level ${l.level}` : ''}. {l.access[0]!.toUpperCase()}{l.access.slice(1)}.{l.note ? ` ${l.note}` : ''}</p>
               <a className="button" href={l.url} target="_blank" rel="noreferrer" data-testid="open-link" onClick={() => void open(l)}>Open on {providerName(l)}</a>
               {l.fallbackUrl && l.fallbackUrl !== l.url && (
                 <p className="definition-small">If the link fails: <a href={l.fallbackUrl} target="_blank" rel="noreferrer" onClick={() => void open(l)}>the {l.sourceId === 'lichess-practice' ? 'study' : 'course page'}</a>.</p>
@@ -193,37 +172,28 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
           {(opened || openedBefore) && status.stage !== 'taught' && status.stage !== 'demonstrated' && (
             <div className="return-card" data-testid="return-card">
               <p><strong>Back from the lesson?</strong> Opening a link is not counted as studying.</p>
-              <div className="actions">
-                <button className="primary" data-testid="mark-done" onClick={() => void markDone()}>I finished the lesson</button>
-              </div>
+              <div className="actions"><button className="primary" data-testid="mark-done" onClick={() => void markDone()}>I finished the lesson</button></div>
             </div>
           )}
-        </section>
+        </details>
       )}
-      {!status.hasAnyLesson && <p className="note">No suitable human-written lesson was found for this concept in the source audit. It can still be practised.</p>}
+      {!status.hasAnyLesson && <p className="note">No lesson for this yet; it can still be practised.</p>}
 
-      <section>
-        <h2>Check understanding</h2>
-        {status.assessable ? (
-          <>
-            <p className="muted">
-              {concept.assessment.kind === 'kpk-playout'
-                ? `${KPK_CHECK.size} unseen endings against perfect play, no help. ${KPK_CHECK.pass} correct pass.`
-                : `${CHECK.size} unseen positions, no hints. ${CHECK.pass} first-try solves pass.`}
-            </p>
-            {status.lastCheck && <p data-testid="last-check">Last check: {status.lastCheck.passed ? 'passed' : 'not passed'}{status.lastCheck.total ? ` (${status.lastCheck.correct} of ${status.lastCheck.total})` : ''}.</p>}
-            <div className="actions">
-              <button className={status.stage === 'taught' ? 'primary' : ''} data-testid="start-check" onClick={() => setMode({ kind: 'check' })}>
-                {status.stage === 'demonstrated' ? 'Take another check' : status.stage === 'taught' ? 'Check understanding' : 'Pre-test this concept'}
-              </button>
-              {concept.themes.length > 0 && <button onClick={() => go('practice/run', { concept: concept.id })}>Practise with hints</button>}
-              {concept.assessment.kind === 'kpk-playout' && <button onClick={() => go('practice/run', { mode: 'kpk' })}>Practise this ending</button>}
-            </div>
-          </>
-        ) : (
-          <p className="note">No check exists for this concept yet, so it is never reported as demonstrated.</p>
-        )}
-      </section>
+      <details className="more" data-testid="about-concept">
+        <summary>About this</summary>
+        <dl className="facts">
+          <dt>Evidence</dt>
+          <dd data-testid="concept-evidence">{evidenceText(status)}</dd>
+          <dt>Check</dt>
+          <dd>{status.assessable
+            ? concept.assessment.kind === 'kpk-playout' ? `${KPK_CHECK.size} unseen endings against perfect play, no help; ${KPK_CHECK.pass} correct pass.` : `${CHECK.size} unseen positions, no hints; ${CHECK.pass} first-try solves pass.`
+            : 'No check exists for this yet, so it is never reported as learned.'}</dd>
+          {local.map((l) => {
+            const src = SOURCE_BY_ID.get(l.sourceId)!;
+            return (<span key={l.id} style={{ display: 'contents' }}><dt>Lesson</dt><dd>{l.title}: {src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes.</dd></span>);
+          })}
+        </dl>
+      </details>
     </div>,
   );
 }

@@ -78,15 +78,15 @@ test('play day: suggested after two study sessions, game logged by hand, shown o
 
 test('Today has one thing to do, and Progress is one page of cards with every other number and the backup one row away', async ({ page }) => {
   await openApp(page, '#/today');
-  await expect(page.getByTestId('start-session')).toHaveText('Start training · 30 min');
+  await expect(page.getByTestId('today-length')).toHaveText('30 min');
   await expect(page.getByTestId('start-mix')).toBeVisible();
-  // The plan, the other lengths and the optional baseline are folded away until asked for.
-  await expect(page.getByTestId('scoresheet')).toBeHidden();
+  // The day's plan is in the card, as the reason for its one main button (ADR-064); the other
+  // lengths and the optional baseline are folded away until asked for.
+  await expect(page.getByTestId('today-card').getByTestId('scoresheet')).toBeVisible();
   await expect(page.getByTestId('baseline-card')).toBeHidden();
   await page.getByTestId('today-options').locator('summary').click();
-  await expect(page.getByTestId('scoresheet')).toBeVisible();
   await page.getByRole('button', { name: '20 min' }).click();
-  await expect(page.getByTestId('start-session')).toHaveText('Start training · 20 min');
+  await expect(page.getByTestId('today-length')).toHaveText('20 min');
 
   // No folds and no period picker: every card is on the page, each in its own window (ADR-061).
   await page.goto('./#/progress');

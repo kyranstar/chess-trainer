@@ -178,34 +178,47 @@ export function Today({ learner }: { learner: Learner }) {
       <div className="page" data-testid="today" data-state="unplanned">
         <div className="page-head"><p className="kicker">{dateLabel}</p>{account && <AccountLink name={account.name} />}</div>
         {account ? <h1 data-testid="greeting">{greeting(new Date(now), account.name)}</h1> : <h1>Today</h1>}
-        <div className="actions start-actions">
-          {/* Fixed places and sizes: the suggestion can change a moment after launch (a game fetched from
-              Chess.com counts as a play day), and buttons that swap under the finger start the wrong kind of day. */}
-          <button className={suggestion.kind === 'study' ? 'primary big' : 'big'} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start training · {length} min</button>
-          <button className={suggestion.kind === 'play' ? 'primary big' : 'big'} data-testid="start-play" onClick={() => void start('play')}>Play day · one rapid game</button>
+        {/* One card: the day's plan is the reason for its one main button (ADR-064). The buttons keep
+            their places and sizes when the suggestion changes a moment after launch (a game fetched
+            from Chess.com counts as a play day); only which one is filled changes (ADR-051). */}
+        <section className="card today-card" data-testid="today-card">
+          <div className="today-card-head">
+            <h2>Today’s training</h2>
+            <span className="muted" data-testid="today-length">{length} min</span>
+          </div>
+          {suggestion.kind === 'play' && <p className="today-play">Today is a play day: one rapid game, then a short look back.</p>}
+          <Scoresheet session={preview} activeIndex={-1} />
+          <button className={suggestion.kind === 'study' ? 'primary big' : 'big'} data-testid="start-session" disabled={!packReady} onClick={() => void start('study')}>Start training</button>
+        </section>
+        <div className="today-secondary">
           <a className="button big" data-testid="start-mix" href={href('practice/run', { mode: 'mix' })}>Just practise</a>
+          <button className={suggestion.kind === 'play' ? 'primary big' : 'big'} data-testid="start-play" onClick={() => void start('play')}>Play a game</button>
         </div>
-        <p className="muted small" data-testid="suggestion" data-kind={suggestion.kind}>{suggestion.reason}</p>
-        {!packReady && <p className="note" data-testid="pack-missing">The practice positions are not installed on this device yet. Connect once to download them.</p>}
-        <p className="definition-small" data-testid="offline-ready" data-ready={packReady && appCached === true}>
-          {packReady && appCached === true
-            ? 'Stored on this phone: everything but new games and linked lessons works with no connection.'
-            : appCached === false
-              ? 'This browser cannot store the app for offline use. Add it to the Home Screen from Safari.'
-              : online
-                ? 'Still storing the app on this phone. Keep it open with a connection for a moment before going underground.'
-                : 'The app is not fully stored on this phone yet; it needs a connection once.'}
-        </p>
+        <p className="muted small" data-testid="suggestion" data-kind={suggestion.kind} hidden={suggestion.kind === 'study'}>{suggestion.reason}</p>
+        {!packReady && (online
+          ? <p className="muted small" data-testid="pack-missing">Getting the practice positions ready…</p>
+          : <p className="note" data-testid="pack-missing">The practice positions are not on this device yet. Connect once to download them.</p>)}
+        {/* Said only when it needs attention: once the app is stored for offline use there is nothing to say. */}
+        {packReady && appCached === true
+          ? <p className="offline-ok" data-testid="offline-ready" data-ready="true">Ready offline</p>
+          : (
+            <p className="note" data-testid="offline-ready" data-ready="false">
+              {appCached === false
+                ? 'This browser cannot store the app for offline use. Add it to the Home Screen from Safari.'
+                : online
+                  ? 'Still storing the app on this phone. Keep it open with a connection for a moment before going underground.'
+                  : 'The app is not fully stored on this phone yet; it needs a connection once.'}
+            </p>
+          )}
         {/* One thing to do on this screen: start. The length, the plan and the optional
             baseline are a tap away for the day they are wanted. */}
         <details className="today-options" data-testid="today-options">
-          <summary>Plan and length</summary>
+          <summary>Length and baseline</summary>
           <div className="length-picker" role="group" aria-label="Session length">
             {SESSION_LENGTHS.map((m) => (
               <button key={m} className={m === length ? 'chip is-on' : 'chip'} aria-pressed={m === length} onClick={() => setLength(m)}>{m} min</button>
             ))}
           </div>
-          <Scoresheet session={preview} activeIndex={-1} why />
           {!baseline.complete && packReady && (
             <div className="return-card" data-testid="baseline-card">
               <p><strong>Baseline: {baseline.sampled} of {baseline.total} early concepts sampled.</strong> Optional: about {baseline.positionsLeft} unseen positions, no hints.</p>

@@ -20,11 +20,12 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await expect(page.getByTestId('concept-stage')).toHaveText('Started');
   await expect(page.getByTestId('return-card')).toHaveCount(0);
   const popup = context.waitForEvent('page');
+  await openMoreLessons(page);
   await page.getByTestId('open-link').first().click();
   await (await popup).close();
   await expect(page.getByTestId('concept-stage')).toHaveText('Started');
   await page.getByTestId('mark-done').click();
-  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you, not yet checked');
+  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you · check due');
   await page.getByTestId('learn-continue').click();
 
   // Apply: new positions on the concept, solved on the real board.
@@ -171,8 +172,8 @@ test('local lesson: read the public-domain text, play its moves, and it is recor
     }
     await page.getByTestId('lesson-next').click();
   }
-  await expect(page.getByTestId('concept-stage')).toHaveText('Studied, not yet checked');
-  await expect(page.getByTestId('start-check')).toHaveText('Check understanding');
+  await expect(page.getByTestId('concept-stage')).toHaveText('Studied · check due');
+  await expect(page.getByTestId('start-check')).toHaveText('Take the check');
 
   // A lesson can be left and resumed part-way.
   await page.getByTestId('start-lesson').click();
@@ -254,10 +255,11 @@ test('the check for a studied concept comes in a later day’s session, unannoun
   await page.clock.install({ time: new Date(2026, 10, 10, 9, 0, 0) });
   await openApp(page, '#/learn/safety.hanging-pieces');
   const popup = context.waitForEvent('page');
+  await openMoreLessons(page);
   await page.getByTestId('open-link').first().click();
   await (await popup).close();
   await page.getByTestId('mark-done').click();
-  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you, not yet checked');
+  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you · check due');
 
   // Next morning: the session's test block opens with the check.
   await page.clock.setSystemTime(new Date(2026, 10, 11, 9, 0, 0));
@@ -404,3 +406,9 @@ test('a lesson says when it asks: reading pages show a captioned figure, questio
     expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
   }
 });
+
+/** "More lessons" (links to other sites) is folded on a concept that has a lesson of its own (ADR-064). */
+async function openMoreLessons(page: import('@playwright/test').Page) {
+  const more = page.getByTestId('more-lessons');
+  if ((await more.getAttribute('open')) === null) await more.locator('summary').click();
+}

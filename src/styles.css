@@ -693,14 +693,35 @@ button.danger { background: var(--flag); border-color: var(--flag); color: #fff;
 .attribution .source-details { display: inline; }
 .attribution .source-details summary { list-style: none; cursor: pointer; font-size: 1rem; padding: 0 0.3rem; }
 .attribution .source-details summary::-webkit-details-marker { display: none; }
+.attribution .source-details summary::before { content: none; }
 .attribution .source-details[open] .note { margin-top: 0.4rem; }
 .notation-note { font-size: 0.88rem; color: var(--muted); }
 .lesson-figures { display: flex; gap: 0.75rem; justify-content: center; align-items: flex-start; }
-.lesson-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: min(62%, 15rem); }
-.lesson-figure.is-half { width: min(48%, 11rem); }
+.lesson-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: min(50%, 12rem); }
+.lesson-figure.is-half { width: min(44%, 10rem); }
 .lesson-figure-board { width: 100%; padding: 5px; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
 .lesson-figure-board .board-wrap { width: 100%; min-width: 0; }
 .lesson-figure figcaption { font-size: 0.85rem; color: var(--muted); }
 .your-turn { display: flex; flex-direction: column; gap: 0.35rem; }
 .your-turn-label { align-self: flex-start; padding: 0.2rem 0.6rem; border-radius: 99px; background: var(--pencil-soft); color: var(--ink); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .lead-in { font-family: var(--book); font-size: 1rem; line-height: 1.5; color: var(--muted); }
+.up-next h2 { font-size: 1.3rem; }
+.concept-status { font-weight: 600; }
+details.more { border-top: 1px solid var(--rule); padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.55rem; }
+details.more > summary { cursor: pointer; font-weight: 600; color: var(--felt); list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: ' ›'; }
+details.more[open] > summary::after { content: ' ⌄'; }
+details.more[open] > * + * { margin-top: 0.55rem; }
+/* Today (ADR-064): one card with the day's plan and its one main button; two equal secondary buttons. */
+.today-card { gap: 0.8rem; }
+.today-card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.today-card-head h2 { font-size: 1.15rem; }
+.today-play { font-size: 0.95rem; background: var(--pencil-soft); border-radius: 8px; padding: 0.5rem 0.65rem; }
+.today-card .scoresheet { border: 0; background: transparent; border-radius: 0; }
+.today-card .sheet-row { padding: 0.6rem 0; grid-template-columns: 2rem 1fr auto; }
+.today-card .sheet-no { font-family: var(--ui); font-size: 0.85rem; font-weight: 700; border-right: 0; align-self: start; width: 1.6rem; height: 1.6rem; display: grid; place-items: center; border-radius: 50%; background: var(--paper); color: var(--muted); padding: 0; }
+.today-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.today-secondary .big { min-height: 3.25rem; }
+.offline-ok { font-size: 0.85rem; color: var(--muted); }
+.offline-ok::before { content: '✓ '; color: var(--good); font-weight: 700; }

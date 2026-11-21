@@ -95,6 +95,6 @@ test('the opposition is demonstrated by playing five unseen endings correctly, n
   }
   await expect(page.getByTestId('check-result')).toHaveAttribute('data-passed', 'true');
   await page.getByTestId('check-done').click();
-  await expect(page.getByTestId('concept-stage')).toHaveText('Demonstrated by pre-test');
+  await expect(page.getByTestId('concept-stage')).toHaveText('Learned by pre-test');
   await expect(page.getByTestId('concept-evidence')).toContainText('5 of 5 endings played out correctly first time');
 });

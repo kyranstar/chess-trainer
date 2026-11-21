@@ -11,7 +11,7 @@ test('after one online visit the app runs with no network: launch, practise, per
   });
   // The app says so itself, so the learner knows when it is safe to go underground.
   await expect(page.getByTestId('offline-ready')).toHaveAttribute('data-ready', 'true');
-  await expect(page.getByTestId('offline-ready')).toContainText('works with no connection');
+  await expect(page.getByTestId('offline-ready')).toHaveText('Ready offline');
 
   const requests: string[] = [];
   await context.setOffline(true);
@@ -37,6 +37,8 @@ test('after one online visit the app runs with no network: launch, practise, per
 
   // The local lesson opens offline; linked lessons say they need a connection.
   await page.goto('./#/learn/tactics.double-attack');
+  await expect(page.getByTestId('more-lessons').locator('summary')).toContainText('need a connection');
+  await page.getByTestId('more-lessons').locator('summary').click();
   await expect(page.getByTestId('offline-links')).toBeVisible();
   await page.getByTestId('start-lesson').click();
   await expect(page.getByTestId('lesson')).toContainText('There are two kinds of elementary attack.');

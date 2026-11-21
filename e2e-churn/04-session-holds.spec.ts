@@ -25,10 +25,11 @@ test('a whole study session under churn: apply (own-game question, puzzle), test
   await mockChessCom(page, clones(900));
   await openApp(page, '#/learn/safety.hanging-pieces');
   const popup = context.waitForEvent('page');
+  await openMoreLessons(page);
   await page.getByTestId('open-link').first().click();
   await (await popup).close();
   await page.getByTestId('mark-done').click();
-  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you, not yet checked');
+  await expect(page.getByTestId('concept-stage')).toHaveText('Marked done by you · check due');
 
   await page.clock.setSystemTime(new Date(2026, 10, 10, 9, 0, 0));
   await openApp(page, '#/progress');
@@ -361,3 +362,9 @@ test('session learn block: a lesson step with a move to find holds under churn a
   await still(page, 'endgame check mid play-out');
   expect(await page.getByTestId('run-note').textContent()).toBe(kicker);
 });
+
+/** "More lessons" (links to other sites) is folded on a concept that has a lesson of its own (ADR-064). */
+async function openMoreLessons(page: import('@playwright/test').Page) {
+  const more = page.getByTestId('more-lessons');
+  if ((await more.getAttribute('open')) === null) await more.locator('summary').click();
+}
