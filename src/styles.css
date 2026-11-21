@@ -727,3 +727,5 @@ details.more[open] > * + * { margin-top: 0.55rem; }
 .today-secondary .big { min-height: 3.25rem; }
 .offline-ok { font-size: 0.85rem; color: var(--muted); }
 .offline-ok::before { content: '✓ '; color: var(--good); font-weight: 700; }
+.facts-row { display: contents; }
+button.lesson-name { justify-content: flex-start; text-align: left; font-weight: 600; }

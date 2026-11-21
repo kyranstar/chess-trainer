@@ -13,6 +13,22 @@
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Chess Trainer</title>
+      <script>
+      // The look is painted before the app's code loads (ADR-064): ground colour and scheme only.
+      (function () {
+        try {
+          var l = localStorage.getItem('ct.look');
+          if (l !== 'studio' && l !== 'night') l = 'clubroom';
+          var dark = l === 'night' || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var bg = { clubroom: dark ? '#0f1713' : '#F3F1EA', studio: dark ? '#0E1116' : '#F7F8FA', night: '#111315' }[l];
+          var d = document.documentElement;
+          d.setAttribute('data-look', l);
+          d.style.setProperty('--paper', bg);
+          d.style.background = bg;
+          d.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

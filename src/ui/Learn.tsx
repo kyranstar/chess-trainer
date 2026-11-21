@@ -123,10 +123,20 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   const page = (inner: ReactNode) => (embedded ? inner : <div className="page"><a className="back" href={href('learn')}>Learn</a>{inner}</div>);
   const label = learnLabel(status);
   const local = concept.localLessons.map((id) => LESSON_BY_ID.get(id)!);
+  // Several lessons: each is named, and the next one not yet finished is the one to go on with.
+  const finished = new Set(learner.events.filter((e) => e.type === 'local-completed' && e.conceptId === concept.id).map((e) => e.lessonId));
+  const begun = new Set(learner.events.filter((e) => e.type === 'local-started' && e.conceptId === concept.id).map((e) => e.lessonId));
+  const nextLesson = local.find((l) => !finished.has(l.id)) ?? null;
   const lessonButton = (l: Lesson, main: boolean) => (
-    <button key={l.id} className={main ? 'primary big' : 'big'} data-testid="start-lesson" onClick={() => setMode({ kind: 'lesson', id: l.id })}>
-      {status.stage === 'started' ? 'Continue the lesson' : status.taughtVia === 'local-lesson' || label === 'Learned' ? 'Read the lesson again' : 'Start the lesson'}
+    <button key={l.id} className={main ? 'primary big' : 'big lesson-name'} data-testid="start-lesson" onClick={() => setMode({ kind: 'lesson', id: l.id })}>
+      {main
+        ? (begun.has(l.id) ? 'Continue the lesson' : 'Start the lesson')
+        : local.length === 1 ? (finished.has(l.id) ? 'Read the lesson again' : 'Start the lesson') : `${finished.has(l.id) ? 'Read again: ' : ''}${l.title}`}
     </button>
+  );
+  const firstLink = concept.links[0];
+  const linkButton = firstLink && (
+    <a key="link" className="button primary big" data-testid="open-link-main" href={firstLink.url} target="_blank" rel="noreferrer" onClick={() => void open(firstLink)}>Open the lesson on {providerName(firstLink)}</a>
   );
   const checkButton = (main: boolean) => status.assessable && (
     <button className={main ? 'primary big' : 'big'} data-testid="start-check" onClick={() => setMode({ kind: 'check' })}>
@@ -138,7 +148,11 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   );
   // One main action, the one the concept's state calls for; the rest are secondary.
   const actions = label === 'Not started' || label === 'Started'
-    ? [...local.map((l, i) => lessonButton(l, i === 0)), checkButton(local.length === 0), practiseButton(false)]
+    ? [
+      ...(nextLesson ? [lessonButton(nextLesson, true)] : local.length === 0 && linkButton ? [linkButton] : []),
+      ...local.filter((l) => l !== nextLesson).map((l) => lessonButton(l, false)),
+      checkButton(local.length === 0 && !linkButton), practiseButton(false),
+    ]
     : label === 'Check due'
       ? [checkButton(true), ...local.map((l) => lessonButton(l, false)), practiseButton(false)]
       : [practiseButton(true), ...local.map((l) => lessonButton(l, false)), checkButton(false)];
@@ -190,7 +204,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
             : 'No check exists for this yet, so it is never reported as learned.'}</dd>
           {local.map((l) => {
             const src = SOURCE_BY_ID.get(l.sourceId)!;
-            return (<span key={l.id} style={{ display: 'contents' }}><dt>Lesson</dt><dd>{l.title}: {src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes.</dd></span>);
+            return (<div key={l.id} className="facts-row"><dt>Lesson</dt><dd>{l.title}: {src.author}, <cite>{src.title}</cite>. About {l.estMinutes} minutes.</dd></div>);
           })}
         </dl>
       </details>
