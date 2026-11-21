@@ -267,7 +267,12 @@ test('the check for a studied concept comes in a later day’s session, unannoun
   await page.getByTestId('start-session').click();
   for (const blockName of ['learn', 'apply']) {
     await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', blockName);
-    await page.getByTestId('end-block').click();
+    // The tap guard (ADR-036) disables the bar's buttons for a moment whenever the exercise under
+    // them changes; a tap that lands in that moment does nothing, and a person taps again.
+    await expect(async () => {
+      await page.getByTestId('end-block').click({ timeout: 2_000 });
+      await expect(page.getByTestId('session-run')).not.toHaveAttribute('data-block', blockName, { timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
   }
   await expect(page.getByTestId('session-run')).toHaveAttribute('data-block', 'test');
   await expect(page.getByTestId('run-note')).toHaveText('Check 1 of 5');

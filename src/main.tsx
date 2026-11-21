@@ -1,5 +1,7 @@
 import '@fontsource-variable/atkinson-hyperlegible-next';
 import '@fontsource-variable/literata';
+import '@fontsource-variable/inter';
+import '@fontsource-variable/space-grotesk';
 import '@lichess-org/chessground/assets/chessground.base.css';
 import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './styles.css';
@@ -7,6 +9,10 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
+import { applyLook, storedLook } from './ui/looks';
+
+// The look is painted before anything renders, so the app never flashes in another one (ADR-064).
+applyLook(storedLook());
 
 let applyUpdate: () => void = () => {};
 const listeners = new Set<() => void>();

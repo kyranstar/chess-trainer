@@ -12,7 +12,7 @@
 import type { DBCore, DBCoreMutateRequest, DBCoreTable, Middleware } from 'dexie';
 
 /** Preferences that are the learner's own choices and worth carrying to another device. */
-const SETTING_KEYS = ['openings.band', 'openings.side', 'chesscom.username', 'openings.declined'];
+const SETTING_KEYS = ['openings.band', 'openings.side', 'chesscom.username', 'openings.declined', 'look'];
 const SETTING_PREFIXES = ['lessonProgress:', 'flag:'];
 export function isPortableSetting(key: string): boolean {
   return SETTING_KEYS.includes(key) || SETTING_PREFIXES.some((p) => key.startsWith(p));

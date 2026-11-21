@@ -5,15 +5,22 @@
  * always distinguishable from the app's own interface text (Atkinson Hyperlegible).
  */
 :root {
-  --paper: #eef1ec;
+  --paper: #F3F1EA;
   --surface: #ffffff;
-  --ink: #14201a;
-  --muted: #4f5f55;
-  --rule: #c9d2c9;
-  --felt: #1f3b2c;
-  --felt-ink: #f1eeda;
-  --board-dark: #5e8a63;
-  --board-light: #ece7cf;
+  --ink: #1B241E;
+  --muted: #5B665E;
+  --rule: #E2DED2;
+  --felt: #1F4D36;
+  --felt-ink: #F3EFDD;
+  --secondary-bg: #FFFFFF;
+  --secondary-ink: #1B241E;
+  --secondary-border: #D6D1C3;
+  --tab-bg: #FFFFFF;
+  --shadow-card: none;
+  --radius-card: 14px;
+  --radius-button: 12px;
+  --board-dark: #6F9468;
+  --board-light: #ECE6CF;
   --pencil: #e0a526;
   --pencil-soft: #fbf0cf;
   --flag: #b0362d;
@@ -43,43 +50,11 @@
   --neutral-mark: #b4bbb4;
   --ui: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --book: 'Literata Variable', Literata, Georgia, 'Times New Roman', serif;
+  --display: var(--ui);
   --tabs-h: 3.5rem;
   color-scheme: light dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0f1713;
-    --surface: #18231c;
-    --ink: #e7ece5;
-    --muted: #a3b3a8;
-    --rule: #2e3d33;
-    --felt: #9fd0a6;
-    --felt-ink: #0f1713;
-    --pencil-soft: #3a3115;
-    --flag: #f08a80;
-    --flag-soft: #3b1d1a;
-    --good: #86d3a4;
-    --good-soft: #163423;
-    --you: #e8b23c;
-    --you-soft: #3a3115;
-    --game: #aab5bf;
-    --game-soft: #262f37;
-    --best: #8ab8ef;
-    --best-soft: #1b2c40;
-    --other: #c0a5ee;
-    --other-soft: #2c2440;
-    --ch-a: #4f95ec;
-    --ch-bad: #e05a50;
-    --dv-n3: #f27f73;
-    --dv-n2: #c4564a;
-    --dv-n1: #8a4038;
-    --dv-0: #3d4741;
-    --dv-p1: #2d5a8f;
-    --dv-p2: #3f7fcc;
-    --dv-p3: #74b0f5;
-    --neutral-mark: #66716a;
-  }
-}
+/* Dark tokens and the other looks are written on <html> by applyLook (src/ui/looks.ts, ADR-064); the values above are Clubroom light, the fallback. */
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -93,8 +68,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 h1, h2, h3, p, ul, ol, dl, dd { margin: 0; }
-h1 { font-size: 2rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.75rem; }
-h2 { font-size: 1.25rem; line-height: 1.2; font-weight: 700; }
+h1 { font-family: var(--display); font-size: 2rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 0.75rem; }
+h2 { font-family: var(--display); font-size: 1.25rem; line-height: 1.2; font-weight: 700; }
 h3 { font-size: 1rem; font-weight: 700; margin-top: 1rem; }
 a { color: var(--felt); text-underline-offset: 0.15em; }
 :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
@@ -126,7 +101,7 @@ button.link { background: none; border: 0; padding: 0; color: inherit; text-deco
 .tabs {
   position: fixed; inset: auto 0 0 0; z-index: 20;
   display: grid; grid-template-columns: repeat(4, 1fr);
-  background: var(--surface); border-top: 1px solid var(--rule);
+  background: var(--tab-bg); border-top: 1px solid var(--rule);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .tabs a {
@@ -138,14 +113,14 @@ button.link { background: none; border: 0; padding: 0; color: inherit; text-deco
 
 /* Buttons */
 button, .button {
-  font: inherit; font-weight: 600; color: var(--ink);
-  background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px;
-  min-height: 2.9rem; padding: 0.55rem 1rem; cursor: pointer; text-decoration: none;
+  font: inherit; font-weight: 600; color: var(--secondary-ink);
+  background: var(--secondary-bg); border: 1px solid var(--secondary-border); border-radius: var(--radius-button);
+  min-height: 3rem; padding: 0.55rem 1rem; cursor: pointer; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
 }
-button.primary, .button.primary { background: var(--felt); border-color: var(--felt); color: var(--felt-ink); }
+button.primary, .button.primary { background: var(--felt); border-color: var(--felt); color: var(--felt-ink); font-weight: 700; }
 button.quiet { background: transparent; border-color: transparent; color: var(--muted); text-decoration: underline; }
-button.big, .button.big { min-height: 3.5rem; font-size: 1.15rem; width: 100%; }
+button.big, .button.big { min-height: 3.25rem; font-size: 1.08rem; width: 100%; }
 button:disabled { opacity: 0.45; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
 .chip { min-height: 2.5rem; padding: 0.3rem 0.85rem; border-radius: 999px; font-weight: 500; }
@@ -196,7 +171,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .board.cg-wrap, .board .cg-wrap { width: 100%; height: 100%; }
 cg-board {
   background-color: var(--board-light);
-  background-image: conic-gradient(#5e8a63 0 90deg, #ece7cf 90deg 180deg, #5e8a63 180deg 270deg, #ece7cf 270deg);
+  background-image: conic-gradient(var(--board-dark) 0 90deg, var(--board-light) 90deg 180deg, var(--board-dark) 180deg 270deg, var(--board-light) 270deg);
   background-size: 25% 25%;
   border-radius: 3px;
 }
@@ -211,9 +186,9 @@ cg-board square.check { background: radial-gradient(ellipse at center, rgba(176,
 .cg-wrap coords.files { left: 0; bottom: 1px; height: auto; text-transform: lowercase; }
 .cg-wrap coords.files coord { text-align: right; padding-right: 3px; }
 /* Label colour contrasts with the square it sits on (ranks on the left file, files on the bottom rank). */
-.cg-wrap coords coord { color: #ece7cf; }
+.cg-wrap coords coord { color: var(--board-light); }
 .orientation-white .ranks :nth-child(even), .orientation-white .files :nth-child(even),
-.orientation-black .ranks :nth-child(odd), .orientation-black .files :nth-child(odd) { color: #1f3b2c; }
+.orientation-black .ranks :nth-child(odd), .orientation-black .files :nth-child(odd) { color: var(--board-dark); }
 .cg-wrap piece.ghost { opacity: 0.3; }
 .flip { display: block; margin: 0.15rem 0 0 auto; min-height: 2.2rem; padding: 0.2rem 0.4rem; font-size: 0.85rem; font-weight: 500; border-color: transparent; color: var(--muted); background: transparent; text-decoration: underline; }
 /* The answer shows on the board itself, for a moment, as well as in words. */
@@ -310,13 +285,13 @@ code { font-size: 0.85em; background: var(--paper); border: 1px solid var(--rule
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.95rem; }
 .field span, .choice legend { color: var(--muted); padding: 0; }
 .choice { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
-textarea, input[type='number'], input[type='url'], input[type='text'] {
+textarea, input:not([type]), input[type='number'], input[type='url'], input[type='text'], input[type='email'], input[type='password'], select {
   font: inherit; font-size: max(1rem, 16px); /* below 16px iOS zooms the page on focus */ color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; width: 100%;
 }
 .plain-list { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
 
 /* Progress */
-.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .card.focus { border: 1.5px solid var(--ink); }
 .metric-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.7rem; }
 .metric-value { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
