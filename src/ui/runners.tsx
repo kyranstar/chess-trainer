@@ -15,7 +15,6 @@ import { OwnGameDrill, useGames } from './Games';
 import { OwnMoveDrill } from './OwnMove';
 import { KpkDrill, type KpkGoal, kpkCheckSet } from './Kpk';
 import { LessonTry } from './LessonPlayer';
-import { modernLesson } from '../learn/notation';
 import { OpeningDrill, useOpeningBook, useOpeningPrefs, useStoredRepertoire } from './Openings';
 import { SenseDrill } from './Sense';
 import { PuzzlePlayer } from './PuzzlePlayer';
@@ -326,9 +325,7 @@ export function ReviewRunner({ due, sessionId, stop, onAttempt, onFinished, sing
       return <OpeningDrill key={itemId} entry={entry} book={book} band={prefs.band} sessionId={sessionId} onDone={advance} />;
     }
     const [, lessonId, stepNo] = itemId.split(':');
-    const printed = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
-    // The text after the move in modern notation, as in the lesson (owner, 2026-11-20).
-    const lesson = printed ? modernLesson(printed).lesson : undefined;
+    const lesson = lessonId ? LESSON_BY_ID.get(lessonId) : undefined;
     const step = lesson?.steps[Number(stepNo) - 1];
     if (!lesson || !step || step.type !== 'try') return gone;
     return (

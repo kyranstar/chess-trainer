@@ -9,7 +9,6 @@ import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { useItem } from './Stage';
 import { lessonPages, pageOfStep, stepOfPage } from '../learn/pages';
-import { modernLesson } from '../learn/notation';
 
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
@@ -181,15 +180,13 @@ function LessonFigure({ fen, caption, half }: { fen: string; caption: string; ha
   );
 }
 
-export function LessonPlayer({ lesson: printed, sessionId, onFinished, onExit, showExit = true }: {
+export function LessonPlayer({ lesson, sessionId, onFinished, onExit, showExit = true }: {
   lesson: Lesson; sessionId: string | null; onFinished: () => void; onExit: () => void;
   /** False where the frame around the lesson already has the way out. */
   showExit?: boolean;
 }) {
   const db = useDb();
   useFocusMode();
-  // The book's words with its moves in modern notation (owner, 2026-11-20); the file is as printed.
-  const lesson = useMemo(() => modernLesson(printed).lesson, [printed]);
   const source = SOURCE_BY_ID.get(lesson.sourceId)!;
   const key = `lessonProgress:${lesson.id}@${lesson.revision}`;
   const pages = useMemo(() => lessonPages(lesson), [lesson]);
@@ -241,7 +238,7 @@ export function LessonPlayer({ lesson: printed, sessionId, onFinished, onExit, s
               <span>{source.author}, <cite>{source.title}</cite></span>
               <details className="source-details" data-testid="lesson-provenance">
                 <summary aria-label="About this excerpt">ⓘ</summary>
-                <p className="note">The words are the book’s own ({lesson.locator}); passages are excerpts and may be shortened or rearranged. Moves are written in modern notation. Every paragraph was matched against the book, positions against its diagrams or moves, and the moves you are asked to find were checked with Stockfish.{lesson.review.ownerReview === 'pending' ? ' Not yet reviewed by you.' : ''} <a href={source.url} target="_blank" rel="noreferrer">The book</a></p>
+                <p className="note">The words are the book’s own ({lesson.locator}); passages are excerpts and may be shortened or rearranged. Every paragraph was matched against the book, positions against its diagrams or moves, and the moves you are asked to find were checked with Stockfish.{lesson.review.ownerReview === 'pending' ? ' Not yet reviewed by you.' : ''} <a href={source.url} target="_blank" rel="noreferrer">The book</a></p>
               </details>
             </div>
             {lesson.notationNote && <p className="notation-note">{lesson.notationNote}</p>}
