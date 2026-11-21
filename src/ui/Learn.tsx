@@ -103,7 +103,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
   // way back in the bar, the count beside it, the buttons pinned to the bottom.
   const overview = () => setMode({ kind: 'overview' });
   const framed = (title: string, inner: ReactNode) => (embedded ? inner : (
-    <RunFrame testid="concept-run" back={{ href: href(`learn/${concept.id}`), label: 'Concept', onClick: overview }} title={title}>{inner}</RunFrame>
+    <RunFrame testid="concept-run" back={{ href: href(`learn/${concept.id}`), label: concept.title, onClick: overview }} title={title}>{inner}</RunFrame>
   ));
   if (mode.kind === 'lesson') {
     const lesson = LESSON_BY_ID.get(mode.id)!;
@@ -123,7 +123,7 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
     onTaught?.();
   }
 
-  const page = (inner: ReactNode) => (embedded ? inner : <div className="page"><a className="back" href={href('learn')}>All concepts</a>{inner}</div>);
+  const page = (inner: ReactNode) => (embedded ? inner : <div className="page"><a className="back" href={href('learn')}>Learn</a>{inner}</div>);
   return page(
     <div className="concept" data-testid="concept" data-concept={concept.id} data-stage={status.stage}>
       {!embedded && <p className="kicker">{concept.area}</p>}
@@ -230,6 +230,6 @@ export function ConceptStudy({ concept, learner, sessionId, onTaught, embedded }
 
 export function ConceptPage({ id, learner }: { id: string; learner: Learner }) {
   const concept = CONCEPT_BY_ID.get(id);
-  if (!concept) return <div className="page"><h1>Concept not found</h1><a href={href('learn')}>Back to Learn</a></div>;
+  if (!concept) return <div className="page"><h1>Concept not found</h1><a className="back" href={href('learn')}>Learn</a></div>;
   return <ConceptStudy concept={concept} learner={learner} sessionId={null} />;
 }

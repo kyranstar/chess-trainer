@@ -125,7 +125,7 @@ export function KpkDrill({ start, goal, sessionId, context = 'practice', allowSh
         )}
       </div>
       <div className="actions dock">
-        {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show a move that keeps it</button>}
+        {!end && allowShow && <button onClick={show} disabled={!armed || busy}>Show the answer</button>}
         {end && !end.ok && context !== 'check' && <button data-testid="kpk-retry" disabled={!armed} onClick={retry}>Try again</button>}
         {end && <button className="primary" data-testid="kpk-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
@@ -149,7 +149,7 @@ export function KpkRun({ learner, onFinished }: { learner: Learner; onFinished: 
       {start ? <KpkDrill key={`${goal}:${start}`} start={start} goal={goal} sessionId={null} onDone={() => setN(n + 1)} /> : (
         <div className="empty" data-testid="kpk-done">
           <p>No unseen king-and-pawn starts are left in this set.</p>
-          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+          <div className="actions"><button className="primary" onClick={onFinished}>Done</button></div>
         </div>
       )}
     </KeepLast>

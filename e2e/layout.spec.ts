@@ -42,7 +42,7 @@ test('the board stays in one place through every phase of a puzzle and on to the
 
   // The solution, shown: still the same board, and "Play it yourself" sits where "Try again"
   // was. There is no "Next" until it has been played by hand (ADR-058).
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   expect(await boardBox(page)).toEqual(asked);
   await expect(page.getByTestId('next')).toHaveCount(0);

@@ -61,7 +61,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await expect(missed.locator('.board')).not.toHaveAttribute('data-fen', asked!);
   // The solution is played through the same way, and then the position can be played by hand:
   // that second go is practice and changes nothing that was recorded.
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   // The wrong move and the solution side by side, each with the engine's number; the solution's is the higher.
   const number = async (id: string) => Number(await page.getByTestId(id).locator('.line-bar').getAttribute('data-score'));
@@ -85,7 +85,7 @@ test('daily session: linked lesson -> apply -> mixed test (no check on the lesso
   await page.getByTestId('replay').click();
   await expect(missed.locator('.board')).toHaveAttribute('data-fen', start!);
   await expect(page.getByTestId('next')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   await expect(page.getByTestId('next')).toHaveCount(0);
   await page.getByTestId('replay').click();
@@ -335,7 +335,7 @@ test('a check interrupted by a reload goes on with the answers already given', a
   // Two positions missed before the interruption.
   for (let i = 0; i < 2; i++) {
     await failPuzzle(page);
-    await page.getByRole('button', { name: 'Show solution' }).click();
+    await page.getByRole('button', { name: 'Show the answer' }).click();
     // In a check too the shown solution is played by hand; that go is not recorded, so the miss stands.
     await expect(page.getByTestId('next')).toHaveCount(0);
     await page.getByTestId('replay').click();

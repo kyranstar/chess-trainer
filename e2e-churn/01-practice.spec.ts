@@ -109,7 +109,7 @@ test('practice / king-and-pawn play-out holds mid-game under churn', async ({ pa
   expect(c.after).toBeGreaterThan(c.before + 3);
   const states = await watched(page);
   expect(states, JSON.stringify(states, null, 1)).toHaveLength(1);
-  await page.getByRole('button', { name: 'Show a move that keeps it' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('kpk-verdict')).toBeVisible();
   await expect.poll(async () => (await store(page, 'attempts')).filter((a) => a.exerciseKind === 'endgame').length).toBe(1);
 });
@@ -119,7 +119,7 @@ test('practice / review queue (puzzle, own-game, game-sense items) holds under c
   // Day 1: miss one of each kind so that all three are in the review queue.
   await page.goto('./#/practice/run?concept=mate.in-one');
   await failPuzzle(page);
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await page.goto('./#/practice/run?mode=own');
   await expect(page.getByTestId('own-drill')).toHaveAttribute('data-expected', 'h5f7');
   await playMove(page, 'h5e5');

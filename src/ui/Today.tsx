@@ -304,7 +304,7 @@ export function SessionRun({ learner }: { learner: Learner }) {
   }, [session, idx]);
 
   if (session === undefined || !learner.ready) return <div className="page"><p className="muted">Loading</p></div>;
-  if (!session || !block) return <div className="page"><p>No session is running. <a href={href('today')}>Go to Today</a></p></div>;
+  if (!session || !block) return <div className="page"><a className="back" href={href('today')}>Today</a><p>No session is running.</p></div>;
 
   const untimed = block.kind === 'play' || block.kind === 'reflect';
   const left = Math.max(0, block.budgetSec - spent);
@@ -502,7 +502,7 @@ export function BaselineRun({ learner }: { learner: Learner }) {
         </table>
         <p className="definition-small">“Pre-test to skip” appears when every sampled position was solved first try: the 5-position check on the concept page decides, not this sampler.</p>
         <div className="actions">
-          <a className="button primary" href={href('today')}>Back to Today</a>
+          <a className="button primary" href={href('today')}>Done</a>
           {!progress.complete && <button onClick={() => setStopped(false)}>Continue the baseline</button>}
         </div>
       </div>

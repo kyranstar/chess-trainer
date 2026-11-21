@@ -89,7 +89,7 @@ test('the opposition is demonstrated by playing five unseen endings correctly, n
   await page.getByTestId('start-check').click();
   for (let i = 0; i < 5; i++) {
     await expect(page.getByTestId('run-note')).toHaveText(`Check ${i + 1} of 5`);
-    await expect(page.getByRole('button', { name: 'Show a move that keeps it' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Show the answer' })).toHaveCount(0);
     await playPerfectly(page);
     await page.getByTestId('kpk-next').click();
   }

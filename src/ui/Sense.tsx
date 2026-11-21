@@ -230,7 +230,7 @@ export function SenseRun({ learner, onFinished }: { learner: Learner; onFinished
       {current ? <SenseDrill key={current.id} item={current} sessionId={null} context="practice" onDone={() => setN(n + 1)} /> : (
         <div className="empty" data-testid="sense-done">
           <p>{items && items.length === 0 ? 'These questions are built from your own analysed games, and there are none on this device yet. They appear once your games have been fetched and analysed.' : 'No unseen questions are left for now; more appear as you play.'}</p>
-          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+          <div className="actions"><button className="primary" onClick={onFinished}>Done</button></div>
         </div>
       )}
     </KeepLast>

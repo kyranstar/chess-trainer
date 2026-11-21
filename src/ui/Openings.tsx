@@ -150,7 +150,7 @@ export function OpeningDrill({ entry, book, band, sessionId, onDone }: {
         )}
       </div>
       <div className="actions dock">
-        {!result && <button onClick={() => void record(null, true)}>Show my move</button>}
+        {!result && <button onClick={() => void record(null, true)}>Show the answer</button>}
         {result && !result.ok && !adopted && entry.source && result.playedSan && result.ev?.verdict === 'sound' && (
           <button data-testid="drill-adopt" onClick={() => void adopt()}>Make {result.playedSan} my move</button>
         )}
@@ -468,7 +468,7 @@ export function OpeningRecallRun({ learner, side, onFinished }: { learner: Learn
     return (
       <div className="empty" data-testid="recall-done">
         <p>{queue.current.length === 0 ? 'Nothing to recall right now.' : `Recalled ${queue.current.length} position${queue.current.length === 1 ? '' : 's'}. Each comes back when it is due.`}</p>
-        <div className="actions"><button className="primary" onClick={onFinished}>Back to the repertoire</button></div>
+        <div className="actions"><button className="primary" onClick={onFinished}>Done</button></div>
       </div>
     );
   }

@@ -370,7 +370,7 @@ export function OwnMoveRun({ items, owed, fresh, pace, onFinished }: {
       {item ? <OwnMoveDrill key={item.id} item={item} sessionId={null} context="practice" pace={latch.current!.pace} onDone={() => setN((x) => x + 1)} /> : (
         <div className="empty" data-testid="own-move-done">
           <p>{items.length === 0 ? 'These positions come from your own games at moves 10 to 19, once the games have been fetched and analysed on this device. There are none yet.' : 'No untried positions are left for now; more appear as you play.'}</p>
-          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+          <div className="actions"><button className="primary" onClick={onFinished}>Done</button></div>
         </div>
       )}
     </KeepLast>

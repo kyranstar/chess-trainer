@@ -333,7 +333,7 @@ export function PuzzlePlayer(props: PuzzlePlayerProps) {
         {phase === 'solving' && (
           <>
             {allowHints && !wrongSan && <button onClick={hint} disabled={!armed || busy || marks.length > 0}>Show which piece</button>}
-            {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show solution</button>}
+            {(wrongSan || outcome) && <button onClick={reveal} disabled={!armed || busy}>Show the answer</button>}
             {/* A check is a fixed set of positions: skipping one would shrink it. */}
             {!outcome && props.context !== 'check' && <button className="quiet" data-testid="skip" disabled={!armed || busy} onClick={() => void skip()}>Skip</button>}
             {wrongSan && <button className="primary" data-testid="try-again" disabled={!armed} onClick={tryAgain}>Try again</button>}

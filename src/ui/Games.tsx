@@ -397,7 +397,7 @@ export function OwnGameDrill({ drill, sessionId, onDone }: { drill: DrillPositio
         )}
       </div>
       <div className="actions dock">
-        {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the move</button>}
+        {!result && <button disabled={!armed} onClick={() => void record(null, true)}>Show the answer</button>}
         {owes && <button className="primary" data-testid="own-retry" disabled={!armed} onClick={retry}>{result?.shown ? 'Play it yourself' : 'Try again'}</button>}
         {result && !owes && <button className="primary" data-testid="own-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Next'}</button>}
       </div>
@@ -427,7 +427,7 @@ export function OwnGameRun({ learner, onFinished }: { learner: Learner; onFinish
       {drill ? <OwnGameDrill key={drill.id} drill={drill} sessionId={null} onDone={() => setI(i + 1)} /> : (
         <div className="empty" data-testid="own-done">
           <p>{queue.current.length === 0 ? 'No positions from your games are waiting. They appear after analysed games are imported.' : `Worked through ${queue.current.length} position${queue.current.length === 1 ? '' : 's'} from your games.`}</p>
-          <div className="actions"><button className="primary" onClick={onFinished}>Back to Practice</button></div>
+          <div className="actions"><button className="primary" onClick={onFinished}>Done</button></div>
         </div>
       )}
     </KeepLast>

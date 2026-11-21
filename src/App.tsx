@@ -20,11 +20,12 @@ import { MorePageView } from './ui/ProgressMore';
 import { DeepGamesList, DeepPage } from './ui/ProgressDeep';
 import { BaselineRun, SessionRun, Today } from './ui/Today';
 
+/** The four places, each with an icon so they can be told apart at a glance (ADR-064). */
 const TABS = [
-  { key: 'today', label: 'Today' },
-  { key: 'learn', label: 'Learn' },
-  { key: 'practice', label: 'Practice' },
-  { key: 'progress', label: 'Progress' },
+  { key: 'today', label: 'Today', icon: 'M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z' },
+  { key: 'learn', label: 'Learn', icon: 'M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z' },
+  { key: 'practice', label: 'Practice', icon: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM4 12h16M12 4v16' },
+  { key: 'progress', label: 'Progress', icon: 'M4 19V9M10 19V5M16 19v-7M22 19H2' },
 ] as const;
 
 /** A failure on one screen must not blank the app: show what happened and a way back. Data is untouched. */
@@ -113,6 +114,7 @@ function Shell({ updateReady, applyUpdate }: { updateReady: boolean; applyUpdate
       <nav className="tabs" aria-label="Main">
         {TABS.map((t) => (
           <a key={t.key} href={href(t.key)} className={tab === t.key ? 'is-on' : ''} aria-current={tab === t.key ? 'page' : undefined} data-testid={`tab-${t.key}`}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={t.icon} /></svg>
             {t.label}
           </a>
         ))}

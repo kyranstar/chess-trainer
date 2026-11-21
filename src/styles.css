@@ -51,7 +51,7 @@
   --ui: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --book: 'Literata Variable', Literata, Georgia, 'Times New Roman', serif;
   --display: var(--ui);
-  --tabs-h: 3.5rem;
+  --tabs-h: 3.6rem;
   color-scheme: light dark;
 }
 /* Dark tokens and the other looks are written on <html> by applyLook (src/ui/looks.ts, ADR-064); the values above are Clubroom light, the fallback. */
@@ -89,7 +89,7 @@ main { max-width: 34rem; width: 100%; margin: 0 auto; flex: 1; display: flex; fl
 .note { background: var(--pencil-soft); border-left: 4px solid var(--pencil); padding: 0.6rem 0.75rem; border-radius: 0 6px 6px 0; font-size: 0.95rem; }
 .note.is-error { background: var(--flag-soft); border-color: var(--flag); }
 .note.is-ok { background: var(--good-soft); border-color: var(--good); }
-.back { font-size: 0.95rem; align-self: flex-start; padding: 0.4rem 0; }
+.back { font-size: 0.95rem; font-weight: 600; align-self: flex-start; padding: 0.4rem 0; text-decoration: none; color: var(--felt); }
 .back::before { content: '‹ '; }
 
 .status-strip { margin: 0; padding: calc(0.35rem + env(safe-area-inset-top)) 1rem 0.35rem; background: var(--felt); color: var(--felt-ink); font-size: 0.9rem; text-align: center; }
@@ -105,11 +105,10 @@ button.link { background: none; border: 0; padding: 0; color: inherit; text-deco
   padding-bottom: env(safe-area-inset-bottom);
 }
 .tabs a {
-  display: grid; place-items: center; height: var(--tabs-h);
-  color: var(--muted); text-decoration: none; font-weight: 600; font-size: 0.95rem;
-  border-top: 3px solid transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem; height: var(--tabs-h);
+  color: var(--muted); text-decoration: none; font-weight: 600; font-size: 0.75rem;
 }
-.tabs a.is-on { color: var(--ink); border-top-color: var(--pencil); }
+.tabs a.is-on { color: var(--felt); }
 
 /* Buttons */
 button, .button {
@@ -119,7 +118,7 @@ button, .button {
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
 }
 button.primary, .button.primary { background: var(--felt); border-color: var(--felt); color: var(--felt-ink); font-weight: 700; }
-button.quiet { background: transparent; border-color: transparent; color: var(--muted); text-decoration: underline; }
+button.quiet { background: transparent; border-color: transparent; color: var(--muted); text-decoration: underline; font-weight: 500; }
 button.big, .button.big { min-height: 3.25rem; font-size: 1.08rem; width: 100%; }
 button:disabled { opacity: 0.45; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
@@ -153,7 +152,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .run-side .flip-bar { text-decoration: none; font-size: 1.2rem; min-width: 2rem; }
 .page.run:not(:has(.board)) .flip-bar { display: none; }
 .run-note { font-variant-numeric: tabular-nums; }
-.run-bar .back { white-space: nowrap; }
+.run-bar .back { white-space: nowrap; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 .run-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .run-side .last-item { min-width: 2.4rem; min-height: 2.4rem; padding: 0; border-radius: 99px; font-size: 1.25rem; font-weight: 600; line-height: 1; color: var(--ink); }
 .run-side .last-item[aria-pressed='true'] { background: var(--pencil-soft); border-color: var(--pencil); }

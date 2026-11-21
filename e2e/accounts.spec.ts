@@ -160,7 +160,7 @@ test('a friend sees none of the owner things', async ({ page }) => {
   await signIn(page);
   await openApp(page, '#/practice/run?concept=mate.in-one');
   await failPuzzle(page);
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   await expect(page.getByTestId('flag-item')).toHaveCount(0);
   await openApp(page, '#/progress/more/data');
@@ -182,7 +182,7 @@ test('the admin keeps the owner things', async ({ page }) => {
   await signIn(page);
   await openApp(page, '#/practice/run?concept=mate.in-one');
   await failPuzzle(page);
-  await page.getByRole('button', { name: 'Show solution' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('verdict-revealed')).toBeVisible();
   await expect(page.getByTestId('flag-item')).toBeVisible();
   await openApp(page, '#/account');

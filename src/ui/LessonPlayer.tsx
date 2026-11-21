@@ -155,7 +155,7 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
       {finished && step.after.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
       <div className="actions dock split">
         {back}
-        {!finished && <button disabled={!armed} onClick={reveal}>Show the move</button>}
+        {!finished && <button disabled={!armed} onClick={reveal}>Show the answer</button>}
         {finished && <button className="primary" data-testid="lesson-next" disabled={!armed} onClick={stage.next}>{stage.nextLabel ?? 'Continue'}</button>}
       </div>
     </div>

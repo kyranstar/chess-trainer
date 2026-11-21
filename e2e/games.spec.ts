@@ -176,7 +176,7 @@ test('own games: fetched and analysed on the device, ratings and error metrics w
   await expect(page.getByTestId('own-retry')).toHaveText('Try again');
   await page.getByTestId('own-retry').click();
   await expect(page.getByTestId('own-retry-note')).toBeVisible();
-  await page.getByRole('button', { name: 'Show the move' }).click();
+  await page.getByRole('button', { name: 'Show the answer' }).click();
   await expect(page.getByTestId('own-verdict')).toContainText('Shown.');
   await expect(page.getByTestId('own-next')).toHaveCount(0);
   await expect(page.getByTestId('own-retry')).toHaveText('Play it yourself');
