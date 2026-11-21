@@ -31,6 +31,11 @@
 - Review asks what was missed (ADR-056, `src/games/reviewItem.test.ts`, `e2e/games.spec.ts`): every "Your move" position the session can ask is found again by its id; a position whose question is gone is asked as "Your move"; a missed position is first in the next day's review on the position asked; a due item that is not on the device is not announced, is marked gone and is not due again.
 - Exercise layout (ADR-051, `e2e/layout.spec.ts`): the board's place and size are the same through question, wrong move, replay, solution and the next position; the main button is in one place; nothing scrolls while a position is being asked; the flip control in the bar turns the board. The churn suite starts watching for unwanted movement only once a line that plays itself has come to rest.
 
+## Accounts (ADR-063)
+- Server rules on the local emulator (`npm run test:rules`, needs Java, no cloud): `firebase/rules.test.ts` (every collection and role: admin, invited, not invited, removed, unverified, another account) and `firebase/service.test.ts` (the app's own Firebase service: sign-in, the access answer, the profile, the copy written and read through the rules with a conflict on a stale revision, the admin's calls).
+- Unit: settings with change times travel and removals win (`src/db/stamps.test.ts`); the account copy in chunks, merge before write, nothing sent twice, a damaged chunk refused, a newer copy held back (`src/account/copy.test.ts`); which database an account uses and the old one to the admin only (`src/account/device.test.ts`); the greeting; screen flags (`src/db/screenFlag.test.ts`).
+- Browser, on the stand-in account service (`e2e/accounts.spec.ts`, both browsers): not on the list; hello, Chess.com found and confirmed, greeting, straight to Today on reload; skipping Chess.com; install first on an iPhone; offline open once allowed; a second device gets the progress; the admin invites and removes; a friend sees no flag, GitHub copy, courses or admin page; unlinking Chess.com; a flag with a note on any screen. Every other browser test runs in local mode, unchanged.
+
 ## Cost/security
 - Network capture verifies no personal data uploaded in local-only mode. No third-party credential collection, logs sanitized, HTTPS for static hosting.
 - App builds and tests in clean workspace with no cloud credentials, API keys or paid accounts.

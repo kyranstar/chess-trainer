@@ -39,8 +39,11 @@ Done: exact king-and-pawn-versus-king table computed and validated here; win/hol
 - Verified tablebase/theoretical endgame lessons; multi-ply calculation, active defense, strategic ideas; curriculum refinements grounded in assessment data.
 - Reproducible baselines, controlled evaluation of scheduler changes, comprehensive regression fixtures.
 
-## M6 — Optional private synchronization — DROPPED 2026-11-10 (ADR-034: phone only)
+## M6 — Optional private synchronization — DROPPED 2026-11-10 (ADR-034: phone only); a merged account copy exists since ADR-063, not live sync
 - Only after durable local and export/restore experience. Versioned event sync with idempotency, conflict policy, no data loss and private account authentication.
+
+## Accounts for invited friends — BUILT 2026-11-20 (ADR-063, owner request)
+Google sign-in, an invite list enforced on the server with an admin page, a greeting by name, the Chess.com link on first open, an install guide (first on iPhone, so sign-in happens once), per-account data with a copy in the account, settings and removals that travel, and the owner's flags on any screen. Not verified by the builder: a friend's real sign-in and sign-in inside the installed iPhone app.
 
 ## Change policy
 Tasks must meet their own measurable acceptance gates. Scope may be simplified, but not by silently fabricating instructional quality or online/offline capability. Update `docs/STATE.md` at the end of each session.

@@ -9,3 +9,8 @@ test-results/
 playwright-report/
 .DS_Store
 *.local
+
+# Firebase emulator logs (npm run test:rules)
+firestore-debug.log
+firebase-debug.log
+ui-debug.log

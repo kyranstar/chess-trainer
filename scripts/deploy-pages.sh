@@ -17,17 +17,17 @@ OUT="$ROOT/data/deploy"
 cd "$ROOT"
 
 [ -z "$(git status --porcelain)" ] || { echo "Commit your changes first: the source snapshot is taken from HEAD." >&2; exit 1; }
-# Optional personal defaults for the published build, kept out of git (data/ is ignored):
-#   data/deploy.env:  CHESSCOM_USERNAME=<your public Chess.com handle>
+# Optional settings for the published build, kept out of git (data/ is ignored):
+#   data/deploy.env:  FIREBASE_CONFIG='<the Firebase web config as JSON>' (accounts, ADR-063: with it the
+#                     published app has Google sign-in and invites; without it, it runs with no accounts)
 #                     REVIEW_REPO=<owner/name of your private repository for backup copies> (optional;
 #                     only fills in the field under "Private copy for review"; no token is ever built in)
-# With it the installed app starts fetching that player's public games by itself; without
-# it the handle is typed once in the app. The handle ends up in the public bundle.
+# No Chess.com name is built in any more (ADR-063): each account links its own.
 [ -f "$ROOT/data/deploy.env" ] && . "$ROOT/data/deploy.env"
 rm -rf "$OUT" && mkdir -p "$OUT"
 # Built straight into data/deploy so dist/ (which the tests serve) never holds a personalised build.
 npx tsc --noEmit
-VITE_CHESSCOM_USERNAME="${CHESSCOM_USERNAME:-}" VITE_REVIEW_REPO="${REVIEW_REPO:-}" npx vite build --outDir "$OUT" --emptyOutDir
+VITE_FIREBASE_CONFIG="${FIREBASE_CONFIG:-}" VITE_REVIEW_REPO="${REVIEW_REPO:-}" npx vite build --outDir "$OUT" --emptyOutDir
 git archive --format=tar.gz --prefix=chess-trainer/ -o "$OUT/source.tar.gz" HEAD
 touch "$OUT/.nojekyll"
 cat > "$OUT/README.md" <<TXT
@@ -35,8 +35,8 @@ cat > "$OUT/README.md" <<TXT
 
 Built files served at https://$OWNER.github.io/$REPO/ . Source: the \`main\` branch of this
 repository; \`source.tar.gz\` is the snapshot this build was made from (commit $(git rev-parse --short HEAD)).
-No personal training data is stored here: progress lives only in the browser of the device
-that uses the app.
+No personal training data is stored here: progress lives in the browser of the device that
+uses the app and, with accounts, in a copy in the person's account (Firebase).
 TXT
 
 if [ "${DRY_RUN:-}" = "1" ]; then

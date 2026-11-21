@@ -16,6 +16,10 @@
 - `ContentPack(id, schema_version, source_manifest, content_hash, bytes, build_date, source_licenses[])`.
 - `BackupManifest(schema_version, exporter_version, export_time, item_counts, content_hashes)`.
 
+## Accounts (ADR-063)
+- On a device: one IndexedDB database per account, `chess-trainer:<uid>`; the database from before accounts (`chess-trainer`) is adopted by the admin only (`localStorage['ct.legacyOwner']`). Portable settings carry `stamp:<key>` rows `{ key, ts, deleted }`, written by a middleware; the backup's optional `settingStamps` section carries them.
+- In Firestore: `admins/{email}`, `invites/{email}` `{ email, name, invitedAt }`, `users/{uid}` `{ uid, email, name, chesscom, createdAt, lastSeenAt, appVersion, onboarded, copyAt }`, `users/{uid}/copy/manifest` `{ rev, chunks, bytes, sha256, exportTime, deviceId, appVersion, schemaVersion }` and `users/{uid}/copy/manifest/chunks/{i}` `{ rev, i, data }` (the gzipped backup in base64).
+
 ## Invariants
 - New attempts are immutable; late sync or a retry cannot create duplicate UUIDs.
 - Course link clicks are not completion evidence. Completion is user marked, with an independent quiz where possible.

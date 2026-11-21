@@ -18,6 +18,9 @@
 - Offline content must be downloaded once on Wi-Fi and verified via airplane-mode acceptance test.
 - No secrets, premium account credentials, or private progress uploaded to static hosting.
 
+## Accounts (ADR-063)
+- Optional at build time: with a Firebase config (`data/deploy.env`), Google sign-in, an invite list enforced by Firestore rules (`firebase/firestore.rules`), and an account copy of the backup per account in Firestore; without it the app runs with no accounts as before. Practice stays local-first: the phone is the working copy, the copy is merged on open and sent when practice changes, never in the way of a session. The sign-in helper is self-hosted at the root of `kyranstar.github.io` (repository `kyranstar/kyranstar.github.io`, synced weekly by a GitHub Action).
+
 ## Later optional sync
 - Cloudflare Worker + D1 or similarly low-cost backend; privacy review before adoption; append-only client-generated event IDs, idempotent writes, cursors, deterministic conflict policy, proper auth and TLS. Local-first operations never block on network.
 
