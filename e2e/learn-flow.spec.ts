@@ -308,9 +308,9 @@ test('a lesson example does not fault a sound move that is not the text’s: no 
       }
     }
     // Move on one step and wait until the next step is really on screen before looking again.
-    const part = await page.getByText(/^Part \d+ of \d+/).textContent();
+    const part = await page.getByTestId('lesson').getAttribute('data-step');
     await page.getByTestId('lesson-next').click();
-    await expect(page.getByText(/^Part \d+ of \d+/)).not.toHaveText(part!);
+    await expect(page.getByTestId('lesson')).not.toHaveAttribute('data-step', part!);
   }
   const alt = target.alternatives[0]!;
   await playMove(page, alt.uci);
@@ -382,3 +382,25 @@ test('a double tap on "Next position" does not act on the position that follows'
   await expect(puzzle).toHaveAttribute('data-outcome', '');
 });
 
+
+test('a lesson says when it asks: reading pages show a captioned figure, questions say Your turn and fit the screen', async ({ page }, info) => {
+  await openApp(page, '#/learn/safety.hanging-pieces');
+  await page.getByTestId('start-lesson').first().click();
+  const lesson = page.getByTestId('lesson');
+  await expect(lesson).toHaveAttribute('data-page', 'read');
+  await expect(page.getByTestId('lesson-figure').first()).toContainText('Diagram 5');
+  await expect(lesson).not.toContainText('to move');
+  await expect(page.getByTestId('your-turn')).toHaveCount(0);
+  // The book's long lead-in to the first question is a page to read, with its diagram.
+  await page.getByTestId('lesson-next').click();
+  await expect(lesson).toHaveAttribute('data-page', 'read');
+  await expect(page.getByTestId('lesson-figure')).toHaveCount(1);
+  await page.getByTestId('lesson-next').click();
+  await expect(lesson).toHaveAttribute('data-page', 'ask');
+  await expect(page.getByTestId('your-turn')).toContainText('Your turn');
+  await expect(page.getByTestId('lesson-figure')).toHaveCount(0);
+  await expect(page.getByTestId('lesson-try')).toContainText('to move. Find the book’s move.');
+  if (info.project.name === 'iphone-webkit') {
+    expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(0);
+  }
+});

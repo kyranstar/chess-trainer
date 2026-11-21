@@ -8,16 +8,19 @@ import { useDb, useFocusMode } from '../app/store';
 import { Board } from './Board';
 import { useArmed, useScreenChange } from '../app/tapGuard';
 import { useItem } from './Stage';
+import { lessonPages, pageOfStep, stepOfPage } from '../learn/pages';
 
 type TryStep = Extract<LessonStep, { type: 'try' }>;
 
 /** One "find the author's move" interaction inside a lesson (also reused for spaced review). */
-export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone, hideBefore = false, back }: {
+export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone, hideBefore = false, back, leadIn }: {
   lesson: Lesson; stepIndex: number; step: TryStep; sessionId: string | null; context: 'lesson' | 'review'; onDone: () => void;
   /** A control put beside the main button (the lesson's "Back"). */
   back?: ReactNode;
   /** Review shows the position without the lead-in text, which would give the move away. */
   hideBefore?: boolean;
+  /** In a lesson: the book's lead-in to show above the board (ADR-064); long ones are a page of their own. */
+  leadIn?: string[];
 }) {
   const db = useDb();
   const stage = useItem(onDone);
@@ -136,12 +139,17 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   const side = solver === 'white' ? 'White' : 'Black';
   return (
     <div className="lesson-try" data-testid="lesson-try" data-expected={finished ? '' : step.moves[ply]} data-finished={finished}>
-      {/* The board stays in view while the text is read: on a phone the two do not fit on one screen. */}
+      {/* A question looks like one (ADR-064): "Your turn", the book's short lead-in, the board at full size, the question under it. */}
+      {context === 'lesson' && (
+        <div className="your-turn" data-testid="your-turn">
+          <span className="your-turn-label">Your turn</span>
+          {(leadIn ?? (hideBefore ? [] : step.before ?? [])).map((p, i) => <p className="lead-in" key={i}>{p}</p>)}
+        </div>
+      )}
       <div className="lesson-board">
         <Board fen={fen} orientation={solver} movable={finished || checking ? null : solver} lastMove={lastMove} onMove={(u) => void onMove(u)} resetKey={resetKey} />
       </div>
-      {!hideBefore && step.before?.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
-      <p className="prompt">{finished ? 'The text’s move is on the board.' : `${side} to move. Find the text’s move.`}</p>
+      <p className="prompt">{finished ? 'The book’s move is on the board.' : `${side} to move. Find the book’s move.`}</p>
       <div aria-live="polite">
         {wrong && !finished && <div className="verdict wrong"><strong>{wrong} is not the move the text plays.</strong></div>}
         {checking && <p className="muted">Checking your move with the engine</p>}
@@ -162,6 +170,16 @@ export function LessonTry({ lesson, stepIndex, step, sessionId, context, onDone,
   );
 }
 
+/** A position the book shows, as a small framed figure with its caption: something to look at, not to play. */
+function LessonFigure({ fen, caption, half }: { fen: string; caption: string; half: boolean }) {
+  return (
+    <figure className={`lesson-figure${half ? ' is-half' : ''}`} data-testid="lesson-figure">
+      <div className="lesson-figure-board"><Board fen={fen} orientation="white" movable={null} /></div>
+      <figcaption>{caption}</figcaption>
+    </figure>
+  );
+}
+
 export function LessonPlayer({ lesson, sessionId, onFinished, onExit, showExit = true }: {
   lesson: Lesson; sessionId: string | null; onFinished: () => void; onExit: () => void;
   /** False where the frame around the lesson already has the way out. */
@@ -171,39 +189,26 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit, showExit =
   useFocusMode();
   const source = SOURCE_BY_ID.get(lesson.sourceId)!;
   const key = `lessonProgress:${lesson.id}@${lesson.revision}`;
+  const pages = useMemo(() => lessonPages(lesson), [lesson]);
   const [index, setIndex] = useState<number | null>(null);
-  const total = lesson.steps.length;
+  const total = pages.length;
 
   useEffect(() => {
     let live = true;
     void (async () => {
+      // Saved progress is a step index (the format before pages): it opens on the page that holds it.
       const saved = (await getMeta<number>(db, key)) ?? 0;
       if (!live) return;
-      setIndex(Math.min(saved, total - 1));
+      setIndex(Math.min(pageOfStep(pages, saved), total - 1));
       if (saved === 0) await recordLessonEvent(db, { conceptId: lesson.conceptId, lessonId: lesson.id, url: null, type: 'local-started', ts: Date.now() });
     })();
     return () => { live = false; };
-  }, [db, key, lesson, total]);
+  }, [db, key, lesson, pages, total]);
 
-  const step = useMemo(() => (index === null ? null : lesson.steps[index]), [index, lesson]);
+  const page = index === null ? null : pages[index];
   useScreenChange(`${lesson.id}|${index}`);
   const stepArmed = useArmed();
-  // The position a page of text is about: the board just shown, or else the one that follows.
-  // Text and its diagram used to be on separate screens.
-  const context = useMemo(() => {
-    if (index === null || step?.type !== 'text') return null;
-    const prev = lesson.steps[index - 1];
-    const next = lesson.steps[index + 1];
-    if (prev && prev.type === 'board') return prev;
-    if (next && (next.type === 'board' || next.type === 'try')) return next;
-    if (prev && prev.type === 'try') {
-      let pos = positionFromFen(prev.fen);
-      for (const u of prev.moves) pos = applyUci(pos, u);
-      return { fen: fenOf(pos), orientation: prev.orientation };
-    }
-    return null;
-  }, [index, step, lesson]);
-  if (index === null || !step) return <p className="muted">Loading lesson</p>;
+  if (index === null || !page) return <p className="muted">Loading lesson</p>;
 
   async function advance() {
     if (index === null) return;
@@ -213,56 +218,46 @@ export function LessonPlayer({ lesson, sessionId, onFinished, onExit, showExit =
       onFinished();
       return;
     }
-    await setMeta(db, key, index + 1);
+    await setMeta(db, key, stepOfPage(pages[index + 1]!));
     setIndex(index + 1);
     window.scrollTo(0, 0);
   }
 
-  const back = index > 0 ? <button data-testid="lesson-back" onClick={() => { void setMeta(db, key, index - 1); setIndex(index - 1); }}>Back</button> : null;
+  const back = index > 0 ? <button data-testid="lesson-back" onClick={() => { void setMeta(db, key, stepOfPage(pages[index - 1]!)); setIndex(index - 1); }}>Back</button> : null;
   return (
-    <article className="lesson" data-testid="lesson" data-step={index + 1} data-steps={total}>
+    <article className={`lesson is-${page.kind}`} data-testid="lesson" data-step={index + 1} data-steps={total} data-page={page.kind}>
       <header>
         <div className="lesson-bar">
-          <p className="kicker">Part {index + 1} of {total}{index > 0 ? ` · ${source.author}` : ''}</p>
-          {showExit && <button className="quiet" data-testid="lesson-exit" onClick={onExit}>Leave lesson</button>}
+          <progress value={index + 1} max={total} aria-label={`Part ${index + 1} of ${total}`} />
+          {showExit && <button className="quiet" data-testid="lesson-exit" onClick={onExit}>Leave</button>}
         </div>
-        {index === 0 ? (
+        {index === 0 && (
           <>
-            <h2>{lesson.title}</h2>
-            <p className="attribution">
-              From <cite>{source.title}</cite> by {source.author} ({lesson.locator}). The words are the book’s own; passages are excerpts and may be shortened or rearranged.{' '}
-              <a href={source.url} target="_blank" rel="noreferrer">Source</a>
-            </p>
-            {lesson.notationNote && <p className="note">{lesson.notationNote}</p>}
-            {lesson.review.ownerReview === 'pending' && (
+            <h2 className="lesson-title">{lesson.title}</h2>
+            <div className="attribution">
+              <span>{source.author}, <cite>{source.title}</cite></span>
               <details className="source-details" data-testid="lesson-provenance">
-                <summary>How this excerpt was checked</summary>
-                <p className="note">This excerpt was selected when the app was built and checked mechanically (every paragraph matches the book; positions match its diagrams or moves; the moves you are asked to find were checked with Stockfish). You have not reviewed it yet.</p>
+                <summary aria-label="About this excerpt">ⓘ</summary>
+                <p className="note">The words are the book’s own ({lesson.locator}); passages are excerpts and may be shortened or rearranged. Every paragraph was matched against the book, positions against its diagrams or moves, and the moves you are asked to find were checked with Stockfish.{lesson.review.ownerReview === 'pending' ? ' Not yet reviewed by you.' : ''} <a href={source.url} target="_blank" rel="noreferrer">The book</a></p>
               </details>
-            )}
+            </div>
+            {lesson.notationNote && <p className="notation-note">{lesson.notationNote}</p>}
           </>
-        ) : null}
+        )}
       </header>
-      <progress value={index} max={total} aria-label="Lesson progress" />
-      {step.type === 'text' && (
+      {page.kind === 'read' ? (
         <>
-          {context && (
-            <div className="lesson-board" data-testid="lesson-context-board">
-              <Board fen={context.fen} orientation={context.orientation} movable={null} />
+          {page.figures.length > 0 && (
+            <div className="lesson-figures">
+              {page.figures.map((f) => <LessonFigure key={f.step + f.caption} fen={f.fen} caption={f.caption} half={page.figures.length > 1} />)}
             </div>
           )}
-          {step.paragraphs.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
+          {page.paragraphs.map((p, i) => <p className="quoted" key={i}>{p}</p>)}
           <div className="actions dock split">{back}<button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
         </>
+      ) : (
+        <LessonTry lesson={lesson} stepIndex={page.step} step={lesson.steps[page.step] as TryStep} sessionId={sessionId} context="lesson" leadIn={page.leadIn} onDone={() => void advance()} back={back} />
       )}
-      {step.type === 'board' && (
-        <>
-          <div className="lesson-board"><Board fen={step.fen} orientation={step.orientation} movable={null} /></div>
-          <p className="prompt">{step.diagram && !step.afterDiagramMoves?.length ? `Diagram ${step.diagram} from the book.` : 'Position from the text.'} {positionFromFen(step.fen).turn === 'white' ? 'White' : 'Black'} to move.</p>
-          <div className="actions dock split">{back}<button className="primary" data-testid="lesson-next" disabled={!stepArmed} onClick={() => void advance()}>Continue</button></div>
-        </>
-      )}
-      {step.type === 'try' && <LessonTry lesson={lesson} stepIndex={index} step={step} sessionId={sessionId} context="lesson" onDone={() => void advance()} back={back} />}
     </article>
   );
 }
