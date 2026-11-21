@@ -113,6 +113,45 @@ setting `look` (stamped, so it travels and a later change wins) and in `localSto
 so the next launch paints in it before anything loads. Account page: a **Look** row with the
 same three tiles. Local mode: under Your data.
 
+### Lesson pages (builder's calls, from the review of this document)
+
+The 16 lessons hold 37 board steps (15 printed diagrams, 22 positions the book describes but
+did not print), 33 questions (10 with a lead-in over 250 characters, 8 with none) and boards
+between two texts. Regrouping is mechanical, the same rule for every lesson, no lesson edited:
+- A board belongs to the text that **starts from it**: the next text if there is one, else
+  the text before it (the last board of a lesson). Two boards in a row: the first goes to the
+  text before, the second to the text after; with no text before, both stand side by side on
+  the following page at half size. No page is only a board.
+- A question's lead-in stays above the board when it is short (three lines at 390 px, about
+  180 characters) and no diagram comes just before it; otherwise the lead-in becomes a reading
+  page of its own (with that diagram as its figure, if there is one), and the question page
+  carries "Your turn", the board and the question only. So a question page never scrolls
+  (ADR-051) and every word of the book is still shown.
+- A question with no lead-in keeps the text before it as the preceding reading page.
+- Captions: "Diagram 17" for a printed diagram; "Diagram 5, after Bh2+" for a diagram the book
+  then plays on from (`afterDiagramMoves`); "From the text" for a position the book describes
+  without printing. A reading page's figure is drawn from White, as printed.
+
+### Today on a play day
+
+The layout stays fixed (ADR-051: nothing changes place under the finger when the suggestion
+changes a moment after launch). On a day the plan suggests a game (two play days a week,
+PRODUCT.md), the card says so in one line under its heading ("Today is a play day: one
+rapid game, then a short look back."), "Play a game" takes the main colour in its place and
+"Start training" becomes secondary in its place; both buttons are the same height on Today.
+
+### Learn's states
+
+Five labels, from the curriculum's stages (ADR-029): **Learned** (demonstrated, by a check or
+the pre-test, and no re-check due), **Check due** (studied and waiting for its first check, or
+a re-check due after 21 days, or the last re-check not passed; the concept page says which in
+its sentence), **Studied** (a lesson finished or a linked lesson marked done where no check
+exists), **Started** (a lesson begun, not finished), **Not started**. "N of 29 learned" counts
+Learned only, plus those whose re-check is merely due (they passed); a failed re-check does not
+count. The concept page's main action follows the label: Not started / Started → the lesson;
+Check due → Take the check; Studied with no check → Practise; Learned → Practise, with the
+lesson under "Read again".
+
 ### Button words
 
 | Action | Word | Where |
